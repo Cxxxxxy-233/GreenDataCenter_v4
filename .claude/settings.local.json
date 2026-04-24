@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv add:*)",
+      "Bash(uv sync:*)",
+      "Bash(uv run:*)",
+      "Bash(python -c \"import langgraph; print\\(dir\\(langgraph\\)\\)\")",
+      "Bash(python -c \"from langgraph.graph import StateGraph; print\\(StateGraph.__doc__\\)\")",
+      "Bash(python -c \"from langgraph.runtime import CompiledStateGraph; print\\('Found CompiledStateGraph'\\)\")",
+      "Bash(python -c \"from langgraph.graph import CompiledGraph; print\\('Found CompiledGraph'\\)\")",
+      "Bash(python -c \"from langgraph.graph import *; print\\(dir\\(\\)\\)\")",
+      "Bash(python -c \"from langchain_core.memory import BaseMemory; print\\('Found BaseMemory'\\)\")",
+      "Bash(python -c \"import langchain_core; print\\(dir\\(langchain_core\\)\\)\")",
+      "Bash(python -c \"from langchain.memory import BaseMemory; print\\('Found BaseMemory'\\)\")",
+      "Bash(python -c \"import langchain; import langchain_core; print\\(f'langchain: {langchain.__version__}, langchain_core: {langchain_core.__version__}'\\)\")",
+      "Bash(set PYTHONIOENCODING=utf-8)",
+      "Bash(ls:*)",
+      "Bash(python tests/test_api.py)",
+      "Bash(python tests/test_simple.py)"
+    ]
+  }
+}
