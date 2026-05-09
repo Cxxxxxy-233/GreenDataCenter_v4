@@ -36,7 +36,7 @@ def should_continue_debate(state: dict) -> str:
     return "continue"
 
 
-def check_debate_status(state: dict) -> Literal["continue", "end"]:
+def check_debate_status(state: dict) -> Literal["revise", "end"]:
     """
     检查辩论状态
 
@@ -47,5 +47,27 @@ def check_debate_status(state: dict) -> Literal["continue", "end"]:
         "continue" 或 "end"
     """
     if should_continue_debate(state) == "continue":
-        return "continue"
+        return "revise"
     return "end"
+
+
+def check_budget_status(state: dict) -> Literal["retry", "continue"]:
+    """
+    检查预算状态
+
+    Args:
+        state: 图状态
+
+    Returns:
+        "retry" 或 "continue"
+    """
+    analysis = state.get("economic_analysis_result", {})
+    is_over_budget = analysis.get("is_over_budget", False)
+    retry_count = int(state.get("budget_retry_count", 0) or 0)
+    max_retries = int(state.get("max_budget_retries", 2) or 2)
+
+    if is_over_budget and retry_count <= max_retries:
+        print(f"\n[WARN] 超出预算，触发重试 ({retry_count}/{max_retries})")
+        return "retry"
+
+    return "continue"

@@ -128,3 +128,13 @@ def create_requirement_parser_llm(on_chunk: Optional[callable] = None) -> BaseCh
         on_chunk=on_chunk,
         timeout=60
     )
+
+
+def create_final_report_llm(on_chunk: Optional[callable] = None) -> BaseChatModel:
+    """创建最终报告生成使用的LLM"""
+    return get_llm(
+        temperature=0.6,
+        max_tokens=4000,
+        on_chunk=on_chunk,
+        timeout=120
+    )

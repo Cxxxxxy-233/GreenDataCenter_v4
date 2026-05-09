@@ -5,6 +5,7 @@ AI系统协调器（基于LangGraph）
 
 import json
 import sys
+from pathlib import Path
 from datetime import datetime
 from typing import Any, Optional
 
@@ -36,8 +37,27 @@ class AISystemCoordinator:
         # 编译图
         self.compiled_graph = self.graph.compile()
 
+        self._export_workflow_png()
+
         print("AI系统协调器初始化完成")
         print(f"图节点: {list(self.graph.nodes.keys())}")
+
+    def _export_workflow_png(self) -> None:
+        try:
+            graph_obj = self.compiled_graph.get_graph()
+            if hasattr(graph_obj, "draw_mermaid_png"):
+                png_bytes = graph_obj.draw_mermaid_png()
+            elif hasattr(graph_obj, "draw_png"):
+                png_bytes = graph_obj.draw_png()
+            else:
+                return
+
+            output_dir = Path(__file__).resolve().parent / "output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_path = output_dir / "workflow_graph.png"
+            output_path.write_bytes(png_bytes)
+        except Exception as exc:
+            print(f"[WARN] Failed to export workflow PNG: {exc}")
 
     async def generate_solution_async(
         self,
@@ -70,6 +90,11 @@ class AISystemCoordinator:
             "max_debate_rounds": 5,
             "consensus_reached": False,
             "should_continue_debate": True,
+            "budget_feedback": "",
+            "budget_retry_count": 0,
+            "max_budget_retries": 2,
+            "draft_plan_feedback": "",
+            "draft_plan_summary": "",
             "economic_opinion": None,
             "power_reliability_opinion": None,
             "environmental_opinion": None,

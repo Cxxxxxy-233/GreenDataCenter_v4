@@ -6,15 +6,29 @@
 import io
 import json
 import sys
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
+from langchain.agents import create_agent
 from pydantic import BaseModel as PydanticBaseModel
 
-from greendatacenter.llm.config import create_economic_llm, create_power_reliability_llm, create_environmental_llm, create_arbitrator_llm, create_requirement_parser_llm
+from greendatacenter.llm.config import create_economic_llm, create_power_reliability_llm, create_environmental_llm, create_arbitrator_llm, create_final_report_llm, get_llm
 from greendatacenter.memory import ExpertSharedMemory
-from greendatacenter.graph.state import GraphState, ExpertOpinion, DebateMessage
+from greendatacenter.graph.state import GraphState, UserRequirement, ExpertOpinion, DebateMessage
+from greendatacenter.tools.green_power_allocation import green_power_allocation_tool
+from greendatacenter.tools.cooling import cooling_scheme_generator_tool
+from greendatacenter.tools.power_supply_config import power_supply_config_tool
+
+# 绿电与储能系统 CAPEX 单位成本（万元 / MW 或 万元 / MWh）
+COST_FACTORS = {
+    "wind_per_mw": 700,
+    "pv_per_mw": 350,
+    "storage_per_mwh": 250,
+}
 
 # 强制UTF-8输出（仅在交互式控制台模式下）
 # 这个会影响终端输出不要解开注释
@@ -29,40 +43,6 @@ class RequirementParserNode:
 
     def __init__(self, memory: ExpertSharedMemory):
         self.memory = memory
-        self.prompt_template = ChatPromptTemplate.from_messages([
-            SystemMessage(content="""You are a data center construction requirement parsing expert.
-
-Your task is to analyze the user's data center construction requirements and extract key information, supplementing missing necessary parameters.
-
-Analysis points:
-1. Construction scale (rack count, server count)
-2. Power requirements (total power, power density)
-3. Reliability requirements (Tier level)
-4. Cooling requirements (PUE target, cooling method)
-5. Environmental requirements (green power ratio, carbon emission target)
-6. Network requirements (bandwidth, redundancy)
-7. Constraints (budget, site, schedule)
-8. Project objectives and priorities
-
-Output format requirements:
-Output in JSON format with the following fields:
-- name: requirement name
-- rack_count: rack count (number)
-- total_power: total power requirement (kW, number)
-- power_density: power density (kW/rack, number)
-- tier_level: reliability level (1-4)
-- pue_target: PUE target value (number)
-- green_power_ratio: green power ratio (0-1, number)
-- budget: budget (wan yuan, number)
-- floor_area: floor area (m2, number)
-- bandwidth: bandwidth requirement (Gbps, number)
-- objectives: objectives list
-- constraints: constraints list
-- priorities: priorities dictionary (economic/reliability/environmental)
-
-If the user-provided information is incomplete, please supplement reasonable default values based on industry standards. Use Chinese for all field names and values."""),
-            HumanMessage(content="User requirements: {requirement}\nPlease analyze and extract key information, output in JSON format. Use Chinese for all field names and values.")
-        ])
 
     def __call__(self, state: GraphState) -> dict[str, Any]:
         """执行需求解析"""
@@ -71,28 +51,19 @@ If the user-provided information is incomplete, please supplement reasonable def
         sys.stdout.write("="*60 + "\n")
         sys.stdout.flush()
 
-        # 创建LLM并获取输出
-        llm = create_requirement_parser_llm(on_chunk=self._on_stream_chunk)
-
-        # 构建prompt
-        requirement_text = json.dumps(state["requirement"], ensure_ascii=False, indent=2)
-
-        messages = self.prompt_template.format_messages(requirement=requirement_text)
-
-        # 调用LLM
-        response = llm.invoke(messages)
-
-        # 解析输出
+        raw_requirement = state.get("user_requirement") or state.get("requirement") or {}
+        normalized = self._normalize_requirement(raw_requirement)
         try:
-            parsed_requirement = json.loads(response.content)
-        except json.JSONDecodeError:
-            # 如果JSON解析失败，使用原始需求
-            parsed_requirement = state["requirement"]
+            parsed_requirement = UserRequirement(**normalized)
+        except Exception as exc:
+            raise ValueError(f"Invalid user requirement payload: {exc}") from exc
+
+        parsed_dict = parsed_requirement.model_dump()
 
         sys.stdout.write("[OK] Requirement parsing completed\n")
-        sys.stdout.write(f"  - Rack count: {parsed_requirement.get('rack_count', 'N/A')}\n")
-        sys.stdout.write(f"  - Total power: {parsed_requirement.get('total_power', 'N/A')} kW\n")
-        sys.stdout.write(f"  - Tier level: {parsed_requirement.get('tier_level', 'N/A')}\n")
+        sys.stdout.write(f"  - Location: {parsed_dict.get('location', 'N/A')}\n")
+        sys.stdout.write(f"  - Load: {parsed_dict.get('planned_load_kw', 'N/A')} kW\n")
+        sys.stdout.write(f"  - Green ratio: {parsed_dict.get('green_power_ratio', 'N/A')}\n")
         sys.stdout.flush()
 
         # 记录流式输出
@@ -100,19 +71,265 @@ If the user-provided information is incomplete, please supplement reasonable def
         streaming_output.append({
             "node": "requirement_parser",
             "expert": "Requirement Parser",
-            "content": f"Requirements parsed: {parsed_requirement.get('name', 'Unnamed')}",
-            "full_output": parsed_requirement
+            "content": f"Requirements parsed: {parsed_dict.get('location', 'Unknown')}",
+            "full_output": parsed_dict
         })
 
         return {
-            "requirement": parsed_requirement,
+            "user_requirement": parsed_requirement,
+            "requirement": parsed_dict,
             "current_step": "requirement_parsed",
             "streaming_output": streaming_output
         }
 
+    def _normalize_requirement(self, raw: Any) -> dict[str, Any]:
+        if hasattr(raw, "model_dump"):
+            data = raw.model_dump()
+        else:
+            data = dict(raw or {})
+
+        if "planned_load_kw" not in data:
+            if "planned_load" in data:
+                data["planned_load_kw"] = data["planned_load"]
+            elif "total_power" in data:
+                data["planned_load_kw"] = data["total_power"]
+
+        if "green_power_ratio" not in data and "green_energy_target" in data:
+            green_target = data.get("green_energy_target")
+            if green_target is not None:
+                data["green_power_ratio"] = float(green_target) / 100.0 if green_target > 1 else float(green_target)
+
+        return data
+
+
+class CostCalculationNode:
+    """成本计算节点"""
+
+    def __call__(self, state: GraphState) -> dict[str, Any]:
+        user_req = state.get("user_requirement")
+        if hasattr(user_req, "model_dump"):
+            user_req_data = user_req.model_dump()
+        else:
+            user_req_data = dict(user_req or {})
+
+        green_power_result = state.get("green_power_result", {})
+        power_supply_plan = state.get("power_supply_plan", {})
+        budget_constraint = float(user_req_data.get("budget_constraint", 0.0) or 0.0)
+
+        power_supply_raw = power_supply_plan.get("raw_json", {})
+        load_mw = float(power_supply_raw.get("total_load_mw", 0.0) or 0.0)
+        cost_per_mw = float(power_supply_raw.get("cost_per_mw", 0.0) or 0.0)
+        power_supply_capex = load_mw * cost_per_mw
+
+        optimization_res = green_power_result.get("optimization", {})
+        wind_mw = float(optimization_res.get("wind_capacity_mw", 0.0) or 0.0)
+        pv_mw = float(optimization_res.get("pv_capacity_mw", 0.0) or 0.0)
+        storage_mwh = float(optimization_res.get("storage_capacity_mwh", 0.0) or 0.0)
+
+        wind_capex = wind_mw * COST_FACTORS["wind_per_mw"]
+        pv_capex = pv_mw * COST_FACTORS["pv_per_mw"]
+        storage_capex = storage_mwh * COST_FACTORS["storage_per_mwh"]
+        green_power_capex = wind_capex + pv_capex + storage_capex
+
+        total_capex = power_supply_capex + green_power_capex
+        is_over_budget = total_capex > budget_constraint
+        budget_delta = total_capex - budget_constraint
+
+        budget_retry_count = int(state.get("budget_retry_count", 0) or 0)
+        max_budget_retries = int(state.get("max_budget_retries", 2) or 2)
+        budget_feedback = ""
+        if is_over_budget:
+            budget_retry_count += 1
+            budget_feedback = f"超出预算{budget_delta:.2f}万元，请重新制定方案"
+
+        summary = (
+            f"项目总投资估算为 {total_capex:.2f} 万元。"
+            f"用户预算为 {budget_constraint:.2f} 万元。"
+        )
+        if is_over_budget:
+            summary += f"已超出预算 {budget_delta:.2f} 万元。建议调整方案，例如降低绿电比例、调整供电等级或增加预算。"
+        else:
+            summary += f"未超出预算，预算结余 {-budget_delta:.2f} 万元。方案经济性可行。"
+
+        analysis_result = {
+            "status": "success",
+            "is_over_budget": is_over_budget,
+            "budget_constraint_lakh": budget_constraint,
+            "total_capex_lakh": round(total_capex, 2),
+            "budget_delta_lakh": round(budget_delta, 2),
+            "budget_retry_count": budget_retry_count,
+            "max_budget_retries": max_budget_retries,
+            "budget_feedback": budget_feedback,
+            "capex_breakdown": {
+                "power_supply_system_lakh": round(power_supply_capex, 2),
+                "green_power_system_lakh": round(green_power_capex, 2),
+                "details": {
+                    "wind_capex_lakh": round(wind_capex, 2),
+                    "pv_capex_lakh": round(pv_capex, 2),
+                    "storage_capex_lakh": round(storage_capex, 2),
+                },
+            },
+            "summary": summary,
+            "cost_factors": COST_FACTORS,
+        }
+
+        streaming_output = state.get("streaming_output", [])
+        streaming_output.append({
+            "node": "cost_calculation",
+            "expert": "Cost Calculation",
+            "content": analysis_result["summary"],
+            "full_output": analysis_result,
+        })
+
+        return {
+            "economic_analysis_result": analysis_result,
+            "budget_feedback": budget_feedback,
+            "budget_retry_count": budget_retry_count,
+            "max_budget_retries": max_budget_retries,
+            "streaming_output": streaming_output,
+        }
+
+
+class DraftPlanAgentNode:
+    """初稿生成专家（ReAct Agent）"""
+
+    def __init__(self, memory: ExpertSharedMemory):
+        self.memory = memory
+        self.tools = [
+            green_power_allocation_tool,
+            cooling_scheme_generator_tool,
+            power_supply_config_tool,
+        ]
+        self.system_prompt = (
+            "You are a data center solution draft agent. "
+            "You MUST use the tools to generate an initial plan. "
+            "Use the tools in this order when possible: "
+            "1) green_power_allocation, 2) cooling-scheme-generator, 3) power_supply_config. "
+            "Return ONLY JSON with keys: green_power_result, cooling_result, power_supply_plan, summary."
+        )
+
+    def __call__(self, state: GraphState) -> dict[str, Any]:
+        requirement = state.get("user_requirement") or {}
+        if hasattr(requirement, "model_dump"):
+            req_data = requirement.model_dump()
+        else:
+            req_data = dict(requirement)
+
+        memory_context = self.memory.get_memory_context()
+        budget_feedback = state.get("budget_feedback", "")
+        draft_plan_feedback = state.get("draft_plan_feedback", "")
+
+        if budget_feedback:
+            sys.stdout.write(f"  - Budget feedback: {budget_feedback}\n")
+        if draft_plan_feedback:
+            sys.stdout.write("  - Debate feedback received\n")
+        sys.stdout.write("=" * 60 + "\n")
+        sys.stdout.flush()
+
+        input_payload = {
+            "user_requirement": req_data,
+            "budget_feedback": budget_feedback,
+            "debate_feedback": draft_plan_feedback,
+            "memory_context": memory_context,
+        }
+
+        llm = get_llm(
+            temperature=0.4,
+            max_tokens=2000,
+            on_chunk=self._on_stream_chunk,
+            timeout=90,
+        )
+
+        agent = create_agent(
+            llm,
+            self.tools,
+            system_prompt=self.system_prompt,
+        )
+
+        sys.stdout.write("[Draft Plan Agent] Calling tools...\n")
+        sys.stdout.flush()
+
+        result = agent.invoke(
+            {"messages": [HumanMessage(content=json.dumps(input_payload, ensure_ascii=False))]},
+            config={"callbacks": [ToolLoggingCallbackHandler()]},
+        )
+
+        sys.stdout.write("[Draft Plan Agent] Tool-calling completed\n")
+        sys.stdout.flush()
+
+        output_text = self._extract_final_content(result)
+        plan_data = self._parse_json_response(output_text)
+
+        green_power_result = plan_data.get("green_power_result") or state.get("green_power_result", {})
+        cooling_result = plan_data.get("cooling_result") or state.get("cooling_result", {})
+        power_supply_plan = plan_data.get("power_supply_plan") or state.get("power_supply_plan", {})
+
+        streaming_output = state.get("streaming_output", [])
+        streaming_output.append({
+            "node": "draft_plan_agent",
+            "expert": "Draft Plan Agent",
+            "content": plan_data.get("summary", "Draft plan generated"),
+            "full_output": {
+                "raw_output": output_text,
+                "parsed": plan_data,
+            },
+        })
+
+        return {
+            "green_power_result": green_power_result,
+            "cooling_result": cooling_result,
+            "power_supply_plan": power_supply_plan,
+            "draft_plan_summary": plan_data.get("summary", ""),
+            "streaming_output": streaming_output,
+        }
+
+    def _parse_json_response(self, content: str) -> dict[str, Any]:
+        import re
+
+        try:
+            return json.loads(content.strip())
+        except json.JSONDecodeError:
+            pass
+
+        json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group(1))
+            except json.JSONDecodeError:
+                pass
+
+        json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group())
+            except json.JSONDecodeError:
+                pass
+
+        return {}
+
+    def _extract_final_content(self, agent_result: dict[str, Any]) -> str:
+        messages = agent_result.get("messages", [])
+        for msg in reversed(messages):
+            content = getattr(msg, "content", None)
+            if isinstance(content, str) and content.strip():
+                return content.strip()
+        return ""
+
     def _on_stream_chunk(self, chunk: str):
-        """流式输出回调"""
         sys.stdout.write(chunk)
+        sys.stdout.flush()
+
+
+class ToolLoggingCallbackHandler(BaseCallbackHandler):
+    """Log tool start/end for agent tool calls."""
+
+    def on_tool_start(self, serialized: dict, input_str: str, **kwargs) -> None:
+        name = serialized.get("name", "unknown")
+        sys.stdout.write(f"[Tool] Starting: {name}\n")
+        sys.stdout.flush()
+
+    def on_tool_end(self, output: str, **kwargs) -> None:
+        sys.stdout.write("[Tool] Completed\n")
         sys.stdout.flush()
 
 
@@ -630,6 +847,155 @@ Please conduct professional analysis based on the requirements."""),
             "summary": "Environmental analysis completed",
             "reasoning": content[:500] if len(content) > 500 else content,
             "scores": {"environmental_score": 0.8, "pue_score": 0.8, "green_power_score": 0.8, "carbon_efficiency": 0.8},
+            "metrics": {"pue_target": 1.5, "green_power_ratio": 0.5, "annual_carbon_emission": 0, "carbon_per_rack": 0},
+            "recommendations": [],
+            "concerns": [],
+            "confidence": 0.7
+        }
+
+    def _on_stream_chunk(self, chunk: str):
+        """流式输出回调"""
+        sys.stdout.write(chunk)
+        sys.stdout.flush()
+
+
+class FinalReportNode:
+    """最终方案报告节点"""
+
+    def __call__(self, state: GraphState) -> dict[str, Any]:
+        sys.stdout.write("\n" + "=" * 60 + "\n")
+        sys.stdout.write("[Final Report] Start generating report...\n")
+        sys.stdout.write("=" * 60 + "\n")
+        sys.stdout.flush()
+
+        state_payload = self._serialize_state(state)
+        state_json = json.dumps(state_payload, ensure_ascii=False, indent=2)
+
+        system_prompt = (
+            "你是“绿色数据中心规划可行性总顾问”。\n\n"
+            "工作方式（必须遵守）：\n"
+            "1. 先阅读用户提供的 state_json，识别已给出的项目参数与缺失字段。\n"
+            "2. 基于 state 数据直接完整分析，并生成最终报告。\n"
+            "3. 输出最终报告时，必须是 Markdown 且正文不少于 1000 字。\n\n"
+            "报告硬性要求：\n"
+            "- 必须包含结论：可行 / 有条件可行 / 暂不可行。\n"
+            "- 若数据缺失，明确写出“数据缺失/待补充”及对结论影响。\n\n"
+            "建议结构：\n"
+            "- 标题与摘要\n"
+            "- 1. 项目背景与目标约束\n"
+            "- 2. 场址与环境可行性\n"
+            "- 3. 能源系统与绿电消纳策略\n"
+            "- 4. 制冷系统与能效路径\n"
+            "- 5. 仿真结果解读与运行策略\n"
+            "- 6. 财务可行性与投资回收\n"
+            "- 7. 风险清单与缓解措施\n"
+            "- 8. 实施路线图（近期/中期/远期）\n"
+            "- 9. 综合结论与建议\n"
+            "- 10. 关键指标汇总表\n"
+        )
+
+        llm = create_final_report_llm()
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=f"state_json:\n{state_json}")
+        ]
+
+        response = llm.invoke(messages)
+        report_text = response.content.strip()
+
+        output_dir = Path(__file__).resolve().parents[1] / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_path = output_dir / f"final_report_{timestamp}.md"
+        report_path.write_text(report_text, encoding="utf-8")
+
+        solution = dict(state.get("solution") or {})
+        solution.update({
+            "final_report": report_text,
+            "final_report_path": str(report_path),
+        })
+
+        streaming_output = state.get("streaming_output", [])
+        streaming_output.append({
+            "node": "final_report",
+            "expert": "Final Report",
+            "content": "Generated final feasibility report",
+            "full_output": {"path": str(report_path)}
+        })
+
+        sys.stdout.write("[OK] Final report generated\n")
+        sys.stdout.flush()
+
+        return {
+            "solution": solution,
+            "streaming_output": streaming_output,
+        }
+
+    def _serialize_state(self, state: GraphState) -> dict[str, Any]:
+        def _dump(value: Any) -> Any:
+            if hasattr(value, "model_dump"):
+                return value.model_dump()
+            return value
+
+        return {
+            "user_requirement": _dump(state.get("user_requirement")),
+            "power_supply_plan": state.get("power_supply_plan"),
+            "green_power_result": state.get("green_power_result"),
+            "cooling_result": state.get("cooling_result"),
+            "economic_analysis_result": state.get("economic_analysis_result"),
+            "economic_opinion": _dump(state.get("economic_opinion")),
+            "power_reliability_opinion": _dump(state.get("power_reliability_opinion")),
+            "environmental_opinion": _dump(state.get("environmental_opinion")),
+            "consensus_score": state.get("consensus_score"),
+            "debate_round": state.get("debate_round"),
+        }
+
+    def _parse_json_response(self, content: str) -> dict:
+        """解析JSON响应 - 改进版"""
+        import re
+
+        try:
+            return json.loads(content.strip())
+        except json.JSONDecodeError:
+            pass
+
+        json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group(1))
+            except json.JSONDecodeError:
+                pass
+
+        json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group())
+            except json.JSONDecodeError:
+                pass
+
+        stack = []
+        start_idx = None
+        for i, char in enumerate(content):
+            if char == '{':
+                if not stack:
+                    start_idx = i
+                stack.append(char)
+            elif char == '}' and stack:
+                stack.pop()
+                if not stack and start_idx is not None:
+                    try:
+                        json_str = content[start_idx:i+1]
+                        return json.loads(json_str)
+                    except json.JSONDecodeError:
+                        pass
+
+        sys.stderr.write(f"[WARN] Failed to parse JSON, using default values\n")
+        return {
+            "expert_type": "environmental",
+            "expert_name": "Environmental Analysis Expert-Wang",
+            "summary": "Environmental analysis completed",
+            "reasoning": content[:500] if len(content) > 500 else content,
+            "scores": {"environmental_score": 0.8, "pue_score": 0.8, "green_power_score": 0.8, "carbon_efficiency": 0.8},
             "metrics": {},
             "recommendations": [],
             "concerns": [],
@@ -704,11 +1070,14 @@ class DebateRoundNode:
         sys.stdout.write(f"  - Consensus score: {consensus_score:.2f}\n")
         sys.stdout.flush()
 
+        draft_plan_feedback = self.memory.get_memory_context()
+
         return {
             "debate_round": state["debate_round"] + 1,
             "consensus_score": consensus_score,
             "should_continue_debate": consensus_score < 0.8,
             "consensus_reached": consensus_score >= 0.8,
+            "draft_plan_feedback": draft_plan_feedback,
             "streaming_output": streaming_output
         }
 

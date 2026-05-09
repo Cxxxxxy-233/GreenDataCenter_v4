@@ -23,6 +23,10 @@ uv sync
 # 3. 配置API密钥
 cp .env.example .env
 # 编辑.env文件，添加DeepSeek API密钥
+# .env 文件内容示例：
+# LLM_API_KEY=sk-your-deepseek-api-key-here
+#
+# API Key 可在 https://platform.deepseek.com 获取
 
 # 4. 激活虚拟环境
 # Windows
@@ -31,6 +35,110 @@ cp .env.example .env
 # Linux/macOS
 source .venv/bin/activate
 ```
+
+## 运行程序
+
+### 基本运行方式
+
+使用以下命令运行程序，读取输入文件并生成数据中心建设方案：
+
+```bash
+uv run python -m greendatacenter.cli generate example_input.json -o solution.json --detail full
+```
+
+**命令参数说明：**
+
+| 参数 | 说明 |
+|------|------|
+| `generate` | 子命令：生成方案 |
+| `example_input.json` | 输入文件路径（JSON格式） |
+| `-o solution.json` | 输出文件路径，生成方案将保存到此文件 |
+| `--detail full` | 输出详细程度：`summary`（摘要）、`detail`（详细）、`full`（完整） |
+
+### 输入文件格式
+
+项目根目录下的 `example_input.json` 是一个完整的输入示例：
+
+```json
+{
+  "location": "贵阳",
+  "planned_load_kw": 12000,
+  "green_power_ratio": 0.6,
+  "planned_area": 18000,
+  "budget_constraint": 35000,
+  "cooling_technology": "浸没式液冷",
+  "machine_room_grade": "A",
+  "pue_target": 1.25,
+  "sim_hours": 168,
+  "electricity_prices": {
+    "尖峰电价": 0.6,
+    "高峰电价": 0.5,
+    "平段电价": 0.4,
+    "低谷电价": 0.3,
+    "深谷电价": 0.25
+  }
+}
+```
+
+**输入字段说明：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `location` | string | 是 | 数据中心所在城市 |
+| `planned_load_kw` | float | 是 | 规划用电负荷（kW） |
+| `green_power_ratio` | float | 否 | 绿电比例（0-1） |
+| `planned_area` | float | 否 | 规划面积（m²） |
+| `budget_constraint` | float | 否 | 预算约束（万元） |
+| `cooling_technology` | string | 否 | 制冷技术（如"浸没式液冷"） |
+| `machine_room_grade` | string | 否 | 机房等级（A/B/C） |
+| `pue_target` | float | 否 | PUE目标值 |
+| `sim_hours` | int | 否 | 仿真时长（小时） |
+| `year` | int | 否 | 仿真年份 |
+| `pv_tilt` | float | 否 | 光伏倾斜角度（null则自动计算） |
+| `pv_azimuth` | float | 否 | 光伏方位角 |
+| `wind_cut_in_ms` | float | 否 | 风电切入风速（m/s） |
+| `wind_rated_ms` | float | 否 | 风电额定风速（m/s） |
+| `wind_cut_out_ms` | float | 否 | 风电切出风速（m/s） |
+| `computing_power_density` | float | 否 | 算力密度（kW/机柜） |
+| `carbon_emission_factor` | float | 否 | 碳排放因子 |
+| `electricity_prices` | object | 否 | 分时电价配置 |
+| `maxiter` | int | 否 | 优化最大迭代次数 |
+| `popsize` | int | 否 | 优化种群大小 |
+| `seed` | int | 否 | 随机种子 |
+
+### 其他 CLI 命令
+
+```bash
+# 生成示例输入文件
+uv run python -m greendatacenter.cli example
+
+# 查看系统状态
+uv run python -m greendatacenter.cli status
+
+# 解释已生成的方案
+uv run python -m greendatacenter.cli explain solution.json --detail full
+```
+
+### 运行流程说明
+
+程序运行时，系统会依次执行以下步骤（全程约2分钟）：
+
+1. **需求解析** — 解析输入的JSON文件，提取关键参数
+2. **经济性分析** — 经济性专家分析成本、投资回报等
+3. **供电可靠性分析** — 供电可靠性专家评估可用性、冗余设计
+4. **环保性分析** — 环保性专家评估PUE、碳排、绿电比例
+5. **专家辩论** — 多轮专家讨论，达成共识
+6. **仲裁决策** — 综合各方意见，生成平衡方案
+7. **方案输出** — 保存完整方案到指定JSON文件
+
+运行过程中，终端会实时输出各专家的分析内容。方案生成成功后，结果会保存到 `-o` 参数指定的文件中。
+
+### 运行注意事项
+
+- **API密钥必须配置**：运行前确保 `.env` 文件中 `LLM_API_KEY` 已正确设置，否则会报 `缺少环境变量 LLM_API_KEY` 错误
+- **网络连接**：程序需要访问 DeepSeek API，请确保网络通畅
+- **生成时间**：一次完整方案生成约需 1-3 分钟，取决于 API 响应速度
+- **JSON解析容错**：如果LLM返回的JSON格式异常，系统会自动使用默认值继续运行
 
 ### IDE配置
 

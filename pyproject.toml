@@ -22,10 +22,19 @@ dependencies = [
     "rich>=13.0.0",
     "typing-extensions>=4.5.0",
     "typer>=0.24.1",
+    "langchain-core>=0.2.25",
     "langchain>=1.2.15",
     "langchain-openai>=1.1.14",
     "langgraph>=1.1.8",
+    "langchain-community>=0.2.16",
     "python-dotenv>=1.2.2",
+    "geopy>=2.4.1",
+    "matplotlib>=3.8.0",
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "pvlib>=0.10.5",
+    "requests>=2.32.0",
+    "scipy>=1.12.0",
 ]
 
 [project.optional-dependencies]
