@@ -76,9 +76,10 @@
                   <span class="agent-name">绿电分配方案</span>
                 </div>
                 <div class="agent-content">
-                  <div class="agent-detail">光伏容量: {{ nodeResults.draftPlan.pvCapacity }} MW</div>
-                  <div class="agent-detail">风电容量: {{ nodeResults.draftPlan.windCapacity }} MW</div>
-                  <div class="agent-detail">储能容量: {{ nodeResults.draftPlan.storageCapacity }} MWh</div>
+                  <div class="agent-detail">光伏容量: {{ formatNumber(nodeResults.draftPlan.pvCapacity) }} MW</div>
+                  <div class="agent-detail">风电容量: {{ formatNumber(nodeResults.draftPlan.windCapacity) }} MW</div>
+                  <div class="agent-detail">储能容量: {{ formatNumber(nodeResults.draftPlan.storageCapacity) }} MWh</div>
+                  <div class="agent-detail">绿电占比: {{ formatPercent(nodeResults.draftPlan.achievedGreenRatio) }}</div>
                 </div>
               </el-card>
             </el-col>
@@ -90,8 +91,9 @@
                 </div>
                 <div class="agent-content">
                   <div class="agent-detail">推荐技术: {{ nodeResults.draftPlan.coolingTech }}</div>
-                  <div class="agent-detail">预测PUE: {{ nodeResults.draftPlan.pue }}</div>
-                  <div class="agent-detail">制冷功耗: {{ nodeResults.draftPlan.coolingPower }} kW</div>
+                  <div class="agent-detail">预测PUE: {{ formatNumber(nodeResults.draftPlan.pue, 2) }}</div>
+                  <div class="agent-detail">预测WUE: {{ formatNumber(nodeResults.draftPlan.wue, 2) }}</div>
+                  <div class="agent-detail">制冷功耗: {{ formatNumber(nodeResults.draftPlan.coolingPower) }} kW</div>
                 </div>
               </el-card>
             </el-col>
@@ -102,9 +104,10 @@
                   <span class="agent-name">供电方案</span>
                 </div>
                 <div class="agent-content">
-                  <div class="agent-detail">Tier等级: {{ nodeResults.draftPlan.tierLevel }}</div>
-                  <div class="agent-detail">可用性: {{ nodeResults.draftPlan.availability }}%</div>
-                  <div class="agent-detail">UPS配置: {{ nodeResults.draftPlan.upsConfig }}</div>
+                  <div class="agent-detail">方案等级: {{ nodeResults.draftPlan.tierLevel }}</div>
+                  <div class="agent-detail">外部电压: {{ nodeResults.draftPlan.externalVoltage }}</div>
+                  <div class="agent-detail">冗余配置: {{ nodeResults.draftPlan.redundancyLogic }}</div>
+                  <div class="agent-detail">母线类型: {{ nodeResults.draftPlan.upsConfig }}</div>
                 </div>
               </el-card>
             </el-col>
@@ -830,26 +833,61 @@ const handleSSENode = (nodeName, data) => {
     }
 
     if (nodeName === 'draft_plan_agent') {
+      console.log('[SSE] ================== draft_plan_agent START ==================')
+      console.log('[SSE] draft_plan_agent raw data type:', typeof data)
+      console.log('[SSE] draft_plan_agent raw data keys:', Object.keys(data || {}))
+      console.log('[SSE] draft_plan_agent raw data:', JSON.stringify(data, null, 2))
+      
       const fullOutput = data || {}
-      console.log('[SSE] draft_plan_agent raw keys:', Object.keys(fullOutput), 'has parsed:', !!fullOutput.parsed)
       const parsed = fullOutput.parsed || fullOutput
+      console.log('[SSE] parsed type:', typeof parsed)
+      console.log('[SSE] parsed keys:', Object.keys(parsed || {}))
+      
       const gpResult = parsed.green_power_result || fullOutput.green_power_result || {}
+      console.log('[SSE] green_power_result exists:', !!gpResult)
+      console.log('[SSE] green_power_result keys:', Object.keys(gpResult || {}))
+      console.log('[SSE] green_power_result:', JSON.stringify(gpResult, null, 2))
+      
       const cooling = parsed.cooling_result || fullOutput.cooling_result || {}
+      console.log('[SSE] cooling_result exists:', !!cooling)
+      console.log('[SSE] cooling_result keys:', Object.keys(cooling || {}))
+      console.log('[SSE] cooling_result:', JSON.stringify(cooling, null, 2))
+      
       const power = parsed.power_supply_plan || fullOutput.power_supply_plan || {}
+      console.log('[SSE] power_supply_plan exists:', !!power)
+      console.log('[SSE] power_supply_plan keys:', Object.keys(power || {}))
+      console.log('[SSE] power_supply_plan:', JSON.stringify(power, null, 2))
+      
       const gp = gpResult.optimization || gpResult
+      console.log('[SSE] optimization exists:', 'optimization' in gpResult)
+      console.log('[SSE] gp keys:', Object.keys(gp || {}))
+      console.log('[SSE] gp data:', JSON.stringify(gp, null, 2))
+      console.log('[SSE] ================== draft_plan_agent END ==================')
+      
       const powerRaw = power.raw_json || power
+      
+      const achievedGreenRatio = toNumber(gp.achieved_green_ratio)
+      const pueValue = toNumber(cooling.estimated_pue || cooling.cooling_kpis?.predicted_PUE)
+      
       nodeResults.draftPlan = {
         pvCapacity: toNumber(gp.pv_capacity_mw),
         windCapacity: toNumber(gp.wind_capacity_mw),
         storageCapacity: toNumber(gp.storage_capacity_mwh),
-        coolingTech: cooling.cooling_technology || '--',
-        pue: toNumber(cooling.estimated_pue || cooling.cooling_kpis?.predicted_PUE),
+        achievedGreenRatio: achievedGreenRatio,
+        coolingTech: cooling.cooling_technology || cooling.regional_cooling_preference || '--',
+        pue: pueValue,
+        wue: toNumber(cooling.predicted_wue || cooling.cooling_kpis?.predicted_WUE),
         coolingPower: toNumber(cooling.cooling_power_consumption || cooling.cooling_kpis?.cooling_power_kw),
-        tierLevel: powerRaw.machine_room_grade || power.scheme_name || '--',
-        availability: toNumber(powerRaw.expected_availability),
-        upsConfig: power.redundancy_logic || power.diesel_status || '--'
+        wasteHeatRecovery: toNumber(cooling.waste_heat_recovery_kw || cooling.cooling_kpis?.waste_heat_recovery_kw),
+        tierLevel: powerRaw.machine_room_grade || power.scheme_name?.split('-')[0] || '--',
+        externalVoltage: power.external_voltage || '--',
+        redundancyLogic: power.redundancy_logic || '--',
+        upsConfig: power.bus_type || power.diesel_status || '--',
+        schemeName: power.scheme_name || '--',
+        costPerMw: toNumber(powerRaw.cost_per_mw)
       }
-      addLog(`初稿方案: 光伏${gp.pv_capacity_mw || '--'}MW, 风电${gp.wind_capacity_mw || '--'}MW`, 'success')
+      console.log('[SSE] final draftPlan:', JSON.stringify(nodeResults.draftPlan, null, 2))
+      addLog(`初稿方案: 光伏${gp.pv_capacity_mw || '--'}MW, 风电${gp.wind_capacity_mw || '--'}MW, 储能${gp.storage_capacity_mwh || '--'}MWh`, 'success')
     }
 
     if (nodeName === 'cost_calculation') {
@@ -1345,7 +1383,7 @@ onUnmounted(() => {
 }
 
 .agent-result-card {
-  height: 180px;
+  height: 200px;
 }
 
 .agent-header {

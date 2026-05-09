@@ -259,10 +259,26 @@ class DraftPlanAgentNode:
 
         output_text = self._extract_final_content(result)
         plan_data = self._parse_json_response(output_text)
+        print(f"[DraftPlanAgent] Parsed plan_data keys: {list(plan_data.keys())}", flush=True)
+        print(f"[DraftPlanAgent] green_power_result exists: {'green_power_result' in plan_data}", flush=True)
+        print(f"[DraftPlanAgent] cooling_result exists: {'cooling_result' in plan_data}", flush=True)
+        print(f"[DraftPlanAgent] power_supply_plan exists: {'power_supply_plan' in plan_data}", flush=True)
 
         green_power_result = plan_data.get("green_power_result") or state.get("green_power_result", {})
         cooling_result = plan_data.get("cooling_result") or state.get("cooling_result", {})
         power_supply_plan = plan_data.get("power_supply_plan") or state.get("power_supply_plan", {})
+        
+        if green_power_result:
+            print(f"[DraftPlanAgent] green_power_result has optimization: {'optimization' in green_power_result}", flush=True)
+            if 'optimization' in green_power_result:
+                opt_keys = list(green_power_result['optimization'].keys()) if isinstance(green_power_result['optimization'], dict) else 'not dict'
+                print(f"[DraftPlanAgent] optimization keys: {opt_keys}", flush=True)
+        if cooling_result:
+            print(f"[DraftPlanAgent] cooling_result has cooling_technology: {'cooling_technology' in cooling_result}", flush=True)
+            print(f"[DraftPlanAgent] cooling_result has cooling_kpis: {'cooling_kpis' in cooling_result}", flush=True)
+        if power_supply_plan:
+            print(f"[DraftPlanAgent] power_supply_plan has scheme_name: {'scheme_name' in power_supply_plan}", flush=True)
+            print(f"[DraftPlanAgent] power_supply_plan has external_voltage: {'external_voltage' in power_supply_plan}", flush=True)
 
         streaming_output = state.get("streaming_output", [])
         streaming_output.append({
