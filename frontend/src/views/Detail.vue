@@ -49,6 +49,18 @@
               <el-icon><CircleCloseFilled /></el-icon>
               <span>{{ formatRisk(arbitrator.risks[0]) }}</span>
             </div>
+            <div class="expert-recommendations" v-if="arbitrator.recommendations && arbitrator.recommendations.length">
+              <h5>最终建议</h5>
+              <ul>
+                <li v-for="(rec, i) in arbitrator.recommendations" :key="`final-rec-${i}`">{{ rec }}</li>
+              </ul>
+            </div>
+            <div class="expert-recommendations" v-if="arbitrator.trade_offs && arbitrator.trade_offs.length">
+              <h5>关键权衡</h5>
+              <ul>
+                <li v-for="(item, i) in arbitrator.trade_offs" :key="`trade-${i}`">{{ item.conflict }}：{{ item.resolution }}</li>
+              </ul>
+            </div>
           </div>
 
           <div class="info-section">
@@ -92,10 +104,14 @@
               <h4>经济指标</h4>
               <div class="param-grid">
                 <div class="param-item">初始投资：{{ formatNumber(coolingEconomics.initial_investment, 2) }} 万元</div>
-                <div class="param-item">年运维成本：{{ formatNumber(coolingEconomics.annual_opex, 2) }} 万元</div>
+                <div class="param-item">年运维成本：{{ formatNumber(coolingEconomics.annual_op_cost, 2) }} 万元</div>
                 <div class="param-item">年电费：{{ formatNumber(coolingEconomics.annual_electricity_cost, 2) }} 万元</div>
                 <div class="param-item">LCOE：{{ formatNumber(coolingEconomics.lcoe, 4) }} 元/kWh</div>
               </div>
+            <div class="param-grid" v-if="environmentalSection.recommendations && environmentalSection.recommendations.length">
+              <div class="param-item">环保建议：</div>
+              <div class="param-item" v-for="(rec, idx) in environmentalSection.recommendations" :key="`env-rec-${idx}`">- {{ rec }}</div>
+            </div>
             </el-card>
           </div>
 
@@ -277,15 +293,16 @@
           </div>
           <div class="report-content">
             <div class="report-title-section">
-              <h1 class="report-title">{{ solutionData.name || '数据中心绿电消纳方案报告' }}</h1>
+              <h1 class="report-title">{{ finalReportData.name || '数据中心绿电消纳方案报告' }}</h1>
               <div class="report-meta">
                 <span>方案编号：{{ solutionId }}</span>
                 <span>生成时间：{{ solutionData.created_at || '-' }}</span>
-                <span>置信度：{{ formatPercent(solutionData.confidence) }}</span>
+                <span>置信度：{{ formatPercent(finalReportData.confidence) }}</span>
               </div>
             </div>
             <div class="report-executive-summary">
               <h2>执行摘要</h2>
+              <p class="summary-text">{{ finalReportData.summary || '暂无摘要' }}</p>
               <div class="executive-grid">
                 <div class="executive-item">
                   <div class="executive-label">推荐制冷方案</div>
@@ -306,9 +323,105 @@
               </div>
             </div>
             <div class="report-chapter">
-              <h2>仲裁摘要</h2>
+              <h2>综合评分</h2>
               <div class="report-section-item">
-                <p>{{ arbitrator.summary || solutionData.report_summary || '暂无报告摘要内容' }}</p>
+                <div class="executive-grid">
+                  <div class="executive-item">
+                    <div class="executive-label">经济性</div>
+                    <div class="executive-value">{{ formatPercent(overallScores.economic) }}</div>
+                  </div>
+                  <div class="executive-item">
+                    <div class="executive-label">可靠性</div>
+                    <div class="executive-value">{{ formatPercent(overallScores.reliability) }}</div>
+                  </div>
+                  <div class="executive-item">
+                    <div class="executive-label">环保性</div>
+                    <div class="executive-value">{{ formatPercent(overallScores.environmental) }}</div>
+                  </div>
+                  <div class="executive-item">
+                    <div class="executive-label">总体</div>
+                    <div class="executive-value">{{ formatPercent(overallScores.overall) }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="report-chapter">
+              <h2>关键指标</h2>
+              <div class="report-section-item">
+                <el-table :data="keyMetricsRows" border>
+                  <el-table-column prop="label" label="指标" width="240" />
+                  <el-table-column prop="value" label="数值" />
+                </el-table>
+              </div>
+            </div>
+            <div class="report-chapter">
+              <h2>经济性方案</h2>
+              <div class="report-section-item">
+                <p>{{ economicSection.description || '暂无经济性描述' }}</p>
+                <el-table v-if="economicRows.length" :data="economicRows" border>
+                  <el-table-column prop="label" label="指标" width="240" />
+                  <el-table-column prop="value" label="数值" />
+                </el-table>
+                <ul v-if="economicSection.recommendations && economicSection.recommendations.length">
+                  <li v-for="(item, idx) in economicSection.recommendations" :key="`eco-${idx}`">{{ item }}</li>
+                </ul>
+              </div>
+            </div>
+            <div class="report-chapter">
+              <h2>供电可靠性方案</h2>
+              <div class="report-section-item">
+                <p>{{ powerSection.description || '暂无供电可靠性描述' }}</p>
+                <el-table v-if="powerRows.length" :data="powerRows" border>
+                  <el-table-column prop="label" label="指标" width="240" />
+                  <el-table-column prop="value" label="数值" />
+                </el-table>
+                <ul v-if="powerSection.recommendations && powerSection.recommendations.length">
+                  <li v-for="(item, idx) in powerSection.recommendations" :key="`power-${idx}`">{{ item }}</li>
+                </ul>
+              </div>
+            </div>
+            <div class="report-chapter">
+              <h2>环保方案</h2>
+              <div class="report-section-item">
+                <p>{{ environmentalSection.description || '暂无环保描述' }}</p>
+                <el-table v-if="environmentalRows.length" :data="environmentalRows" border>
+                  <el-table-column prop="label" label="指标" width="240" />
+                  <el-table-column prop="value" label="数值" />
+                </el-table>
+                <ul v-if="environmentalSection.recommendations && environmentalSection.recommendations.length">
+                  <li v-for="(item, idx) in environmentalSection.recommendations" :key="`env-${idx}`">{{ item }}</li>
+                </ul>
+              </div>
+            </div>
+            <div class="report-chapter">
+              <h2>关键权衡</h2>
+              <div class="report-section-item">
+                <ul v-if="finalReportData.trade_offs && finalReportData.trade_offs.length">
+                  <li v-for="(item, idx) in finalReportData.trade_offs" :key="`trade-off-${idx}`">
+                    {{ item.conflict || '-' }}：{{ item.resolution || '-' }}
+                  </li>
+                </ul>
+                <p v-else>暂无关键权衡项</p>
+              </div>
+            </div>
+            <div class="report-chapter">
+              <h2>风险清单</h2>
+              <div class="report-section-item">
+                <ul v-if="finalReportData.risks && finalReportData.risks.length">
+                  <li v-for="(item, idx) in finalReportData.risks" :key="`risk-${idx}`">
+                    [{{ item.type || '未知类型' }}] {{ item.description || '-' }}
+                  </li>
+                </ul>
+                <p v-else>暂无风险项</p>
+              </div>
+            </div>
+            <div class="report-chapter">
+              <h2>最终建议</h2>
+              <div class="report-section-item">
+                <ul v-if="finalReportData.recommendations && finalReportData.recommendations.length">
+                  <li v-for="(item, idx) in finalReportData.recommendations" :key="`final-rec-${idx}`">{{ item }}</li>
+                </ul>
+                <p v-else>暂无最终建议</p>
               </div>
             </div>
             <div class="report-chapter" v-if="reportMarkdown">
@@ -370,29 +483,119 @@ const formatRisk = (risk) => {
   return JSON.stringify(risk)
 }
 
+const formatObjectRows = (obj = {}) => {
+  if (!obj || typeof obj !== 'object') return []
+  return Object.entries(obj).map(([key, value]) => ({
+    label: key,
+    value: typeof value === 'number' ? value : String(value)
+  }))
+}
+
 const intermediate = computed(() => solutionData.value.intermediate_results || {})
 const draftOutput = computed(() => intermediate.value.draft_plan_agent?.full_output || {})
-const coolingResult = computed(() => draftOutput.value.cooling_result || {})
-const coolingKpis = computed(() => coolingResult.value.cooling_kpis || {})
-const coolingEconomics = computed(() => coolingResult.value.economic_indicators || {})
-const greenPowerResult = computed(() => draftOutput.value.green_power_result || {})
-const greenOptimization = computed(() => greenPowerResult.value.optimization || {})
-const greenFiles = computed(() => greenPowerResult.value.generated_files || {})
-const powerPlan = computed(() => draftOutput.value.power_supply_plan || {})
-const powerRaw = computed(() => powerPlan.value.raw_json || {})
-const costResult = computed(() => intermediate.value.cost_calculation?.full_output || {})
 const arbitrator = computed(() => intermediate.value.arbitrator?.full_output || solutionData.value || {})
 const overallScores = computed(() => solutionData.value.overall_scores || arbitrator.value.overall_scores || {})
 const keyMetrics = computed(() => solutionData.value.key_metrics || arbitrator.value.key_metrics || {})
 const finalReportPath = computed(() => intermediate.value.final_report?.full_output?.path || solutionData.value.final_report_path || '')
+
+const economicSection = computed(() => solutionData.value.economic_section || arbitrator.value.economic_section || {})
+const powerSection = computed(() => solutionData.value.power_reliability_section || arbitrator.value.power_reliability_section || {})
+const environmentalSection = computed(() => solutionData.value.environmental_section || arbitrator.value.environmental_section || {})
+const economicContent = computed(() => economicSection.value.content || {})
+const powerContent = computed(() => powerSection.value.content || {})
+const environmentalContent = computed(() => environmentalSection.value.content || {})
+
+const coolingResult = computed(() => {
+  const draftCooling = draftOutput.value.cooling_result || {}
+  return {
+    ...draftCooling,
+    cooling_technology: draftCooling.cooling_technology || environmentalSection.value.description || '-',
+    estimated_pue: draftCooling.estimated_pue ?? environmentalContent.value.pue ?? keyMetrics.value.pue ?? null,
+    predicted_wue: draftCooling.predicted_wue ?? environmentalContent.value.wue ?? null,
+    cooling_power_consumption: draftCooling.cooling_power_consumption ?? draftCooling.cooling_kpis?.cooling_power_kw ?? null,
+    waste_heat_recovery_kw: draftCooling.waste_heat_recovery_kw ?? draftCooling.cooling_kpis?.waste_heat_recovery_kw ?? null,
+    strategy_optimization_trace: draftCooling.strategy_optimization_trace || []
+  }
+})
+const coolingKpis = computed(() => coolingResult.value.cooling_kpis || {})
+const coolingEconomics = computed(() => {
+  const draftEco = coolingResult.value.economic_indicators || {}
+  return {
+    initial_investment: draftEco.initial_investment ?? economicContent.value.total_cost ?? keyMetrics.value.total_cost ?? null,
+    annual_op_cost: draftEco.annual_op_cost ?? null,
+    annual_electricity_cost: draftEco.annual_electricity_cost ?? null,
+    lcoe: draftEco.lcoe ?? null
+  }
+})
+
+const greenPowerResult = computed(() => draftOutput.value.green_power_result || {})
+const greenOptimization = computed(() => greenPowerResult.value.optimization || {})
+const greenFiles = computed(() => greenPowerResult.value.generated_files || {})
+
+const powerPlan = computed(() => {
+  const draftPower = draftOutput.value.power_supply_plan || {}
+  return {
+    ...draftPower,
+    external_source_type: draftPower.external_source_type || powerSection.value.description || '-',
+    redundancy_logic: draftPower.redundancy_logic || powerContent.value.ups_configuration || '-',
+    bus_type: draftPower.bus_type || '-',
+    secondary_voltage: draftPower.secondary_voltage || '-',
+    external_voltage: draftPower.external_voltage || '-'
+  }
+})
+const powerRaw = computed(() => {
+  const raw = powerPlan.value.raw_json || {}
+  return {
+    ...raw,
+    machine_room_grade: raw.machine_room_grade || keyMetrics.value.tier_level || powerContent.value.tier_level || '-',
+    cost_per_mw: raw.cost_per_mw ?? null
+  }
+})
+
+const costResult = computed(() => intermediate.value.cost_calculation?.full_output || {})
+const finalReportData = computed(() => ({
+  ...arbitrator.value,
+  ...solutionData.value
+}))
+const keyMetricsRows = computed(() => {
+  const metrics = keyMetrics.value || {}
+  return [
+    { label: '总成本(万元)', value: formatNumber(metrics.total_cost, 2) },
+    { label: 'PUE', value: formatNumber(metrics.pue, 3) },
+    { label: '绿电比例', value: formatPercent(metrics.green_power_ratio) },
+    { label: 'Tier 等级', value: metrics.tier_level ?? '-' },
+    { label: '预期可用性', value: metrics.expected_availability ?? '-' },
+    { label: '年碳排放(吨)', value: metrics.annual_carbon_emission ?? '-' }
+  ]
+})
+const economicRows = computed(() => formatObjectRows(economicContent.value))
+const powerRows = computed(() => formatObjectRows(powerContent.value))
+const environmentalRows = computed(() => formatObjectRows(environmentalContent.value))
 
 const economicOpinion = computed(() => intermediate.value.economic_analysis?.full_output || {})
 const reliabilityOpinion = computed(() => intermediate.value.power_reliability_analysis?.full_output || {})
 const environmentalOpinion = computed(() => intermediate.value.environmental_analysis?.full_output || {})
 
 const expertOpinions = computed(() => {
-  const source = [economicOpinion.value, reliabilityOpinion.value, environmentalOpinion.value].filter(Boolean)
-  return source.map((item) => ({
+  const source = [economicOpinion.value, reliabilityOpinion.value, environmentalOpinion.value].filter(item => item && Object.keys(item).length)
+  if (source.length) {
+    return source.map((item) => ({
+      name: item.expert_name || '专家',
+      type: item.expert_type || '分析',
+      summary: item.summary || '',
+      metrics: item.metrics || {},
+      recommendations: item.recommendations || []
+    }))
+  }
+
+  // 若中间专家节点缺失，回退展示最终方案三段内容，保证与后端最终输出一致。
+  const fallback = [
+    { expert_name: '经济性结论', expert_type: 'economic', summary: economicSection.value.description || '', metrics: economicContent.value, recommendations: economicSection.value.recommendations || [] },
+    { expert_name: '可靠性结论', expert_type: 'power_reliability', summary: powerSection.value.description || '', metrics: powerContent.value, recommendations: powerSection.value.recommendations || [] },
+    { expert_name: '环保性结论', expert_type: 'environmental', summary: environmentalSection.value.description || '', metrics: environmentalContent.value, recommendations: environmentalSection.value.recommendations || [] }
+  ].filter(item => item.summary || Object.keys(item.metrics || {}).length)
+
+  return fallback.map((item) => ({
     name: item.expert_name || '专家',
     type: item.expert_type || '分析',
     summary: item.summary || '',
@@ -420,6 +623,13 @@ const greenConfig = computed(() => {
   const pv = toNumber(greenOptimization.value.pv_capacity_mw, 0)
   const storage = toNumber(greenOptimization.value.storage_capacity_mwh, 0)
   const total = wind + pv + storage
+  if (total <= 0) {
+    const ratio = toNumber(keyMetrics.value.green_power_ratio, null)
+    return [
+      { type: '绿电占比(最终方案)', capacity: '-', ratio: ratio !== null ? (ratio * 100).toFixed(1) : '-' },
+      { type: '传统电占比(推导)', capacity: '-', ratio: ratio !== null ? (100 - ratio * 100).toFixed(1) : '-' }
+    ]
+  }
   return [
     { type: '光伏', capacity: `${formatNumber(pv)} MW`, ratio: total ? ((pv / total) * 100).toFixed(1) : '0.0' },
     { type: '风电', capacity: `${formatNumber(wind)} MW`, ratio: total ? ((wind / total) * 100).toFixed(1) : '0.0' },
@@ -448,10 +658,17 @@ const costBreakdown = computed(() => {
     { item: '光伏CAPEX', amount: toNumber(b.details?.pv_capex_lakh, 0) },
     { item: '储能CAPEX', amount: toNumber(b.details?.storage_capex_lakh, 0) }
   ]
-  return items.filter(i => i.amount > 0).map(i => ({
+  const mapped = items.filter(i => i.amount > 0).map(i => ({
     ...i,
     ratio: total > 0 ? ((i.amount / total) * 100).toFixed(1) : '0.0'
   }))
+  if (mapped.length) return mapped
+
+  const finalTotal = toNumber(keyMetrics.value.total_cost, 0)
+  if (finalTotal > 0) {
+    return [{ item: '最终方案总成本', amount: finalTotal, ratio: '100.0' }]
+  }
+  return []
 })
 
 const filteredMarkdown = computed(() => {

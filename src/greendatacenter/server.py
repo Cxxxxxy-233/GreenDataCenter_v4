@@ -193,6 +193,15 @@ async def _run_workflow(workflow_id: str, input_data: dict):
                     workflows_store[workflow_id]["streaming_output"].append(fallback_msg)
                     pushed_nodes.add(entry["node"])
 
+        solution = {}
+        for item in workflows_store.get(workflow_id, {}).get("streaming_output", []):
+            node = item.get("node", "")
+            data = item.get("data", {})
+            if node == "arbitrator" and isinstance(data, dict):
+                solution = data
+            if node == "final_report" and isinstance(data, dict):
+                solution.update(data)
+
         if "output" not in pushed_nodes:
             print("[SSE] Fallback: output node not received from astream, pushing manually", flush=True)
             fallback_output_msg = {

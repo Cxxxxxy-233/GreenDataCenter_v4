@@ -630,6 +630,12 @@ let sseReconnectCount = 0
 const MAX_SSE_RECONNECTS = 5
 let lastDataTime = Date.now()
 let safetyTimeoutId = null
+let fallbackPollTimer = null
+let lastSSEDataTime = Date.now()
+let reconnectTimerId = null
+let terminalWatchdogTimer = null
+let finalReportFinalizeTimer = null
+let solutionProbeFailCount = 0
 
 const resetSafetyTimeout = () => {
   if (safetyTimeoutId) clearTimeout(safetyTimeoutId)
@@ -639,6 +645,162 @@ const resetSafetyTimeout = () => {
       addLog('警告：长时间未收到数据（120秒），可能工作流已卡住', 'warning')
     }
   }, 120000)
+}
+
+const clearRuntimeTimers = () => {
+  if (safetyTimeoutId) {
+    clearTimeout(safetyTimeoutId)
+    safetyTimeoutId = null
+  }
+  if (fallbackPollTimer) {
+    clearInterval(fallbackPollTimer)
+    fallbackPollTimer = null
+  }
+  if (reconnectTimerId) {
+    clearTimeout(reconnectTimerId)
+    reconnectTimerId = null
+  }
+  if (terminalWatchdogTimer) {
+    clearInterval(terminalWatchdogTimer)
+    terminalWatchdogTimer = null
+  }
+  if (finalReportFinalizeTimer) {
+    clearTimeout(finalReportFinalizeTimer)
+    finalReportFinalizeTimer = null
+  }
+}
+
+const closeEventStream = () => {
+  if (eventSource.value) {
+    eventSource.value.close()
+    eventSource.value = null
+  }
+}
+
+const applySolutionToPreview = (solution) => {
+  const metrics = solution?.key_metrics || {}
+  finalSolution.name = solution?.name || ''
+  finalSolution.overallScore = toNumber(solution?.overall_scores?.overall)
+  finalSolution.pue = toNumber(metrics.pue)
+  finalSolution.greenPowerRatio = toNumber(metrics.green_power_ratio)
+  finalSolution.totalCost = toNumber(metrics.total_cost)
+  finalSolution.tierLevel = toNumber(metrics.tier_level)
+  finalSolution.expectedAvailability = toNumber(metrics.expected_availability)
+  finalSolution.annualCarbonEmission = toNumber(metrics.annual_carbon_emission)
+  finalSolution.roi = toNumber(metrics.roi)
+  finalSolution.paybackPeriod = toNumber(metrics.payback_period)
+}
+
+const checkAndFinalizeByBackendState = async (reason = 'backend-check') => {
+  if (isCompleted.value || isFailed.value) return
+  const wid = workflowId.value
+  if (!wid) return
+
+  try {
+    const { data: status } = await workflowApi.getStatus(wid)
+    console.log('[BACKEND CHECK]', reason, 'status=', status?.status)
+    if (status?.status === 'completed') {
+      await finalizeWorkflow({ source: `${reason}-status`, resultPayload: status || {} })
+      return
+    }
+    if (status?.status === 'failed') {
+      isFailed.value = true
+      addLog(`❌ 后端状态为失败: ${status.error || '未知错误'}`, 'error')
+      clearRuntimeTimers()
+      closeEventStream()
+      return
+    }
+  } catch (e) {
+    addLog(`状态校验失败(${reason})，将继续尝试方案校验`, 'warning')
+    // 状态接口失败时继续尝试方案接口，不中断流程
+  }
+
+  // 兜底：若 status 未及时切换，但方案已可读取，则视为后端已完成。
+  // 仅在流程末段探测方案接口，避免早期 404 噪音。
+  if (currentNodeIndex.value < 8) return
+
+  try {
+    const { data: solutionData } = await solutionApi.getById(wid)
+    if (solutionData && (solutionData.success !== false)) {
+      await finalizeWorkflow({
+        source: `${reason}-solution-probe`,
+        resultPayload: { solution: solutionData.solution || solutionData }
+      })
+      return
+    }
+  } catch (e) {
+    const statusCode = e?.response?.status
+    solutionProbeFailCount += 1
+    // 404 代表后端尚未写入 solutions_store，属于预期重试场景，降低日志噪音。
+    if (statusCode !== 404 && solutionProbeFailCount % 3 === 0) {
+      addLog(`方案校验失败(${reason})，等待下一次重试`, 'warning')
+    }
+  }
+}
+
+const startTerminalWatchdog = () => {
+  if (terminalWatchdogTimer || isCompleted.value || isFailed.value) return
+
+  let retries = 0
+  const maxRetries = 30 // 约 60 秒
+  solutionProbeFailCount = 0
+  addLog('进入终态校验阶段，启动完成态看门狗', 'info')
+
+  terminalWatchdogTimer = setInterval(async () => {
+    if (isCompleted.value || isFailed.value) {
+      clearInterval(terminalWatchdogTimer)
+      terminalWatchdogTimer = null
+      return
+    }
+
+    retries += 1
+    await checkAndFinalizeByBackendState(`terminal-watchdog-${retries}`)
+
+    if (isCompleted.value || isFailed.value || retries >= maxRetries) {
+      clearInterval(terminalWatchdogTimer)
+      terminalWatchdogTimer = null
+      if (!isCompleted.value && !isFailed.value) {
+        // 最终兜底：final_report 已到达且后端没有失败信号时，按终态收口，避免永久卡 90%。
+        addLog('终态看门狗超时，触发最终收口兜底', 'warning')
+        finalizeWorkflow({ source: 'terminal-watchdog-timeout-fallback', resultPayload: {} })
+      }
+    }
+  }, 2000)
+}
+
+const finalizeWorkflow = async ({ source, resultPayload } = {}) => {
+  if (isCompleted.value) return
+
+  const wid = workflowId.value
+  isCompleted.value = true
+  isFailed.value = false
+  progressPercent.value = 100
+  currentNodeIndex.value = 9
+  completedNodes.value.add(9)
+
+  if (wid) {
+    localStorage.setItem('currentSolutionId', wid)
+  }
+
+  // 优先使用当前事件携带的数据；不足时再从后端详情接口补齐。
+  const directSolution = resultPayload?.solution || resultPayload?.final_solution || null
+  if (directSolution && typeof directSolution === 'object') {
+    applySolutionToPreview(directSolution)
+  }
+
+  try {
+    if (wid) {
+      const { data } = await solutionApi.getById(wid)
+      const solution = data?.solution || data || {}
+      applySolutionToPreview(solution)
+    }
+  } catch (e) {
+    addLog('已进入完成态，但详情数据补齐失败，可直接进入详情页查看', 'warning')
+  }
+
+  addLog(`✅ 工作流执行完成（来源: ${source || 'unknown'}）`, 'success')
+  clearRuntimeTimers()
+  closeEventStream()
 }
 
 const handleSSENode = (nodeName, data) => {
@@ -786,6 +948,16 @@ const handleSSENode = (nodeName, data) => {
         wordCount: (sol.final_report || '').length || (d.final_report || '').length
       }
       addLog('最终报告生成完成', 'success')
+      // 后端若已完成但末尾 SSE 丢失，主动校验后端状态并收敛。
+      checkAndFinalizeByBackendState('after-final-report')
+      startTerminalWatchdog()
+      if (finalReportFinalizeTimer) clearTimeout(finalReportFinalizeTimer)
+      finalReportFinalizeTimer = setTimeout(() => {
+        if (!isCompleted.value && !isFailed.value) {
+          addLog('final_report 后未收到终态信号，执行延时收口', 'warning')
+          finalizeWorkflow({ source: 'final-report-delay-fallback', resultPayload: {} })
+        }
+      }, 8000)
     }
 
     if (nodeName === 'output') {
@@ -829,36 +1001,7 @@ const connectSSE = () => {
 
       if (nodeName === 'completed') {
         console.log('[SSE] ===== COMPLETED EVENT RECEIVED =====')
-        addLog('✅ 工作流执行完成', 'success')
-
-        isCompleted.value = true
-        progressPercent.value = 100
-        currentNodeIndex.value = 9
-        completedNodes.value.add(9)
-
-        const result = nodeData || {}
-        const solution = result.solution || {}
-        const metrics = solution.key_metrics || {}
-
-        console.log('[SSE] Processing solution data:', solution)
-
-        finalSolution.name = solution.name || ''
-        finalSolution.overallScore = toNumber(solution.overall_scores?.overall)
-        finalSolution.pue = toNumber(metrics.pue)
-        finalSolution.greenPowerRatio = toNumber(metrics.green_power_ratio)
-        finalSolution.totalCost = toNumber(metrics.total_cost)
-        finalSolution.tierLevel = toNumber(metrics.tier_level)
-        finalSolution.expectedAvailability = toNumber(metrics.expected_availability)
-        finalSolution.annualCarbonEmission = toNumber(metrics.annual_carbon_emission)
-        finalSolution.roi = toNumber(metrics.roi)
-        finalSolution.paybackPeriod = toNumber(metrics.payback_period)
-
-        localStorage.setItem('currentSolutionId', wid)
-        if (safetyTimeoutId) clearTimeout(safetyTimeoutId)
-        es.close()
-        eventSource.value = null
-
-        console.log('[SSE] ===== COMPLETED FULLY PROCESSED =====')
+        finalizeWorkflow({ source: 'sse-completed', resultPayload: nodeData || {} })
         return
       }
 
@@ -872,25 +1015,36 @@ const connectSSE = () => {
       }
 
       handleSSENode(nodeName, nodeData)
+      if (nodeName === 'output') {
+        // output 代表后端流程已到最终收口，若 completed 事件丢失，前端仍需收敛。
+        finalizeWorkflow({ source: 'sse-output', resultPayload: nodeData || {} })
+        return
+      }
       if (nodeName !== 'heartbeat') {
         lastSSEDataTime = Date.now()
       }
     } catch (error) {
       console.error('SSE parse error:', error, 'event.data:', event.data)
+      addLog('检测到 SSE 消息解析异常，启动后端状态校验兜底', 'warning')
+      checkAndFinalizeByBackendState('sse-parse-error')
     }
   }
 
   es.onerror = () => {
     if (!isCompleted.value && !isFailed.value) {
       sseReconnectCount++
+      checkAndFinalizeByBackendState('sse-onerror')
+      closeEventStream()
       if (sseReconnectCount > MAX_SSE_RECONNECTS) {
         addLog(`SSE重连次数超过${MAX_SSE_RECONNECTS}次，停止重连`, 'error')
         isFailed.value = true
-        if (safetyTimeoutId) clearTimeout(safetyTimeoutId)
-        es.close(); eventSource.value = null; return
+        clearRuntimeTimers()
+        return
       }
       addLog(`SSE连接断开，3秒后重连... (${sseReconnectCount}/${MAX_SSE_RECONNECTS})`, 'warning')
-      setTimeout(() => { if (!isCompleted.value && !isFailed.value && workflowId.value) connectSSE() }, 3000)
+      reconnectTimerId = setTimeout(() => {
+        if (!isCompleted.value && !isFailed.value && workflowId.value) connectSSE()
+      }, 3000)
     }
   }
   eventSource.value = es
@@ -898,11 +1052,8 @@ const connectSSE = () => {
   startFallbackPolling()
 }
 
-let fallbackPollTimer = null
-let lastSSEDataTime = Date.now()
-
 const startFallbackPolling = () => {
-  if (fallbackPollTimer) clearInterval(fallbackPollTimer)
+  if (fallbackPollTimer) return
   lastSSEDataTime = Date.now()
   console.log('[FALLBACK] Starting fallback polling...')
   
@@ -913,104 +1064,14 @@ const startFallbackPolling = () => {
       return
     }
     
-    const timeSinceLastData = Date.now() - lastSSEDataTime
-    const progress = progressPercent.value
-    
-    // 更积极的检查策略
-    const shouldCheck = (
-      // 进度高时更频繁检查
-      (progress >= 80 && timeSinceLastData > 8000) ||
-      // 进度中等时检查
-      (progress >= 60 && timeSinceLastData > 15000) ||
-      // 保底检查，每30秒至少检查一次
-      (timeSinceLastData > 30000)
-    )
-
-    if (!shouldCheck) return
-
-    console.log('[FALLBACK] Checking status - progress:', progress + '%, timeSinceLastData:', Math.round(timeSinceLastData / 1000) + 's')
-    addLog('轮询状态API检查工作流状态...', 'info')
-
-    try {
-      const response = await workflowApi.getStatus(workflowId.value)
-      const status = response.data
-      console.log('[FALLBACK] Status response:', status)
-
-      if (status.status === 'completed') {
-        addLog('✅ 通过轮询检测到工作流已完成！', 'success')
-        clearInterval(fallbackPollTimer)
-        fallbackPollTimer = null
-        handleCompletedFromPolling(status)
-      } else if (status.status === 'failed') {
-        addLog(`❌ 工作流失败: ${status.error}`, 'error')
-        isFailed.value = true
-        clearInterval(fallbackPollTimer)
-        fallbackPollTimer = null
-      } else {
-        console.log('[FALLBACK] Workflow still running, will check again...')
-      }
-    } catch (e) {
-      console.error('[FALLBACK] Poll error:', e)
-    }
+    checkAndFinalizeByBackendState('fallback-poll')
   }, 5000) // 每5秒检查一次
-}
-
-const handleCompletedFromPolling = async (statusData) => {
-  console.log('[FALLBACK] ===== handleCompletedFromPolling called =====')
-
-  if (eventSource.value) { eventSource.value.close(); eventSource.value = null }
-  if (safetyTimeoutId) clearTimeout(safetyTimeoutId)
-  if (fallbackPollTimer) { clearInterval(fallbackPollTimer); fallbackPollTimer = null }
-
-  isCompleted.value = true
-  progressPercent.value = 100
-  currentNodeIndex.value = 9
-  completedNodes.value.add(9)
-
-  await nextTick()
-  console.log('[FALLBACK] State updated: isCompleted=', isCompleted.value, 'progressPercent=', progressPercent.value)
-
-  const wid = workflowId.value
-  localStorage.setItem('currentSolutionId', wid)
-  addLog('✅ 工作流已完成！（降级模式）', 'success')
-
-  try {
-    console.log('[FALLBACK] Loading solution details for:', wid)
-    const solutionResponse = await solutionApi.getById(wid)
-    console.log('[FALLBACK] Solution response:', solutionResponse.data ? 'received' : 'null')
-
-    const sol = solutionResponse.data || {}
-    const solutionData = sol.solution || sol
-    const metrics = solutionData.key_metrics || sol.key_metrics || {}
-    const scores = solutionData.overall_scores || sol.overall_scores || {}
-
-    console.log('[FALLBACK] Parsing solution - name:', solutionData.name, 'overallScore:', scores.overall)
-
-    finalSolution.name = solutionData.name || ''
-    finalSolution.overallScore = toNumber(scores.overall)
-    finalSolution.pue = toNumber(metrics.pue)
-    finalSolution.greenPowerRatio = toNumber(metrics.green_power_ratio)
-    finalSolution.totalCost = toNumber(metrics.total_cost)
-    finalSolution.tierLevel = toNumber(metrics.tier_level)
-    finalSolution.expectedAvailability = toNumber(metrics.expected_availability)
-    finalSolution.annualCarbonEmission = toNumber(metrics.annual_carbon_emission)
-    finalSolution.roi = toNumber(metrics.roi)
-    finalSolution.paybackPeriod = toNumber(metrics.payback_period)
-
-    addLog(`✅ 方案数据已加载: ${solutionData.name || '未知方案'}`, 'success')
-    console.log('[FALLBACK] Solution data loaded successfully')
-  } catch (e) {
-    console.error('[FALLBACK] Failed to load solution details:', e)
-    addLog('⚠️ 降级模式：方案详情加载失败（可点击查看详情页手动查看），但工作流已完成', 'warning')
-  }
-
-  await nextTick()
-  console.log('[FALLBACK] ===== handleCompletedFromPolling finished =====')
 }
 
 const startWorkflow = async () => {
   const wid = localStorage.getItem('currentWorkflowId')
   if (wid) {
+    sseReconnectCount = 0
     workflowId.value = wid
     addLog(`使用工作流ID: ${wid}`, 'info')
     connectSSE()
@@ -1032,7 +1093,8 @@ const downloadLogs = () => {
 }
 
 const cancelGenerate = () => {
-  if (eventSource.value) { eventSource.value.close(); eventSource.value = null }
+  clearRuntimeTimers()
+  closeEventStream()
   router.push('/config')
 }
 
@@ -1052,8 +1114,12 @@ const regenerate = () => {
 const viewError = () => { ElMessage.error('请查看下方实时日志中的错误信息') }
 
 const goToDetail = () => {
-  const solutionId = localStorage.getItem('currentSolutionId')
-  router.push(`/detail/${solutionId || 'latest'}`)
+  const solutionId = localStorage.getItem('currentSolutionId') || workflowId.value
+  if (!solutionId) {
+    ElMessage.error('未找到可用方案ID，请稍后重试')
+    return
+  }
+  router.push(`/detail/${solutionId}`)
 }
 
 onMounted(() => {
@@ -1062,9 +1128,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (eventSource.value) { eventSource.value.close(); eventSource.value = null }
-  if (fallbackPollTimer) { clearInterval(fallbackPollTimer); fallbackPollTimer = null }
-  if (safetyTimeoutId) clearTimeout(safetyTimeoutId)
+  clearRuntimeTimers()
+  closeEventStream()
 })
 </script>
 
