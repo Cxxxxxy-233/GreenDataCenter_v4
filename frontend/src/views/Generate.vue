@@ -642,6 +642,7 @@ const resetSafetyTimeout = () => {
 }
 
 const handleSSENode = (nodeName, data) => {
+  console.log('[SSE] handleSSENode called with node:', nodeName)
   const idx = nodeIndexMap[nodeName]
   if (idx !== undefined) {
     currentNodeIndex.value = idx
@@ -792,7 +793,10 @@ const handleSSENode = (nodeName, data) => {
       const d = data || {}
       const sol = d.final_solution || d.solution || {}
       if (sol.name) finalSolution.name = sol.name
-      addLog('输出节点完成', 'info')
+      completedNodes.value.add(9)
+      currentNodeIndex.value = 9
+      progressPercent.value = 100
+      addLog('输出节点完成', 'success')
     }
   } catch (e) {
     console.error(`[SSE] Error processing ${nodeName}:`, e, 'data:', JSON.stringify(data).substring(0, 200))
@@ -811,16 +815,33 @@ const connectSSE = () => {
 
   es.onmessage = (event) => {
     try {
+      console.log('[SSE RAW] event.data received:', event.data.substring(0, 200))
       const item = JSON.parse(event.data)
       const nodeName = item.node
       const nodeData = item.data
-      if (nodeName === 'heartbeat') return
+
+      console.log('[SSE PARSED] nodeName:', nodeName)
+
+      if (nodeName === 'heartbeat') {
+        console.log('[SSE] heartbeat received')
+        return
+      }
+
       if (nodeName === 'completed') {
-        addLog('工作流执行完成', 'success')
-        isCompleted.value = true; progressPercent.value = 100; currentNodeIndex.value = 9; completedNodes.value.add(9)
+        console.log('[SSE] ===== COMPLETED EVENT RECEIVED =====')
+        addLog('✅ 工作流执行完成', 'success')
+
+        isCompleted.value = true
+        progressPercent.value = 100
+        currentNodeIndex.value = 9
+        completedNodes.value.add(9)
+
         const result = nodeData || {}
         const solution = result.solution || {}
         const metrics = solution.key_metrics || {}
+
+        console.log('[SSE] Processing solution data:', solution)
+
         finalSolution.name = solution.name || ''
         finalSolution.overallScore = toNumber(solution.overall_scores?.overall)
         finalSolution.pue = toNumber(metrics.pue)
@@ -831,19 +852,32 @@ const connectSSE = () => {
         finalSolution.annualCarbonEmission = toNumber(metrics.annual_carbon_emission)
         finalSolution.roi = toNumber(metrics.roi)
         finalSolution.paybackPeriod = toNumber(metrics.payback_period)
+
         localStorage.setItem('currentSolutionId', wid)
         if (safetyTimeoutId) clearTimeout(safetyTimeoutId)
-        es.close(); eventSource.value = null; return
+        es.close()
+        eventSource.value = null
+
+        console.log('[SSE] ===== COMPLETED FULLY PROCESSED =====')
+        return
       }
+
       if (nodeName === 'error') {
         addLog(`工作流执行失败: ${nodeData?.error || '未知错误'}`, 'error')
         isFailed.value = true
         if (safetyTimeoutId) clearTimeout(safetyTimeoutId)
-        es.close(); eventSource.value = null; return
+        es.close()
+        eventSource.value = null
+        return
       }
+
       handleSSENode(nodeName, nodeData)
-      lastSSEDataTime = Date.now()
-    } catch (error) { console.error('SSE parse error:', error) }
+      if (nodeName !== 'heartbeat') {
+        lastSSEDataTime = Date.now()
+      }
+    } catch (error) {
+      console.error('SSE parse error:', error, 'event.data:', event.data)
+    }
   }
 
   es.onerror = () => {
@@ -870,54 +904,90 @@ let lastSSEDataTime = Date.now()
 const startFallbackPolling = () => {
   if (fallbackPollTimer) clearInterval(fallbackPollTimer)
   lastSSEDataTime = Date.now()
+  console.log('[FALLBACK] Starting fallback polling...')
+  
   fallbackPollTimer = setInterval(async () => {
     if (isCompleted.value || isFailed.value || !workflowId.value) {
       clearInterval(fallbackPollTimer)
       fallbackPollTimer = null
       return
     }
+    
     const timeSinceLastData = Date.now() - lastSSEDataTime
-    const isStuck = progressPercent.value >= 80 && timeSinceLastData > 30000
-    if (!isStuck) return
-    console.log('[FALLBACK] SSE appears stuck at', progressPercent.value + '%, polling status API...')
-    addLog('SSE长时间无数据，尝试轮询状态API...', 'warning')
+    const progress = progressPercent.value
+    
+    // 更积极的检查策略
+    const shouldCheck = (
+      // 进度高时更频繁检查
+      (progress >= 80 && timeSinceLastData > 8000) ||
+      // 进度中等时检查
+      (progress >= 60 && timeSinceLastData > 15000) ||
+      // 保底检查，每30秒至少检查一次
+      (timeSinceLastData > 30000)
+    )
+
+    if (!shouldCheck) return
+
+    console.log('[FALLBACK] Checking status - progress:', progress + '%, timeSinceLastData:', Math.round(timeSinceLastData / 1000) + 's')
+    addLog('轮询状态API检查工作流状态...', 'info')
+
     try {
       const response = await workflowApi.getStatus(workflowId.value)
       const status = response.data
-      console.log('[FALLBACK] Status:', status.status)
+      console.log('[FALLBACK] Status response:', status)
+
       if (status.status === 'completed') {
-        addLog('通过轮询检测到工作流已完成！', 'success')
+        addLog('✅ 通过轮询检测到工作流已完成！', 'success')
         clearInterval(fallbackPollTimer)
         fallbackPollTimer = null
         handleCompletedFromPolling(status)
       } else if (status.status === 'failed') {
-        addLog(`工作流失败: ${status.error}`, 'error')
+        addLog(`❌ 工作流失败: ${status.error}`, 'error')
         isFailed.value = true
         clearInterval(fallbackPollTimer)
         fallbackPollTimer = null
+      } else {
+        console.log('[FALLBACK] Workflow still running, will check again...')
       }
     } catch (e) {
       console.error('[FALLBACK] Poll error:', e)
     }
-  }, 10000)
+  }, 5000) // 每5秒检查一次
 }
 
 const handleCompletedFromPolling = async (statusData) => {
-  isCompleted.value = true
-  progressPercent.value = 100
-  currentNodeIndex.value = 9
-  completedNodes.value.add(9)
+  console.log('[FALLBACK] ===== handleCompletedFromPolling called =====')
+
   if (eventSource.value) { eventSource.value.close(); eventSource.value = null }
   if (safetyTimeoutId) clearTimeout(safetyTimeoutId)
   if (fallbackPollTimer) { clearInterval(fallbackPollTimer); fallbackPollTimer = null }
 
+  isCompleted.value = true
+  progressPercent.value = 100
+  currentNodeIndex.value = 9
+  completedNodes.value.add(9)
+
+  await nextTick()
+  console.log('[FALLBACK] State updated: isCompleted=', isCompleted.value, 'progressPercent=', progressPercent.value)
+
+  const wid = workflowId.value
+  localStorage.setItem('currentSolutionId', wid)
+  addLog('✅ 工作流已完成！（降级模式）', 'success')
+
   try {
-    const wid = workflowId.value
+    console.log('[FALLBACK] Loading solution details for:', wid)
     const solutionResponse = await solutionApi.getById(wid)
+    console.log('[FALLBACK] Solution response:', solutionResponse.data ? 'received' : 'null')
+
     const sol = solutionResponse.data || {}
-    const metrics = sol.key_metrics || {}
-    finalSolution.name = sol.name || ''
-    finalSolution.overallScore = toNumber(sol.overall_scores?.overall)
+    const solutionData = sol.solution || sol
+    const metrics = solutionData.key_metrics || sol.key_metrics || {}
+    const scores = solutionData.overall_scores || sol.overall_scores || {}
+
+    console.log('[FALLBACK] Parsing solution - name:', solutionData.name, 'overallScore:', scores.overall)
+
+    finalSolution.name = solutionData.name || ''
+    finalSolution.overallScore = toNumber(scores.overall)
     finalSolution.pue = toNumber(metrics.pue)
     finalSolution.greenPowerRatio = toNumber(metrics.green_power_ratio)
     finalSolution.totalCost = toNumber(metrics.total_cost)
@@ -926,11 +996,16 @@ const handleCompletedFromPolling = async (statusData) => {
     finalSolution.annualCarbonEmission = toNumber(metrics.annual_carbon_emission)
     finalSolution.roi = toNumber(metrics.roi)
     finalSolution.paybackPeriod = toNumber(metrics.payback_period)
-    localStorage.setItem('currentSolutionId', wid)
-    addLog('方案数据已加载（降级模式）', 'success')
+
+    addLog(`✅ 方案数据已加载: ${solutionData.name || '未知方案'}`, 'success')
+    console.log('[FALLBACK] Solution data loaded successfully')
   } catch (e) {
-    addLog('降级模式：无法加载方案详情，但工作流已完成', 'warning')
+    console.error('[FALLBACK] Failed to load solution details:', e)
+    addLog('⚠️ 降级模式：方案详情加载失败（可点击查看详情页手动查看），但工作流已完成', 'warning')
   }
+
+  await nextTick()
+  console.log('[FALLBACK] ===== handleCompletedFromPolling finished =====')
 }
 
 const startWorkflow = async () => {
