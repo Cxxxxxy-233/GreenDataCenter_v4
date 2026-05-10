@@ -11,29 +11,59 @@ TOOLS_DIR = Path(__file__).resolve().parent
 CSV_DIR = TOOLS_DIR / "csv"
 
 
+# 预定义的城市地理位置缓存（避免网络调用）
+CITY_LOCATION_CACHE = {
+    "乌兰察布": {"lat": 40.9042, "lon": 113.1244, "altitude": 1300.0, "timezone": "Asia/Shanghai"},
+    "北京": {"lat": 39.9042, "lon": 116.4074, "altitude": 50.0, "timezone": "Asia/Shanghai"},
+    "上海": {"lat": 31.2304, "lon": 121.4737, "altitude": 10.0, "timezone": "Asia/Shanghai"},
+    "广州": {"lat": 23.1291, "lon": 113.2644, "altitude": 10.0, "timezone": "Asia/Shanghai"},
+    "深圳": {"lat": 22.5431, "lon": 114.0579, "altitude": 10.0, "timezone": "Asia/Shanghai"},
+    "杭州": {"lat": 30.2741, "lon": 120.1552, "altitude": 10.0, "timezone": "Asia/Shanghai"},
+    "成都": {"lat": 30.5728, "lon": 104.0668, "altitude": 500.0, "timezone": "Asia/Shanghai"},
+    "武汉": {"lat": 30.5928, "lon": 114.3055, "altitude": 30.0, "timezone": "Asia/Shanghai"},
+    "西安": {"lat": 34.2619, "lon": 108.9463, "altitude": 400.0, "timezone": "Asia/Shanghai"},
+    "南京": {"lat": 32.0603, "lon": 118.7969, "altitude": 20.0, "timezone": "Asia/Shanghai"},
+    "张家口": {"lat": 40.8173, "lon": 114.8783, "altitude": 700.0, "timezone": "Asia/Shanghai"},
+    "三亚": {"lat": 18.2208, "lon": 109.5076, "altitude": 10.0, "timezone": "Asia/Shanghai"},
+    "丽江": {"lat": 26.8639, "lon": 100.2389, "altitude": 2400.0, "timezone": "Asia/Shanghai"},
+}
+
 def _get_location_info(city: str) -> Dict[str, Any]:
     """Resolve latitude and longitude for the target city."""
     if not isinstance(city, str):
         raise TypeError(f"city must be str, got {type(city).__name__}")
 
+    # 首先尝试使用缓存
+    normalized_city = city.replace("市", "").strip()
+    if normalized_city in CITY_LOCATION_CACHE:
+        return CITY_LOCATION_CACHE[normalized_city]
+    
+    # 尝试原城市名
+    if city in CITY_LOCATION_CACHE:
+        return CITY_LOCATION_CACHE[city]
+
+    # 尝试网络调用（作为备用）
     try:
         geolocator = Nominatim(user_agent="green_data_center_wind_sim")
-        normalized_city = city.replace("市", "").strip()
         query_candidates = [city, f"{city}, China", normalized_city]
 
         for query in query_candidates:
             location = geolocator.geocode(query, timeout=8)
             if location is not None:
-                return {
+                result = {
                     "lat": float(location.latitude),
                     "lon": float(location.longitude),
                     "altitude": 50.0,
                     "timezone": "Asia/Shanghai",
                 }
+                CITY_LOCATION_CACHE[normalized_city] = result
+                return result
     except Exception as exc:
-        raise ValueError(f"Geopy geocoding failed for '{city}': {exc}") from exc
+        sys.stdout.write(f"[wind_sim] Geocoding failed for '{city}', using default location\n")
+        sys.stdout.flush()
 
-    raise ValueError(f"City '{city}' cannot be geocoded by geopy.")
+    # 如果所有方法都失败，返回默认位置（北京）
+    return {"lat": 39.9042, "lon": 116.4074, "altitude": 50.0, "timezone": "Asia/Shanghai"}
 
 
 def _resolve_time_range(

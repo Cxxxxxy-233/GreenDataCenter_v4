@@ -233,52 +233,97 @@ class DraftPlanAgentNode:
             "memory_context": memory_context,
         }
 
-        llm = get_llm(
-            temperature=0.4,
-            max_tokens=2000,
-            on_chunk=self._on_stream_chunk,
-            timeout=90,
-        )
+        # 手动依次调用三个工具，确保每个工具都被执行
+        green_power_result = {}
+        cooling_result = {}
+        power_supply_plan = {}
+        
+        # 1. 调用绿电分配工具
+        try:
+            sys.stdout.write("[Draft Plan Agent] Calling green_power_allocation...\n")
+            sys.stdout.flush()
+            gp_input = {
+                "location": req_data.get("location", "北京"),
+                "green_power_ratio": req_data.get("green_power_ratio", 0.7),
+                "load_mw": float(req_data.get("planned_load_kw", 0)) / 1000,
+                "sim_hours": req_data.get("sim_hours", 160),  # 使用用户配置或默认160小时
+                "year": 2025,
+            }
+            green_power_result = green_power_allocation_tool.invoke(gp_input)
+            sys.stdout.write("[Draft Plan Agent] green_power_allocation completed\n")
+            sys.stdout.flush()
+        except Exception as e:
+            print(f"[DraftPlanAgent] Error calling green_power_allocation: {e}", flush=True)
+        
+        # 2. 调用制冷方案工具
+        try:
+            sys.stdout.write("[Draft Plan Agent] Calling cooling-scheme-generator...\n")
+            sys.stdout.flush()
+            cooling_input = {
+                "user_requirements": req_data,
+                "environmental_data": {"annual_temperature": 15.0},
+                "location": req_data.get("location"),
+                "planned_load": req_data.get("planned_load_kw"),
+                "computing_power_density": req_data.get("computing_power_density", 8.0),
+                "pue_target": req_data.get("pue_target", 1.3),
+                "green_power_ratio": req_data.get("green_power_ratio", 0.7),
+                "priority": req_data.get("priority", "economic"),
+            }
+            cooling_result = cooling_scheme_generator_tool.invoke(cooling_input)
+            sys.stdout.write("[Draft Plan Agent] cooling-scheme-generator completed\n")
+            sys.stdout.flush()
+        except Exception as e:
+            print(f"[DraftPlanAgent] Error calling cooling-scheme-generator: {e}", flush=True)
+        
+        # 3. 调用供电配置工具
+        try:
+            sys.stdout.write("[Draft Plan Agent] Calling power_supply_config...\n")
+            sys.stdout.flush()
+            power_input = {
+                "machine_room_grade": req_data.get("machine_room_grade", "A"),
+                "total_load_mw": float(req_data.get("planned_load_kw", 0)) / 1000,
+                "pue_target": req_data.get("pue_target", 1.3),
+            }
+            power_supply_plan = power_supply_config_tool.invoke(power_input)
+            sys.stdout.write("[Draft Plan Agent] power_supply_config completed\n")
+            sys.stdout.flush()
+        except Exception as e:
+            print(f"[DraftPlanAgent] Error calling power_supply_config: {e}", flush=True)
 
-        agent = create_agent(
-            llm,
-            self.tools,
-            system_prompt=self.system_prompt,
-        )
-
-        sys.stdout.write("[Draft Plan Agent] Calling tools...\n")
+        sys.stdout.write("[Draft Plan Agent] All tools completed\n")
         sys.stdout.flush()
 
-        result = agent.invoke(
-            {"messages": [HumanMessage(content=json.dumps(input_payload, ensure_ascii=False))]},
-            config={"callbacks": [ToolLoggingCallbackHandler()]},
-        )
-
-        sys.stdout.write("[Draft Plan Agent] Tool-calling completed\n")
-        sys.stdout.flush()
-
-        output_text = self._extract_final_content(result)
-        plan_data = self._parse_json_response(output_text)
-        print(f"[DraftPlanAgent] Parsed plan_data keys: {list(plan_data.keys())}", flush=True)
-        print(f"[DraftPlanAgent] green_power_result exists: {'green_power_result' in plan_data}", flush=True)
-        print(f"[DraftPlanAgent] cooling_result exists: {'cooling_result' in plan_data}", flush=True)
-        print(f"[DraftPlanAgent] power_supply_plan exists: {'power_supply_plan' in plan_data}", flush=True)
-
-        green_power_result = plan_data.get("green_power_result") or state.get("green_power_result", {})
-        cooling_result = plan_data.get("cooling_result") or state.get("cooling_result", {})
-        power_supply_plan = plan_data.get("power_supply_plan") or state.get("power_supply_plan", {})
+        output_text = "{}"
+        plan_data = {}
+        
+        # 工具已经直接调用，结果已经在 green_power_result, cooling_result, power_supply_plan 中
+        # 如果结果为空，尝试从状态中获取缓存
+        if not green_power_result:
+            green_power_result = state.get("green_power_result", {})
+        if not cooling_result:
+            cooling_result = state.get("cooling_result", {})
+        if not power_supply_plan:
+            power_supply_plan = state.get("power_supply_plan", {})
+        
+        print(f"[DraftPlanAgent] green_power_result exists: {bool(green_power_result)}", flush=True)
+        print(f"[DraftPlanAgent] cooling_result exists: {bool(cooling_result)}", flush=True)
+        print(f"[DraftPlanAgent] power_supply_plan exists: {bool(power_supply_plan)}", flush=True)
         
         if green_power_result:
             print(f"[DraftPlanAgent] green_power_result has optimization: {'optimization' in green_power_result}", flush=True)
             if 'optimization' in green_power_result:
                 opt_keys = list(green_power_result['optimization'].keys()) if isinstance(green_power_result['optimization'], dict) else 'not dict'
                 print(f"[DraftPlanAgent] optimization keys: {opt_keys}", flush=True)
+            else:
+                print(f"[DraftPlanAgent] green_power_result keys: {list(green_power_result.keys())}", flush=True)
         if cooling_result:
             print(f"[DraftPlanAgent] cooling_result has cooling_technology: {'cooling_technology' in cooling_result}", flush=True)
             print(f"[DraftPlanAgent] cooling_result has cooling_kpis: {'cooling_kpis' in cooling_result}", flush=True)
+            print(f"[DraftPlanAgent] cooling_result keys: {list(cooling_result.keys())}", flush=True)
         if power_supply_plan:
             print(f"[DraftPlanAgent] power_supply_plan has scheme_name: {'scheme_name' in power_supply_plan}", flush=True)
             print(f"[DraftPlanAgent] power_supply_plan has external_voltage: {'external_voltage' in power_supply_plan}", flush=True)
+            print(f"[DraftPlanAgent] power_supply_plan keys: {list(power_supply_plan.keys())}", flush=True)
 
         streaming_output = state.get("streaming_output", [])
         streaming_output.append({
@@ -288,8 +333,32 @@ class DraftPlanAgentNode:
             "full_output": {
                 "raw_output": output_text,
                 "parsed": plan_data,
+                "green_power_result": green_power_result,
+                "cooling_result": cooling_result,
+                "power_supply_plan": power_supply_plan,
             },
         })
+
+        # 调试：打印将要发送的数据结构
+        print(f"[DraftPlanAgent] === FINAL OUTPUT DEBUG ===", flush=True)
+        print(f"[DraftPlanAgent] green_power_result type: {type(green_power_result)}", flush=True)
+        print(f"[DraftPlanAgent] green_power_result has optimization: {'optimization' in green_power_result}", flush=True)
+        if 'optimization' in green_power_result:
+            opt = green_power_result['optimization']
+            print(f"[DraftPlanAgent] optimization keys: {list(opt.keys())}", flush=True)
+            print(f"[DraftPlanAgent] pv_capacity_mw: {opt.get('pv_capacity_mw')}", flush=True)
+            print(f"[DraftPlanAgent] wind_capacity_mw: {opt.get('wind_capacity_mw')}", flush=True)
+            print(f"[DraftPlanAgent] storage_capacity_mwh: {opt.get('storage_capacity_mwh')}", flush=True)
+            print(f"[DraftPlanAgent] achieved_green_ratio: {opt.get('achieved_green_ratio')}", flush=True)
+        print(f"[DraftPlanAgent] cooling_result has cooling_technology: {'cooling_technology' in cooling_result}", flush=True)
+        if 'cooling_technology' in cooling_result:
+            print(f"[DraftPlanAgent] cooling_technology: {cooling_result['cooling_technology']}", flush=True)
+            print(f"[DraftPlanAgent] estimated_pue: {cooling_result.get('estimated_pue')}", flush=True)
+        print(f"[DraftPlanAgent] power_supply_plan has scheme_name: {'scheme_name' in power_supply_plan}", flush=True)
+        if 'scheme_name' in power_supply_plan:
+            print(f"[DraftPlanAgent] scheme_name: {power_supply_plan['scheme_name']}", flush=True)
+            print(f"[DraftPlanAgent] external_voltage: {power_supply_plan.get('external_voltage')}", flush=True)
+        print(f"[DraftPlanAgent] === END DEBUG ===", flush=True)
 
         return {
             "green_power_result": green_power_result,
@@ -298,6 +367,51 @@ class DraftPlanAgentNode:
             "draft_plan_summary": plan_data.get("summary", ""),
             "streaming_output": streaming_output,
         }
+    
+    def _extract_tool_results_from_messages(self, result: dict, plan_data: dict) -> dict:
+        """从 Agent 调用结果和解析结果中提取工具返回的数据"""
+        tool_results = {}
+        
+        messages = result.get("messages", [])
+        for msg in messages:
+            # 检查是否是工具调用结果
+            tool_calls = getattr(msg, "tool_calls", None)
+            tool_results_msg = getattr(msg, "tool_results", None)
+            
+            if tool_results_msg and isinstance(tool_results_msg, dict):
+                for tool_name, tool_result in tool_results_msg.items():
+                    if tool_result and isinstance(tool_result, dict):
+                        tool_results[tool_name] = tool_result
+            
+            # 检查 message content 中是否有工具结果
+            content = getattr(msg, "content", None)
+            if content and isinstance(content, dict):
+                # 尝试从 content 中提取工具结果
+                if "green_power_allocation" in content:
+                    tool_results["green_power_allocation"] = content["green_power_allocation"]
+                if "cooling-scheme-generator" in content:
+                    tool_results["cooling-scheme-generator"] = content["cooling-scheme-generator"]
+                if "power_supply_config" in content:
+                    tool_results["power_supply_config"] = content["power_supply_config"]
+        
+        print(f"[DraftPlanAgent] Extracted tool results from messages: {list(tool_results.keys())}", flush=True)
+        
+        # 如果从消息中提取不到结果，尝试从 plan_data 中提取
+        # 因为 Agent 可能直接输出了 green_power_allocation 的结果
+        if not tool_results and plan_data:
+            print(f"[DraftPlanAgent] Trying to extract from plan_data, keys: {list(plan_data.keys())}", flush=True)
+            # plan_data 中有 optimization 等字段，说明这是 green_power_allocation 的结果
+            if "optimization" in plan_data or "pv_profile" in plan_data or "wind_profile" in plan_data:
+                tool_results["green_power_allocation"] = plan_data
+                print(f"[DraftPlanAgent] Extracted green_power_allocation from plan_data", flush=True)
+            if "cooling_technology" in plan_data:
+                tool_results["cooling-scheme-generator"] = plan_data
+                print(f"[DraftPlanAgent] Extracted cooling-scheme-generator from plan_data", flush=True)
+            if "scheme_name" in plan_data:
+                tool_results["power_supply_config"] = plan_data
+                print(f"[DraftPlanAgent] Extracted power_supply_config from plan_data", flush=True)
+        
+        return tool_results
 
     def _parse_json_response(self, content: str) -> dict[str, Any]:
         import re
@@ -1236,6 +1350,10 @@ class ArbitratorNode:
         power_opinion = state.get("power_reliability_opinion")
         environmental_opinion = state.get("environmental_opinion")
         debate_round = state.get("debate_round", 0)
+        
+        # 获取成本计算结果（用于正确的总成本）
+        economic_analysis_result = state.get("economic_analysis_result", {})
+        total_capex_lakh = economic_analysis_result.get("total_capex_lakh", 0)
 
         # 构建仲裁prompt
         opinions_text = f"""
@@ -1262,6 +1380,9 @@ Recommendations: {environmental_opinion.recommendations}
 
 [Debate status]
 Completed {debate_round} rounds of debate
+
+[Cost Calculation]
+Total CAPEX (project total investment): {total_capex_lakh} 万元
 """
 
         prompt = f"""You are a data center construction solution arbitrator.

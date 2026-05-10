@@ -838,22 +838,21 @@ const handleSSENode = (nodeName, data) => {
       console.log('[SSE] draft_plan_agent raw data keys:', Object.keys(data || {}))
       console.log('[SSE] draft_plan_agent raw data:', JSON.stringify(data, null, 2))
       
-      const fullOutput = data || {}
-      const parsed = fullOutput.parsed || fullOutput
-      console.log('[SSE] parsed type:', typeof parsed)
-      console.log('[SSE] parsed keys:', Object.keys(parsed || {}))
+      // 从 full_output 中读取数据（后端实际发送的位置）
+      const fullOutput = data.full_output || data || {}
+      console.log('[SSE] fullOutput keys:', Object.keys(fullOutput || {}))
       
-      const gpResult = parsed.green_power_result || fullOutput.green_power_result || {}
+      const gpResult = fullOutput.green_power_result || data.green_power_result || {}
       console.log('[SSE] green_power_result exists:', !!gpResult)
       console.log('[SSE] green_power_result keys:', Object.keys(gpResult || {}))
       console.log('[SSE] green_power_result:', JSON.stringify(gpResult, null, 2))
       
-      const cooling = parsed.cooling_result || fullOutput.cooling_result || {}
+      const cooling = fullOutput.cooling_result || data.cooling_result || {}
       console.log('[SSE] cooling_result exists:', !!cooling)
       console.log('[SSE] cooling_result keys:', Object.keys(cooling || {}))
       console.log('[SSE] cooling_result:', JSON.stringify(cooling, null, 2))
       
-      const power = parsed.power_supply_plan || fullOutput.power_supply_plan || {}
+      const power = fullOutput.power_supply_plan || data.power_supply_plan || {}
       console.log('[SSE] power_supply_plan exists:', !!power)
       console.log('[SSE] power_supply_plan keys:', Object.keys(power || {}))
       console.log('[SSE] power_supply_plan:', JSON.stringify(power, null, 2))
@@ -866,7 +865,7 @@ const handleSSENode = (nodeName, data) => {
       
       const powerRaw = power.raw_json || power
       
-      const achievedGreenRatio = toNumber(gp.achieved_green_ratio)
+      const achievedGreenRatio = toNumber(gp.achieved_green_ratio || gp.green_supply_ratio)
       const pueValue = toNumber(cooling.estimated_pue || cooling.cooling_kpis?.predicted_PUE)
       
       nodeResults.draftPlan = {

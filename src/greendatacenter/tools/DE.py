@@ -425,7 +425,16 @@ def constraint_func(
 
     green_supply_ratio = summary["green_supply"] / total_load
     curtailment_ratio = summary["total_curtailment"] / renewable_generation
-    return [curtailment_ratio - 0.1, target_green_ratio - green_supply_ratio]
+    
+    # 两个约束条件：
+    # 1. 弃风弃光率 <= 10%
+    # 2. 绿电比例 >= 目标比例（下限）
+    # 注意：不设置绿电比例上限，让优化器在满足约束的前提下最小化成本
+    # 过度配置会增加成本，优化器自然会避免
+    return [
+        curtailment_ratio - 0.1,           # 约束1: curtailment_ratio <= 0.1
+        target_green_ratio - green_supply_ratio,  # 约束2: green_supply_ratio >= target
+    ]
 
 
 def build_balance_timeseries(
