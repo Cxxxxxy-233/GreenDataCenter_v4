@@ -156,6 +156,39 @@ export const mockSolutionData = {
     draft_plan_agent: {
       full_output: {
         green_power_result: {
+          inputs: {
+            location: '乌兰察布',
+            green_power_ratio: 0.7,
+            load_mw: 50,
+            sim_hours: 168,
+            year: 2025,
+            date: null,
+            bounds: {
+              wind_capacity_bounds: [1, 500],
+              pv_capacity_bounds: [1, 500],
+              storage_capacity_bounds: [20, 500]
+            },
+            week_start_hour: 0,
+            maxiter: 60,
+            popsize: 10,
+            seed: 42
+          },
+          generated_files: {
+            pv_csv: 'outputs/PV.csv',
+            wind_csv: 'outputs/Wind.csv',
+            load_csv: 'outputs/Load.csv',
+            balance_plot: 'outputs/green_power_balance_wulanchabu_168h.png'
+          },
+          pv_profile: {
+            mode: '8760h',
+            time_range: '2025-01-01 00:00 ~ 2025-12-31 23:00',
+            summary: '根据乌兰察布气象条件生成全年光伏单位出力曲线，正南朝向，倾角采用当地推荐值。'
+          },
+          wind_profile: {
+            mode: '8760h',
+            time_range: '2025-01-01 00:00 ~ 2025-12-31 23:00',
+            summary: '依据当地风速特征和风机切入/额定/切出风速生成全年风电单位出力曲线。'
+          },
           optimization: {
             wind_capacity_mw: 10,
             pv_capacity_mw: 15,
@@ -261,8 +294,15 @@ export const mockSolutionData = {
           redundancy_logic: '主变N+1，配变2N（互为备用）',
           bus_type: '380/220V 单母线分段接线',
           diesel_status: '配置N+1备用柴油发电机组',
+          reasons: '【配置等级】: 选定 A 级供电架构，符合A级容错标准，确保单一组件故障时不影响业务。\n【外部供电】: 采用 35kV 接入，理由：适用于30~60MVA中小型数据中心。\n【次级配电】: 选定 10kV 方案，原因：10kV在设备费与占地上均为最优，配变单台推荐2.5MVA以适配0.4kV断路器能力。\n【电气接线】: 主机房采用 380/220V 单母线分段接线，确保电力分配的可靠性。',
           raw_json: {
-            machine_room_grade: 3,
+            machine_room_grade: 'A',
+            total_load_mw: 50,
+            total_load_mva: 55.56,
+            pue_target: 1.25,
+            power_factor: 0.9,
+            main_transformers: '主变N+1',
+            distribution_transformers: '2.5 MVA / 2N',
             cost_per_mw: 84
           }
         }

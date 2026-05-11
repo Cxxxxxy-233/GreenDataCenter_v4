@@ -144,6 +144,23 @@
                 </div>
               </section>
 
+              <section
+                v-if="card.traceFacts"
+                class="draft-card-section"
+              >
+                <div class="draft-section-title">{{ card.traceFactsTitle || '关键参数' }}</div>
+                <div class="draft-fact-grid">
+                  <div
+                    v-for="fact in card.traceFacts"
+                    :key="fact.label"
+                    class="draft-fact-item"
+                  >
+                    <span class="draft-fact-label">{{ fact.label }}</span>
+                    <span class="draft-fact-value">{{ fact.value }}</span>
+                  </div>
+                </div>
+              </section>
+
               <section class="draft-card-section">
                 <div class="draft-section-title">生成过程</div>
                 <div class="draft-step-list">
@@ -814,7 +831,10 @@ const draftPlanTraceOverview = computed(() => {
 const draftPlanTraceCards = computed(() => {
   const req = mockSolutionData.intermediate_results.requirement_parser.requirement || {}
   const draft = mockSolutionData.intermediate_results.draft_plan_agent.full_output || {}
-  const green = draft.green_power_result?.optimization || {}
+  const greenFull = draft.green_power_result || {}
+  const green = greenFull.optimization || {}
+  const greenInputs = greenFull.inputs || {}
+  const greenFiles = greenFull.generated_files || {}
   const cooling = draft.cooling_result || {}
   const power = draft.power_supply_plan || {}
   const coolingOptimization = cooling.optimization_summary || {}
@@ -822,6 +842,17 @@ const draftPlanTraceCards = computed(() => {
   const coolingRanking = Array.isArray(cooling.all_strategy_scores) ? cooling.all_strategy_scores : []
   const greenLoadMw = toNumber(req.planned_load_kw, 0) / 1000
   const annualTemperature = 15
+  const powerRaw = power.raw_json || {}
+  const powerFactor = toNumber(powerRaw.power_factor, 0.9)
+  const totalLoadMw = toNumber(powerRaw.total_load_mw, greenLoadMw)
+  const totalLoadMva = toNumber(powerRaw.total_load_mva, totalLoadMw / powerFactor)
+  const voltageCriteria = totalLoadMva >= 100
+    ? '命中 220kV 阈值（>=100MVA）'
+    : totalLoadMva >= 40
+      ? '命中 110kV 阈值（>=40MVA）'
+      : totalLoadMva >= 30
+        ? '命中 66kV 阈值（>=30MVA）'
+        : '命中 35kV 阈值（<30MVA）'
 
   return [
     {
@@ -842,28 +873,46 @@ const draftPlanTraceCards = computed(() => {
         `项目位置：${req.location || '--'}`,
         `负荷规模：${formatNumber(greenLoadMw, 2)} MW`,
         `绿电目标：${formatPercent(req.green_power_ratio, 0)}`,
-        `仿真时长：${req.sim_hours || 168} h`,
-        `气象年份：${req.year || 2025}`,
+        `仿真时长：${greenInputs.sim_hours || req.sim_hours || 168} h`,
+        `气象年份：${greenInputs.year || req.year || 2025}`,
         '容量边界：风电/光伏 1-500MW，储能 20-500MWh'
+      ],
+      traceFactsTitle: '优化设定',
+      traceFacts: [
+        { label: '仿真模式', value: greenFull.pv_profile?.mode || '--' },
+        { label: '资源曲线', value: '先生成 PV/Wind 单位出力曲线' },
+        { label: '负荷文件', value: greenFiles.load_csv ? '已载入负荷系数 CSV' : '使用默认负荷曲线' },
+        { label: 'DE 参数', value: `maxiter ${greenInputs.maxiter || 60} · popsize ${greenInputs.popsize || 10} · seed ${greenInputs.seed || 42}` },
+        { label: '搜索边界', value: `风/光 ${greenInputs.bounds?.wind_capacity_bounds?.[0] || 1}-${greenInputs.bounds?.wind_capacity_bounds?.[1] || 500}MW，储能 ${greenInputs.bounds?.storage_capacity_bounds?.[0] || 20}-${greenInputs.bounds?.storage_capacity_bounds?.[1] || 500}MWh` },
+        { label: '结果文件', value: greenFiles.balance_plot ? '同步输出绿电平衡图' : '仅返回优化结果' }
       ],
       steps: [
         {
-          title: '生成本地风光资源曲线',
-          description: 'Tool 先按项目所在地生成光伏与风电出力曲线，构成后续容量优化的资源侧基础。'
+          title: '根据仿真时长决定模拟模式',
+          description: `当仿真时长大于 24h 时切换到 8760h 年度模式，当前按照 ${greenInputs.sim_hours || req.sim_hours || 168}h 输入进入资源曲线生成流程。`
         },
         {
-          title: '载入负荷曲线与容量边界',
-          description: '将数据中心总负荷、仿真时长、绿电目标和风光储搜索范围一起送入优化器。'
+          title: '分别生成光伏与风电出力曲线',
+          description: 'Tool 会先调用 PV 与 Wind 子工具，按地点、年份以及风机/光伏参数生成单位出力 CSV。'
         },
         {
-          title: '用差分进化求最优配比',
-          description: '在满足目标绿电比例约束的前提下，搜索总投资更优的风光储容量组合。'
+          title: '载入负荷曲线并解析装机边界',
+          description: '将数据中心总负荷、默认或指定的负荷 CSV、风光储容量边界和展示起始小时一起整理成优化输入。'
+        },
+        {
+          title: '执行差分进化容量优化',
+          description: '在风电、光伏、储能三维搜索空间内迭代求解，目标是在满足绿电比例约束下最小化总投资成本。'
+        },
+        {
+          title: '输出装机结果与平衡图',
+          description: '在得到最优容量组合后，同时返回风光储装机结果、目标达成情况以及绿电功率平衡图文件。'
         }
       ],
       evidences: [
-        '后端 Tool 明确以“满足绿电消纳率约束下最小化总投资成本”为优化目标。',
+        '后端 Tool 先生成 PV/Wind 曲线，再进入容量优化，不是直接对装机容量做静态估算。',
         `当前输入负荷为 ${formatNumber(greenLoadMw, 2)} MW，会直接影响风光储的容量上限需求。`,
         `绿电目标设置为 ${formatPercent(req.green_power_ratio, 0)}，目标越高，通常需要更大的装机与储能。`,
+        `DE 优化器当前使用 maxiter ${greenInputs.maxiter || 60}、popsize ${greenInputs.popsize || 10}、seed ${greenInputs.seed || 42}。`,
         'Tool 使用差分进化算法进行容量优化，而不是手工指定风光储配比。'
       ]
     },
@@ -952,31 +1001,49 @@ const draftPlanTraceCards = computed(() => {
         { label: '母线类型', value: power.bus_type || '--' }
       ],
       inputs: [
-        `机房等级：${req.machine_room_grade || power.raw_json?.machine_room_grade || '--'}`,
-        `总负荷：${formatNumber(greenLoadMw, 2)} MW`,
+        `机房等级：${powerRaw.machine_room_grade || req.machine_room_grade || '--'}`,
+        `总负荷：${formatNumber(totalLoadMw, 2)} MW`,
         `PUE 目标：${formatNumber(req.pue_target, 2)}`,
-        '功率因数：0.9（默认）',
+        `功率因数：${formatNumber(powerFactor, 2)}`,
         '依据标准：GB 50174-2017 / YD-T 5235-2019'
+      ],
+      traceFactsTitle: '规则命中',
+      traceFacts: [
+        { label: '等级模板', value: `${powerRaw.machine_room_grade || 'A'} 级标准化供电模板` },
+        { label: '负荷折算', value: `${formatNumber(totalLoadMw, 2)} MW ÷ ${formatNumber(powerFactor, 2)} = ${formatNumber(totalLoadMva, 2)} MVA` },
+        { label: '电压阈值', value: voltageCriteria },
+        { label: '外部接入', value: power.external_source_type || '--' },
+        { label: '次级配电', value: power.secondary_voltage || '10 kV' },
+        { label: '单位成本', value: `${formatNumber(powerRaw.cost_per_mw, 2)} 万元/MW` }
       ],
       steps: [
         {
-          title: '按输入等级选供电架构',
-          description: 'Tool 先根据机房等级匹配对应的供电方案模板，确定外部电源与冗余结构基线。'
+          title: '读取机房等级对应的标准模板',
+          description: 'Tool 首先从内置方案库读取 A+/A/B/C 四类标准模板，锁定外部电源、主配变冗余、母线与柴油机策略基线。'
         },
         {
-          title: '按负荷折算选择电压档位',
-          description: '将总负荷从 MW 换算为 MVA，再按照阈值自动匹配 35kV、66kV、110kV 或 220kV。'
+          title: '将总负荷从 MW 折算为 MVA',
+          description: `后端按功率因数 ${formatNumber(powerFactor, 2)} 进行折算，当前 ${formatNumber(totalLoadMw, 2)} MW 约等于 ${formatNumber(totalLoadMva, 2)} MVA。`
         },
         {
-          title: '组合输出结构化配置',
-          description: '最终返回方案名称、外部电压、母线接线方式、柴油机策略和详细理由说明。'
+          title: '按阈值匹配外部电压等级',
+          description: '系统会依次检查 220kV、110kV、66kV、35kV 的容量阈值，命中的首个档位即成为外部电压方案。'
+        },
+        {
+          title: '确定次级配电与配变组织方式',
+          description: '若未显式指定次级电压，默认采用 10kV，并按照机房等级匹配 2.5MVA 配变组织方式。'
+        },
+        {
+          title: '拼接详细理由并输出结构化配置',
+          description: '最终返回方案名称、外部电压、冗余逻辑、母线接线、柴油机策略，以及 reasons/raw_json 两层可追溯结果。'
         }
       ],
       evidences: [
         '后端 Tool 不是自由生成文案，而是先从标准化方案库中选择等级模板。',
-        `当前总负荷约为 ${formatNumber(greenLoadMw, 2)} MW，会参与 MW→MVA 折算并决定外部电压档位。`,
-        '外部电压等级按阈值自动匹配，负荷较小时会落在 35kV 档位，负荷越大则上探更高电压等级。',
-        '最终结果包含详细 reasons 文本和 raw_json 结构，因此每个配置项都能追溯到标准规则。'
+        `当前总负荷约为 ${formatNumber(totalLoadMw, 2)} MW，会参与 MW→MVA 折算并决定外部电压档位。`,
+        `折算后的容量约为 ${formatNumber(totalLoadMva, 2)} MVA，因此当前命中规则为“${voltageCriteria}”。`,
+        '当外部电压和次级配电没有 override 时，工具会完全按阈值和默认策略自动选择。',
+        '最终结果包含 detailed reasons 文本和 raw_json 结构，因此每个配置项都能追溯到标准规则。'
       ]
     }
   ]
@@ -2054,6 +2121,35 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.4;
   color: var(--text-secondary);
+}
+
+.draft-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.draft-fact-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 78px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+}
+
+.draft-fact-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.draft-fact-value {
+  font-size: 13px;
+  line-height: 1.6;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .draft-step-list {
@@ -3435,7 +3531,8 @@ onUnmounted(() => {
 
   .cost-kpi-grid,
   .cost-detail-kpi,
-  .draft-result-grid {
+  .draft-result-grid,
+  .draft-fact-grid {
     grid-template-columns: 1fr;
   }
 
