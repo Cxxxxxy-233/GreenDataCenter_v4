@@ -196,6 +196,61 @@ export const mockSolutionData = {
             { score: 1.24, iteration: 6 },
             { score: 1.23, iteration: 7 },
             { score: 1.23, iteration: 8 }
+          ],
+          optimization_summary: {
+            optimization_mode: 'weighted_multi_objective',
+            priority_mode: 'economic',
+            feasible_strategy_count: 4,
+            selected_strategy: '传统房间级CRAC(上送风)+热通道封闭',
+            objective_weights: {
+              PUE: 0.32,
+              WUE: 0.18,
+              TCO: 0.28,
+              CUE: 0.12,
+              WHR: 0.10
+            }
+          },
+          all_strategy_scores: [
+            {
+              strategy: '传统房间级CRAC(上送风)+热通道封闭',
+              total_score: 1.23,
+              ranking: 1,
+              pue: 1.23,
+              wue: 1.65,
+              tco: 0.84,
+              cue: 0.78,
+              whr: 0.66
+            },
+            {
+              strategy: '冷冻水型水冷冷水机组+行级空调',
+              total_score: 1.31,
+              ranking: 2,
+              pue: 1.20,
+              wue: 1.92,
+              tco: 0.93,
+              cue: 0.74,
+              whr: 0.58
+            },
+            {
+              strategy: '蒸发冷却+冷冻水末端',
+              total_score: 1.37,
+              ranking: 3,
+              pue: 1.18,
+              wue: 2.36,
+              tco: 0.91,
+              cue: 0.76,
+              whr: 0.52
+            },
+            {
+              strategy: '浸没式液冷+余热回收',
+              total_score: 1.42,
+              ranking: 4,
+              pue: 1.15,
+              wue: 1.02,
+              tco: 1.08,
+              cue: 0.71,
+              whr: 0.88
+            }
           ]
         },
         power_supply_plan: {

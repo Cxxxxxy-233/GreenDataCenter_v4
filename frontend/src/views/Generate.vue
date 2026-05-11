@@ -68,50 +68,152 @@
           <el-tag :type="getNodeTagType(1)">{{ getNodeStatus(1) }}</el-tag>
         </div>
         <div v-if="nodeResults.draftPlan">
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-card class="agent-result-card">
-                <div class="agent-header">
-                  <el-icon class="agent-icon"><Edit /></el-icon>
-                  <span class="agent-name">绿电分配方案</span>
+          <div class="draft-overview-panel">
+            <div class="draft-overview-copy">
+              <span class="draft-eyebrow">Draft Generation Trace</span>
+              <h4>初稿结果由三个后端 Tool 顺序生成，而不是直接给出结论</h4>
+              <p>
+                后端 `DraftPlanAgent` 会按固定顺序调用 `green_power_allocation`、`cooling-scheme-generator`
+                和 `power_supply_config`。下面每张卡片都对应一个真实 Tool，展示它的输入条件、推导过程、
+                判断依据和最终输出。
+              </p>
+            </div>
+            <div class="draft-overview-metrics">
+              <div class="draft-overview-metric primary">
+                <span class="draft-overview-label">调用顺序</span>
+                <span class="draft-overview-value">绿电 → 制冷 → 供电</span>
+              </div>
+              <div class="draft-overview-metric">
+                <span class="draft-overview-label">输入基线</span>
+                <span class="draft-overview-value">{{ draftPlanTraceOverview.inputBaseline }}</span>
+              </div>
+              <div class="draft-overview-metric">
+                <span class="draft-overview-label">生成原则</span>
+                <span class="draft-overview-value">{{ draftPlanTraceOverview.guidingRule }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="draft-process-grid">
+            <article
+              v-for="card in draftPlanTraceCards"
+              :key="card.id"
+              class="draft-process-card"
+              :class="card.toneClass"
+            >
+              <div class="draft-card-head">
+                <div class="draft-card-title-wrap">
+                  <span class="draft-card-icon">
+                    <el-icon><component :is="card.icon" /></el-icon>
+                  </span>
+                  <div>
+                    <div class="draft-card-title-row">
+                      <span class="draft-card-title">{{ card.title }}</span>
+                      <span class="draft-card-order">{{ card.order }}</span>
+                    </div>
+                    <div class="draft-card-tool">{{ card.tool }}</div>
+                  </div>
                 </div>
-                <div class="agent-content">
-                  <div class="agent-detail">光伏容量: {{ formatNumber(nodeResults.draftPlan.pvCapacity) }} MW</div>
-                  <div class="agent-detail">风电容量: {{ formatNumber(nodeResults.draftPlan.windCapacity) }} MW</div>
-                  <div class="agent-detail">储能容量: {{ formatNumber(nodeResults.draftPlan.storageCapacity) }} MWh</div>
-                  <div class="agent-detail">绿电占比: {{ formatPercent(nodeResults.draftPlan.achievedGreenRatio) }}</div>
+                <p class="draft-card-summary">{{ card.summary }}</p>
+              </div>
+
+              <section class="draft-card-section">
+                <div class="draft-section-title">输出结果</div>
+                <div class="draft-result-grid">
+                  <div
+                    v-for="metric in card.metrics"
+                    :key="metric.label"
+                    class="draft-result-item"
+                  >
+                    <span class="draft-result-label">{{ metric.label }}</span>
+                    <span class="draft-result-value">{{ metric.value }}</span>
+                  </div>
                 </div>
-              </el-card>
-            </el-col>
-            <el-col :span="8">
-              <el-card class="agent-result-card">
-                <div class="agent-header">
-                  <el-icon class="agent-icon"><Tools /></el-icon>
-                  <span class="agent-name">制冷方案</span>
+              </section>
+
+              <section class="draft-card-section">
+                <div class="draft-section-title">输入条件</div>
+                <div class="draft-chip-list">
+                  <span
+                    v-for="input in card.inputs"
+                    :key="input"
+                    class="draft-chip"
+                  >
+                    {{ input }}
+                  </span>
                 </div>
-                <div class="agent-content">
-                  <div class="agent-detail">推荐技术: {{ nodeResults.draftPlan.coolingTech }}</div>
-                  <div class="agent-detail">预测PUE: {{ formatNumber(nodeResults.draftPlan.pue, 2) }}</div>
-                  <div class="agent-detail">预测WUE: {{ formatNumber(nodeResults.draftPlan.wue, 2) }}</div>
-                  <div class="agent-detail">制冷功耗: {{ formatNumber(nodeResults.draftPlan.coolingPower) }} kW</div>
+              </section>
+
+              <section class="draft-card-section">
+                <div class="draft-section-title">生成过程</div>
+                <div class="draft-step-list">
+                  <div
+                    v-for="(step, index) in card.steps"
+                    :key="step.title"
+                    class="draft-step-item"
+                  >
+                    <span class="draft-step-index">{{ index + 1 }}</span>
+                    <div class="draft-step-copy">
+                      <div class="draft-step-title">{{ step.title }}</div>
+                      <div class="draft-step-desc">{{ step.description }}</div>
+                    </div>
+                  </div>
                 </div>
-              </el-card>
-            </el-col>
-            <el-col :span="8">
-              <el-card class="agent-result-card">
-                <div class="agent-header">
-                  <el-icon class="agent-icon"><Tools /></el-icon>
-                  <span class="agent-name">供电方案</span>
+              </section>
+
+              <section class="draft-card-section">
+                <div class="draft-section-title">判断依据</div>
+                <ul class="draft-evidence-list">
+                  <li
+                    v-for="evidence in card.evidences"
+                    :key="evidence"
+                  >
+                    {{ evidence }}
+                  </li>
+                </ul>
+              </section>
+
+              <section
+                v-if="card.optimization"
+                class="draft-card-section draft-card-section-optimization"
+              >
+                <div class="draft-section-title">多目标寻优</div>
+                <div class="draft-weight-grid">
+                  <div
+                    v-for="weight in card.optimization.weights"
+                    :key="weight.label"
+                    class="draft-weight-item"
+                  >
+                    <span class="draft-weight-label">{{ weight.label }}</span>
+                    <span class="draft-weight-value">{{ weight.value }}</span>
+                  </div>
                 </div>
-                <div class="agent-content">
-                  <div class="agent-detail">方案等级: {{ nodeResults.draftPlan.tierLevel }}</div>
-                  <div class="agent-detail">外部电压: {{ nodeResults.draftPlan.externalVoltage }}</div>
-                  <div class="agent-detail">冗余配置: {{ nodeResults.draftPlan.redundancyLogic }}</div>
-                  <div class="agent-detail">母线类型: {{ nodeResults.draftPlan.upsConfig }}</div>
+                <div class="draft-ranking-list">
+                  <div
+                    v-for="candidate in card.optimization.ranking"
+                    :key="candidate.name"
+                    class="draft-ranking-item"
+                    :class="{ 'is-winner': candidate.isWinner }"
+                  >
+                    <div class="draft-ranking-head">
+                      <span class="draft-ranking-order">#{{ candidate.rank }}</span>
+                      <span class="draft-ranking-name">{{ candidate.name }}</span>
+                      <span class="draft-ranking-score">综合得分 {{ candidate.score }}</span>
+                    </div>
+                    <div class="draft-ranking-tags">
+                      <span
+                        v-for="tag in candidate.tags"
+                        :key="tag"
+                        class="draft-ranking-tag"
+                      >
+                        {{ tag }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </el-card>
-            </el-col>
-          </el-row>
+              </section>
+            </article>
+          </div>
         </div>
       </div>
 
@@ -699,6 +801,185 @@ const coolingCostSnapshot = computed(() => {
     annualElectricityCost: toNumber(coolingEco.annual_electricity_cost, 0),
     lcoe: toNumber(coolingEco.lcoe, null)
   }
+})
+
+const draftPlanTraceOverview = computed(() => {
+  const req = mockSolutionData.intermediate_results.requirement_parser.requirement || {}
+  return {
+    inputBaseline: `${req.location || '--'} · ${formatNumber(toNumber(req.planned_load_kw, 0) / 1000, 2)} MW · 绿电目标 ${formatPercent(req.green_power_ratio, 0)}`,
+    guidingRule: '先满足目标约束，再生成可执行初稿'
+  }
+})
+
+const draftPlanTraceCards = computed(() => {
+  const req = mockSolutionData.intermediate_results.requirement_parser.requirement || {}
+  const draft = mockSolutionData.intermediate_results.draft_plan_agent.full_output || {}
+  const green = draft.green_power_result?.optimization || {}
+  const cooling = draft.cooling_result || {}
+  const power = draft.power_supply_plan || {}
+  const coolingOptimization = cooling.optimization_summary || {}
+  const coolingWeights = coolingOptimization.objective_weights || {}
+  const coolingRanking = Array.isArray(cooling.all_strategy_scores) ? cooling.all_strategy_scores : []
+  const greenLoadMw = toNumber(req.planned_load_kw, 0) / 1000
+  const annualTemperature = 15
+
+  return [
+    {
+      id: 'green-power',
+      order: 'Tool 01',
+      title: '绿电分配方案',
+      tool: 'green_power_allocation',
+      icon: Edit,
+      toneClass: 'tone-green',
+      summary: '先根据项目所在地生成风光出力曲线，再在绿电目标约束下优化风电、光伏和储能装机配比。',
+      metrics: [
+        { label: '光伏容量', value: `${formatNumber(green.pv_capacity_mw, 2)} MW` },
+        { label: '风电容量', value: `${formatNumber(green.wind_capacity_mw, 2)} MW` },
+        { label: '储能容量', value: `${formatNumber(green.storage_capacity_mwh, 2)} MWh` },
+        { label: '绿电占比', value: formatPercent(green.achieved_green_ratio) }
+      ],
+      inputs: [
+        `项目位置：${req.location || '--'}`,
+        `负荷规模：${formatNumber(greenLoadMw, 2)} MW`,
+        `绿电目标：${formatPercent(req.green_power_ratio, 0)}`,
+        `仿真时长：${req.sim_hours || 168} h`,
+        `气象年份：${req.year || 2025}`,
+        '容量边界：风电/光伏 1-500MW，储能 20-500MWh'
+      ],
+      steps: [
+        {
+          title: '生成本地风光资源曲线',
+          description: 'Tool 先按项目所在地生成光伏与风电出力曲线，构成后续容量优化的资源侧基础。'
+        },
+        {
+          title: '载入负荷曲线与容量边界',
+          description: '将数据中心总负荷、仿真时长、绿电目标和风光储搜索范围一起送入优化器。'
+        },
+        {
+          title: '用差分进化求最优配比',
+          description: '在满足目标绿电比例约束的前提下，搜索总投资更优的风光储容量组合。'
+        }
+      ],
+      evidences: [
+        '后端 Tool 明确以“满足绿电消纳率约束下最小化总投资成本”为优化目标。',
+        `当前输入负荷为 ${formatNumber(greenLoadMw, 2)} MW，会直接影响风光储的容量上限需求。`,
+        `绿电目标设置为 ${formatPercent(req.green_power_ratio, 0)}，目标越高，通常需要更大的装机与储能。`,
+        'Tool 使用差分进化算法进行容量优化，而不是手工指定风光储配比。'
+      ]
+    },
+    {
+      id: 'cooling-scheme',
+      order: 'Tool 02',
+      title: '制冷方案',
+      tool: 'cooling-scheme-generator',
+      icon: Tools,
+      toneClass: 'tone-cooling',
+      summary: '结合负荷密度、PUE/WUE 目标、环境条件和优先级，筛选可行制冷技术并给出 KPI 与经济指标。',
+      metrics: [
+        { label: '推荐技术', value: cooling.cooling_technology || '--' },
+        { label: '预测 PUE', value: formatNumber(cooling.estimated_pue, 2) },
+        { label: '预测 WUE', value: formatNumber(cooling.predicted_wue, 2) },
+        { label: '制冷功耗', value: `${formatNumber(cooling.cooling_power_consumption, 0)} kW` }
+      ],
+      inputs: [
+        `项目位置：${req.location || '--'}`,
+        `年均温度：${annualTemperature.toFixed(1)} ℃`,
+        `IT 负荷：${formatNumber(toNumber(req.planned_load_kw, 0), 0)} kW`,
+        `功率密度：${formatNumber(req.computing_power_density, 2)} kW/机柜`,
+        `PUE 目标：${formatNumber(req.pue_target, 2)}`,
+        `优先级：${req.priority || 'economic'}`,
+        '优化目标：PUE / WUE / TCO / CUE / WHR'
+      ],
+      steps: [
+        {
+          title: '归并用户需求与显式参数',
+          description: 'Tool 会先合并需求解析结果和显式传入参数，统一得到负荷、功率密度、PUE/WUE 与优先级。'
+        },
+        {
+          title: '筛选可行制冷技术路线',
+          description: '结合环境温度、算力密度与目标能效，先排除不适合当前工况的制冷方案，只保留可比较候选。'
+        },
+        {
+          title: '执行多目标加权寻优',
+          description: '对每个可行候选同时评估 PUE、WUE、TCO、CUE 与余热回收能力，根据优先级动态加权并选出综合得分最优的方案。'
+        },
+        {
+          title: '输出 KPI 与经济指标',
+          description: '在最优技术确定后，再同步计算预测 PUE、WUE、制冷功耗、初始投资和运维成本。'
+        }
+      ],
+      evidences: [
+        '后端代码明确指出：PUE/WUE 目标越严格，越倾向选择能效更高的方案。',
+        `当前功率密度为 ${formatNumber(req.computing_power_density, 2)} kW/机柜，会影响可行技术的筛选范围。`,
+        `环境侧输入包含年均温度 ${annualTemperature.toFixed(1)} ℃，会影响制冷工况和余热回收判断。`,
+        `最终输出不仅给出“技术名称”，还返回 PUE、WUE、功耗和经济指标，因此结果具备可追溯性。`,
+        '后端寻优目标明确包含 PUE、WUE、TCO、CUE、WHR 五项，不是单一能效排序。'
+      ],
+      optimization: {
+        weights: [
+          { label: 'PUE 权重', value: formatPercent(coolingWeights.PUE, 0) },
+          { label: 'WUE 权重', value: formatPercent(coolingWeights.WUE, 0) },
+          { label: 'TCO 权重', value: formatPercent(coolingWeights.TCO, 0) },
+          { label: 'CUE 权重', value: formatPercent(coolingWeights.CUE, 0) },
+          { label: 'WHR 权重', value: formatPercent(coolingWeights.WHR, 0) }
+        ],
+        ranking: coolingRanking.slice(0, 4).map(item => ({
+          rank: item.ranking ?? '-',
+          name: item.strategy || '--',
+          score: formatNumber(item.total_score, 2),
+          isWinner: (item.strategy || '') === (coolingOptimization.selected_strategy || cooling.cooling_technology),
+          tags: [
+            `PUE ${formatNumber(item.pue, 2)}`,
+            `WUE ${formatNumber(item.wue, 2)}`,
+            `TCO ${formatNumber(item.tco, 2)}`,
+            `WHR ${formatNumber(item.whr, 2)}`
+          ]
+        }))
+      }
+    },
+    {
+      id: 'power-supply',
+      order: 'Tool 03',
+      title: '供电方案',
+      tool: 'power_supply_config',
+      icon: Files,
+      toneClass: 'tone-power',
+      summary: '依据机房等级、总负荷与 PUE 目标，按标准化规则自动匹配外部电压、冗余结构和母线方案。',
+      metrics: [
+        { label: '方案名称', value: power.scheme_name || '--' },
+        { label: '外部电压', value: power.external_voltage || '--' },
+        { label: '冗余配置', value: power.redundancy_logic || '--' },
+        { label: '母线类型', value: power.bus_type || '--' }
+      ],
+      inputs: [
+        `机房等级：${req.machine_room_grade || power.raw_json?.machine_room_grade || '--'}`,
+        `总负荷：${formatNumber(greenLoadMw, 2)} MW`,
+        `PUE 目标：${formatNumber(req.pue_target, 2)}`,
+        '功率因数：0.9（默认）',
+        '依据标准：GB 50174-2017 / YD-T 5235-2019'
+      ],
+      steps: [
+        {
+          title: '按输入等级选供电架构',
+          description: 'Tool 先根据机房等级匹配对应的供电方案模板，确定外部电源与冗余结构基线。'
+        },
+        {
+          title: '按负荷折算选择电压档位',
+          description: '将总负荷从 MW 换算为 MVA，再按照阈值自动匹配 35kV、66kV、110kV 或 220kV。'
+        },
+        {
+          title: '组合输出结构化配置',
+          description: '最终返回方案名称、外部电压、母线接线方式、柴油机策略和详细理由说明。'
+        }
+      ],
+      evidences: [
+        '后端 Tool 不是自由生成文案，而是先从标准化方案库中选择等级模板。',
+        `当前总负荷约为 ${formatNumber(greenLoadMw, 2)} MW，会参与 MW→MVA 折算并决定外部电压档位。`,
+        '外部电压等级按阈值自动匹配，负荷较小时会落在 35kV 档位，负荷越大则上探更高电压等级。',
+        '最终结果包含详细 reasons 文本和 raw_json 结构，因此每个配置项都能追溯到标准规则。'
+      ]
+    }
+  ]
 })
 
 const costStructureSegments = computed(() => {
@@ -1552,36 +1833,383 @@ onUnmounted(() => {
   gap: 30px;
 }
 
-.agent-result-card {
-  height: 100%;
+.draft-overview-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.95fr);
+  gap: 18px;
+  padding: 20px;
+  margin-bottom: 18px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, color-mix(in oklab, var(--primary-color) 10%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 95%, var(--primary-color) 5%) 0%, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 100%);
+  border: 1px solid color-mix(in oklab, var(--primary-color) 14%, var(--border-default));
 }
 
-.agent-header {
+.draft-overview-copy {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
-  margin-bottom: 14px;
+  max-width: 64ch;
 }
 
-.agent-icon {
+.draft-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.draft-overview-copy h4 {
+  font-size: 24px;
+  line-height: 1.22;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-wrap: balance;
+}
+
+.draft-overview-copy p {
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+}
+
+.draft-overview-metrics {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.draft-overview-metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 94px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.draft-overview-metric.primary {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 10%, var(--bg-card)) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+}
+
+.draft-overview-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.draft-overview-value {
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.draft-process-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.draft-process-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.draft-process-card.tone-green {
+  background: linear-gradient(180deg, color-mix(in oklab, #18b26b 7%, var(--bg-card)) 0%, color-mix(in oklab, #18b26b 3%, var(--bg-panel)) 100%);
+}
+
+.draft-process-card.tone-cooling {
+  background: linear-gradient(180deg, color-mix(in oklab, #16b8c4 7%, var(--bg-card)) 0%, color-mix(in oklab, #16b8c4 3%, var(--bg-panel)) 100%);
+}
+
+.draft-process-card.tone-power {
+  background: linear-gradient(180deg, color-mix(in oklab, #9b8cff 7%, var(--bg-card)) 0%, color-mix(in oklab, #9b8cff 3%, var(--bg-panel)) 100%);
+}
+
+.draft-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.draft-card-title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.draft-card-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%);
   color: var(--primary-dark);
 }
 
-.agent-name {
-  font-weight: 600;
-  font-size: 14px;
+.draft-card-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.agent-content {
+.draft-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.draft-card-order {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-placeholder);
+  font-weight: 700;
+}
+
+.draft-card-tool {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+
+.draft-card-summary {
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+}
+
+.draft-card-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.draft-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.draft-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.draft-result-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 84px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+}
+
+.draft-result-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.draft-result-value {
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.draft-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.draft-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.draft-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.draft-step-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.draft-step-index {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--primary-color) 12%, var(--bg-card));
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.draft-step-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0 0;
+}
+
+.draft-step-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.draft-step-desc {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.draft-evidence-list {
+  margin: 0;
+  padding-left: 18px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.agent-detail {
-  font-size: 13px;
+.draft-evidence-list li {
+  font-size: 12px;
+  line-height: 1.7;
   color: var(--text-secondary);
-  line-height: 1.65;
+}
+
+.draft-card-section-optimization {
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in oklab, var(--border-light) 88%, var(--primary-color) 12%);
+}
+
+.draft-weight-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.draft-weight-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 74px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+}
+
+.draft-weight-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.draft-weight-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.draft-ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.draft-ranking-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.draft-ranking-item.is-winner {
+  border-color: color-mix(in oklab, var(--primary-color) 24%, var(--border-default));
+  background: color-mix(in oklab, var(--primary-color) 8%, var(--bg-card));
+}
+
+.draft-ranking-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: baseline;
+}
+
+.draft-ranking-order {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.draft-ranking-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.draft-ranking-score {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.draft-ranking-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.draft-ranking-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%);
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .cost-summary {
@@ -2769,7 +3397,12 @@ onUnmounted(() => {
 }
 
 @media (max-width: 1200px) {
+  .draft-overview-panel,
   .cost-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .draft-process-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2801,7 +3434,8 @@ onUnmounted(() => {
   }
 
   .cost-kpi-grid,
-  .cost-detail-kpi {
+  .cost-detail-kpi,
+  .draft-result-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2830,12 +3464,22 @@ onUnmounted(() => {
   }
 
   .cost-visual-block,
-  .cost-summary-panel {
+  .cost-summary-panel,
+  .draft-process-card {
     padding: 16px;
   }
 
-  .cost-block-header {
+  .cost-block-header,
+  .draft-card-title-row {
     flex-direction: column;
+  }
+
+  .draft-overview-panel {
+    padding: 18px;
+  }
+
+  .draft-overview-copy h4 {
+    font-size: 20px;
   }
 
   .cost-summary-heading {

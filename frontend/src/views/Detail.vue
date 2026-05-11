@@ -484,7 +484,7 @@
               </div>
             </div>
             <div class="report-chapter" v-if="reportMarkdown">
-              <h2>Markdown 报告文本</h2>
+              <h2>Markdown 报告预览</h2>
               <div class="report-section-item">
                 <div class="markdown-rendered" v-html="reportHtml"></div>
               </div>
@@ -877,54 +877,131 @@ const escapeHtml = (text) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
 
+const renderInlineMarkdown = (text) => {
+  const escaped = escapeHtml(text)
+  return escaped
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^\*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>')
+}
+
+const isMarkdownTableSeparator = (line) => {
+  const normalized = line.replace(/\|/g, '').replace(/\s+/g, '')
+  return normalized.length > 0 && /^(:?-{3,}:?)+$/.test(normalized)
+}
+
+const splitMarkdownTableRow = (line) => {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map(cell => renderInlineMarkdown(cell.trim()))
+}
+
 const markdownToHtml = (md) => {
   if (!md) return '<p>暂无报告内容</p>'
   const lines = String(md).split('\n')
   const html = []
-  let inList = false
-  for (const rawLine of lines) {
-    const line = rawLine.trimEnd()
-    const escaped = escapeHtml(line)
-    if (!line.trim()) {
-      if (inList) {
-        html.push('</ul>')
-        inList = false
-      }
+  let i = 0
+
+  const closeListIfNeeded = (state) => {
+    if (state === 'ul') html.push('</ul>')
+    if (state === 'ol') html.push('</ol>')
+  }
+
+  let listState = null
+
+  while (i < lines.length) {
+    const rawLine = lines[i]
+    const line = rawLine.trim()
+    const nextLine = lines[i + 1]?.trim() || ''
+
+    if (!line) {
+      closeListIfNeeded(listState)
+      listState = null
+      i += 1
       continue
     }
-    if (line.startsWith('### ')) {
-      if (inList) {
-        html.push('</ul>')
-        inList = false
+
+    if (line.includes('|') && nextLine.includes('|') && isMarkdownTableSeparator(nextLine)) {
+      closeListIfNeeded(listState)
+      listState = null
+
+      const headers = splitMarkdownTableRow(line)
+      const rows = []
+      i += 2
+      while (i < lines.length && lines[i].trim().includes('|')) {
+        rows.push(splitMarkdownTableRow(lines[i]))
+        i += 1
       }
-      html.push(`<h3>${escapeHtml(line.slice(4))}</h3>`)
-    } else if (line.startsWith('## ')) {
-      if (inList) {
-        html.push('</ul>')
-        inList = false
-      }
-      html.push(`<h2>${escapeHtml(line.slice(3))}</h2>`)
-    } else if (line.startsWith('# ')) {
-      if (inList) {
-        html.push('</ul>')
-        inList = false
-      }
-      html.push(`<h1>${escapeHtml(line.slice(2))}</h1>`)
-    } else if (line.startsWith('- ') || line.startsWith('* ')) {
-      if (!inList) {
-        html.push('<ul>')
-        inList = true
-      }
-      html.push(`<li>${escapeHtml(line.slice(2))}</li>`)
-    } else {
-      if (inList) {
-        html.push('</ul>')
-        inList = false
-      }
-      html.push(`<p>${escaped}</p>`)
+
+      html.push('<div class="markdown-table-wrap"><table><thead><tr>')
+      headers.forEach(header => html.push(`<th>${header}</th>`))
+      html.push('</tr></thead><tbody>')
+      rows.forEach((row) => {
+        html.push('<tr>')
+        row.forEach(cell => html.push(`<td>${cell}</td>`))
+        html.push('</tr>')
+      })
+      html.push('</tbody></table></div>')
+      continue
     }
+
+    if (line.startsWith('### ')) {
+      closeListIfNeeded(listState)
+      listState = null
+      html.push(`<h3>${renderInlineMarkdown(line.slice(4))}</h3>`)
+      i += 1
+      continue
+    }
+
+    if (line.startsWith('## ')) {
+      closeListIfNeeded(listState)
+      listState = null
+      html.push(`<h2>${renderInlineMarkdown(line.slice(3))}</h2>`)
+      i += 1
+      continue
+    }
+
+    if (line.startsWith('# ')) {
+      closeListIfNeeded(listState)
+      listState = null
+      html.push(`<h1>${renderInlineMarkdown(line.slice(2))}</h1>`)
+      i += 1
+      continue
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      if (listState !== 'ul') {
+        closeListIfNeeded(listState)
+        html.push('<ul>')
+        listState = 'ul'
+      }
+      html.push(`<li>${renderInlineMarkdown(line.replace(/^[-*]\s+/, ''))}</li>`)
+      i += 1
+      continue
+    }
+
+    if (/^\d+\.\s+/.test(line)) {
+      if (listState !== 'ol') {
+        closeListIfNeeded(listState)
+        html.push('<ol>')
+        listState = 'ol'
+      }
+      html.push(`<li>${renderInlineMarkdown(line.replace(/^\d+\.\s+/, ''))}</li>`)
+      i += 1
+      continue
+    }
+
+    closeListIfNeeded(listState)
+    listState = null
+    html.push(`<p>${renderInlineMarkdown(line)}</p>`)
+    i += 1
   }
-  if (inList) html.push('</ul>')
+
+  closeListIfNeeded(listState)
   return html.join('\n')
 }
 
@@ -2097,8 +2174,65 @@ onUnmounted(() => {
   margin: 8px 0;
 }
 
-.markdown-rendered :deep(ul) {
+.markdown-rendered :deep(ul),
+.markdown-rendered :deep(ol) {
   margin: 8px 0 8px 20px;
+}
+
+.markdown-rendered :deep(strong) {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.markdown-rendered :deep(code) {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--bg-card) 88%, var(--primary-color) 12%);
+  color: var(--primary-ink);
+  font-size: 0.92em;
+}
+
+.markdown-rendered :deep(a) {
+  color: var(--primary-dark);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in oklab, var(--primary-color) 28%, transparent);
+}
+
+.markdown-rendered :deep(a:hover) {
+  color: var(--primary-color);
+}
+
+.markdown-rendered :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+  border: 1px solid var(--border-light);
+}
+
+.markdown-rendered :deep(th),
+.markdown-rendered :deep(td) {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-light);
+  font-size: 13px;
+}
+
+.markdown-rendered :deep(th) {
+  color: var(--text-primary);
+  font-weight: 700;
+  background: color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%);
+}
+
+.markdown-rendered :deep(tr:last-child td) {
+  border-bottom: none;
+}
+
+.markdown-rendered :deep(.markdown-table-wrap) {
+  overflow-x: auto;
 }
 
 .report-section-item ul {
