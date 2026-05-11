@@ -3,6 +3,9 @@
     <el-card class="settings-card">
       <template #header>
         <span class="card-title">API配置</span>
+        <div class="card-icon">
+          <el-icon><Setting /></el-icon>
+        </div>
       </template>
       <el-form :model="apiConfig" label-width="180px">
         <el-form-item label="阿里云百炼API Key">
@@ -12,13 +15,13 @@
               :type="showApiKey ? 'text' : 'password'"
               placeholder="请输入API Key"
             />
-            <el-button @click="showApiKey = !showApiKey">
+            <el-button @click="showApiKey = !showApiKey" class="toggle-btn">
               {{ showApiKey ? '隐藏' : '显示' }}
             </el-button>
           </div>
         </el-form-item>
         <el-form-item>
-          <el-button @click="testConnection">测试连接</el-button>
+          <el-button class="primary-btn" @click="testConnection">测试连接</el-button>
           <span :class="['connection-status', connectionStatus]">
             {{ connectionStatusText }}
           </span>
@@ -32,6 +35,9 @@
     <el-card class="settings-card">
       <template #header>
         <span class="card-title">成本参数配置</span>
+        <div class="card-icon cost-icon">
+          <el-icon><PieChart /></el-icon>
+        </div>
       </template>
       <el-form :model="costConfig" label-width="160px">
         <el-row :gutter="20">
@@ -77,8 +83,8 @@
           </el-col>
         </el-row>
         <el-form-item>
-          <el-button type="text">批量导入制冷方案成本</el-button>
-          <el-button type="text">导出成本配置</el-button>
+          <el-button type="text" class="text-btn">批量导入制冷方案成本</el-button>
+          <el-button type="text" class="text-btn">导出成本配置</el-button>
         </el-form-item>
         <el-form-item>
           <el-button @click="restoreCostDefaults">恢复默认值</el-button>
@@ -89,6 +95,9 @@
     <el-card class="settings-card">
       <template #header>
         <span class="card-title">专家权重配置</span>
+        <div class="card-icon weight-icon">
+          <el-icon><Briefcase /></el-icon>
+        </div>
       </template>
       <el-form :model="weightConfig" label-width="140px">
         <el-row :gutter="20">
@@ -137,6 +146,9 @@
     <el-card class="settings-card">
       <template #header>
         <span class="card-title">默认参数配置</span>
+        <div class="card-icon default-icon">
+          <el-icon><Document /></el-icon>
+        </div>
       </template>
       <el-form :model="defaultConfig" label-width="160px">
         <el-row :gutter="20">
@@ -186,6 +198,9 @@
     <el-card class="settings-card">
       <template #header>
         <span class="card-title">系统信息</span>
+        <div class="card-icon info-icon">
+          <el-icon><QuestionFilled /></el-icon>
+        </div>
       </template>
       <el-form label-width="140px">
         <el-form-item label="系统版本">
@@ -195,8 +210,8 @@
           <span class="info-value">2024-01-15 10:00:00</span>
         </el-form-item>
         <el-form-item>
-          <el-button @click="checkUpdate">检查更新</el-button>
-          <span v-if="checkingUpdate" class="update-status">检查中...</span>
+          <el-button class="primary-btn" @click="checkUpdate">检查更新</el-button>
+          <span v-if="checkingUpdate" class="update-status loading">检查中...</span>
           <span v-else-if="updateStatus" class="update-status success">{{ updateStatus }}</span>
         </el-form-item>
       </el-form>
@@ -206,6 +221,7 @@
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
+import { Setting, PieChart, Briefcase, Document, QuestionFilled } from '@element-plus/icons-vue'
 
 const showApiKey = ref(false)
 const connectionStatus = ref('')
@@ -275,11 +291,54 @@ const checkUpdate = () => {
 
 .settings-card {
   margin-bottom: 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(16, 185, 129, 0.08);
+  background: linear-gradient(135deg, #FFFFFF 0%, #F0FDF4 100%);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-card:hover {
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.12);
+  transform: translateY(-2px);
 }
 
 .card-title {
   font-size: 16px;
   font-weight: 600;
+  color: var(--text-primary);
+}
+
+.card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.card-icon.cost-icon {
+  background: linear-gradient(135deg, #06B6D4 0%, #0891B2 100%);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.25);
+}
+
+.card-icon.weight-icon {
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+}
+
+.card-icon.default-icon {
+  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+}
+
+.card-icon.info-icon {
+  background: linear-gradient(135deg, #EC4899 0%, #DB2777 100%);
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.25);
 }
 
 .api-input-group {
@@ -287,21 +346,60 @@ const checkUpdate = () => {
   gap: 12px;
 }
 
+.toggle-btn {
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--primary-color);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 8px;
+  transition: all 0.25s ease;
+}
+
+.toggle-btn:hover {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: var(--primary-color);
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  border: none;
+  color: white;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+  transition: all 0.25s ease;
+}
+
+.primary-btn:hover {
+  background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-color) 100%);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
+}
+
+.text-btn {
+  color: var(--primary-color);
+  font-weight: 500;
+  transition: all 0.25s ease;
+}
+
+.text-btn:hover {
+  color: var(--primary-light);
+}
+
 .connection-status {
   margin-left: 12px;
   font-size: 14px;
+  font-weight: 500;
+  animation: fadeIn 0.3s ease;
 }
 
 .connection-status.success {
-  color: #00B42A;
+  color: var(--success-color);
 }
 
 .connection-status.error {
-  color: #F53F3F;
+  color: var(--danger-color);
 }
 
 .connection-status.loading {
-  color: #165DFF;
+  color: var(--info-color);
 }
 
 .help-text {
@@ -311,27 +409,45 @@ const checkUpdate = () => {
 
 .weight-sum {
   font-size: 14px;
+  font-weight: 500;
 }
 
 .weight-sum.success {
-  color: #00B42A;
+  color: var(--success-color);
 }
 
 .weight-sum.error {
-  color: #F53F3F;
+  color: var(--danger-color);
 }
 
 .info-value {
   font-size: 14px;
-  color: #1F2329;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 .update-status {
   margin-left: 12px;
   font-size: 14px;
+  font-weight: 500;
 }
 
 .update-status.success {
-  color: #00B42A;
+  color: var(--success-color);
+}
+
+.update-status.loading {
+  color: var(--info-color);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateX(-5px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 </style>

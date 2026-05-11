@@ -249,11 +249,22 @@ class DraftPlanAgentNode:
                 "sim_hours": req_data.get("sim_hours", 160),  # 使用用户配置或默认160小时
                 "year": 2025,
             }
-            green_power_result = green_power_allocation_tool.invoke(gp_input)
+            print(f"[DraftPlanAgent] green_power_allocation input: {gp_input}", flush=True)
+            temp_result = green_power_allocation_tool.invoke(gp_input)
+            print(f"[DraftPlanAgent] green_power_allocation immediate result type: {type(temp_result)}", flush=True)
+            print(f"[DraftPlanAgent] green_power_allocation immediate result keys: {list(temp_result.keys()) if isinstance(temp_result, dict) else 'not a dict'}", flush=True)
+            if isinstance(temp_result, dict) and 'optimization' in temp_result:
+                print(f"[DraftPlanAgent] optimization present in immediate result", flush=True)
+                print(f"[DraftPlanAgent] pv_capacity_mw: {temp_result['optimization'].get('pv_capacity_mw')}", flush=True)
+            elif isinstance(temp_result, dict) and 'cooling_technology' in temp_result:
+                print(f"[DraftPlanAgent] WARNING: green_power_allocation returned cooling data!", flush=True)
+            green_power_result = temp_result
             sys.stdout.write("[Draft Plan Agent] green_power_allocation completed\n")
             sys.stdout.flush()
         except Exception as e:
             print(f"[DraftPlanAgent] Error calling green_power_allocation: {e}", flush=True)
+            import traceback
+            print(f"[DraftPlanAgent] Traceback: {traceback.format_exc()}", flush=True)
         
         # 2. 调用制冷方案工具
         try:
@@ -1281,8 +1292,8 @@ Please respond concisely in Chinese, within 200 characters."""
 
         # 记录流式输出
         streaming_output.append({
-            "node": "debate",
-            "expert": speaker,
+            "node": "debate_round",
+            "speaker": speaker,
             "content": opinion,
             "round": state["debate_round"]
         })

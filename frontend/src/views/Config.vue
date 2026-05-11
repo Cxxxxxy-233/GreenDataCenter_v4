@@ -542,9 +542,11 @@ const nextStep = async () => {
 .config-sidebar {
   width: 180px;
   background: white;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 10px;
   flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid #D1FAE5;
 }
 
 .config-menu {
@@ -554,11 +556,19 @@ const nextStep = async () => {
 .config-menu :deep(.el-menu-item) {
   height: 44px;
   line-height: 44px;
+  border-radius: 8px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.config-menu :deep(.el-menu-item:hover) {
+  background: rgba(16, 185, 129, 0.06);
+  color: var(--primary-color);
 }
 
 .config-menu :deep(.el-menu-item.is-active) {
-  background: #E8F0FE;
-  color: #165DFF;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%);
+  color: var(--primary-color);
+  font-weight: 600;
 }
 
 .config-content {
@@ -568,22 +578,28 @@ const nextStep = async () => {
 
 .config-card {
   margin-bottom: 20px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.config-card:hover {
+  box-shadow: var(--shadow-hover);
 }
 
 .card-title {
   font-size: 16px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .form-hint {
   margin-left: 12px;
   font-size: 12px;
-  color: #8F959E;
+  color: #6B7280;
 }
 
 .disabled-input {
-  background: #F5F7FA;
-  color: #8F959E;
+  background: #F0FDF4;
+  color: #9CA3AF;
 }
 
 .config-footer {
@@ -591,18 +607,31 @@ const nextStep = async () => {
   gap: 12px;
   justify-content: flex-end;
   padding-top: 16px;
-  border-top: 1px solid #E4E7ED;
+  border-top: 1px solid #D1FAE5;
   margin-top: auto;
+  background: white;
+  padding: 16px 24px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  box-shadow: 0 -2px 10px rgba(16, 185, 129, 0.05);
 }
 
 .primary-btn {
-  background: #FF7D00;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
   border: none;
   color: white;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
 }
 
 .primary-btn:hover {
-  background: #E67E22;
+  background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-color) 100%);
   color: white;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.primary-btn:disabled {
+  background: #D1FAE5;
+  color: #9CA3AF;
+  box-shadow: none;
+  cursor: not-allowed;
 }
 </style>

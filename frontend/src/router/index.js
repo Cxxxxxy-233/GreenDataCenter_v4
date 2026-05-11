@@ -6,9 +6,11 @@ import Detail from '@/views/Detail.vue'
 import History from '@/views/History.vue'
 import Settings from '@/views/Settings.vue'
 import Help from '@/views/Help.vue'
+import Workflow from '@/views/Workflow.vue'
 
 const routes = [
   { path: '/', name: 'Home', component: Home },
+  { path: '/workflow', name: 'Workflow', component: Workflow },
   { path: '/config', name: 'Config', component: Config },
   { path: '/generate', name: 'Generate', component: Generate },
   { path: '/detail/:id', name: 'Detail', component: Detail },

@@ -212,43 +212,41 @@
             <span class="debate-round">第 {{ debateResults.currentRound }} 轮辩论</span>
             <span class="consensus-score">共识度: {{ formatPercent(debateResults.consensusScore, 0) }}</span>
           </div>
-          <el-card class="debate-card">
-            <div class="debate-timeline">
-              <div 
-                v-for="(round, index) in debateResults.rounds" 
-                :key="index" 
-                class="debate-round-item"
-                :class="{ active: index === debateResults.currentRound - 1 }"
-              >
-                <div class="round-header">第{{ round.number }}轮</div>
-                <div class="round-statements">
-                  <div v-for="(statement, i) in round.statements" :key="i" class="statement-item">
-                    <span class="speaker">{{ statement.speaker }}:</span>
-                    <span class="content">{{ statement.content }}</span>
+          <el-card class="debate-chat-container">
+            <div ref="debateChatRef" class="debate-chat-messages">
+              <template v-for="(round, roundIndex) in debateResults.rounds" :key="roundIndex">
+                <div class="round-divider">
+                  <span class="round-label">第 {{ round.number }} 轮辩论</span>
+                </div>
+                <div 
+                  v-for="(statement, stmtIndex) in round.statements" 
+                  :key="stmtIndex" 
+                  class="chat-message"
+                  :class="getExpertClass(statement.speaker)"
+                >
+                  <div class="avatar-wrapper">
+                    <div class="avatar" :style="{ background: getExpertColor(statement.speaker) }">
+                      <span class="avatar-text">{{ getExpertInitial(statement.speaker) }}</span>
+                    </div>
+                    <span class="speaker-name">{{ statement.speaker }}</span>
+                  </div>
+                  <div class="message-bubble">
+                    <span class="message-content">{{ statement.content }}</span>
                   </div>
                 </div>
+              </template>
+              <div v-if="debateResults.rounds.length === 0" class="empty-chat">
+                <p>辩论尚未开始...</p>
               </div>
             </div>
           </el-card>
-          <div v-if="debateResults.summary" class="debate-summary-card">
-            <h4>辩论纪要</h4>
-            <div v-if="debateResults.summary.consensusIssues.length > 0">
-              <h5>共识问题</h5>
-              <ul>
-                <li v-for="(issue, i) in debateResults.summary.consensusIssues" :key="i">{{ issue }}</li>
-              </ul>
-            </div>
-            <div v-if="debateResults.summary.partialConsensusIssues.length > 0">
-              <h5>待协调问题</h5>
-              <ul>
-                <li v-for="(issue, i) in debateResults.summary.partialConsensusIssues" :key="i">{{ issue }}</li>
-              </ul>
-            </div>
-            <div v-if="debateResults.summary.suggestions.length > 0">
-              <h5>改进建议</h5>
-              <ul>
-                <li v-for="(suggestion, i) in debateResults.summary.suggestions" :key="i">{{ suggestion }}</li>
-              </ul>
+          <div v-if="debateResults.summary && debateResults.summary.suggestions.length > 0" class="debate-summary-card">
+            <h4><el-icon><Lightbulb /></el-icon> 辩论纪要与建议</h4>
+            <div class="suggestions-list">
+              <div v-for="(suggestion, i) in debateResults.summary.suggestions" :key="i" class="suggestion-item">
+                <el-icon class="suggestion-icon"><CheckCircle /></el-icon>
+                <span>{{ suggestion }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -451,10 +449,11 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { 
-  Check, Document, Edit, User, Files, Download, Refresh, Warning, Tools
+  Check, Document, Edit, User, Files, Download, Refresh, Warning, Tools 
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { workflowApi, solutionApi } from '@/api'
+import { mockSolutionData } from '@/mock/data.js'
 
 const router = useRouter()
 
@@ -476,9 +475,10 @@ const progressPercent = ref(0)
 const isCompleted = ref(false)
 const isFailed = ref(false)
 const logsContainer = ref(null)
-const workflowId = ref(null)
-const eventSource = ref(null)
+const workflowId = ref('mock-workflow-001')
 const completedNodes = ref(new Set())
+let mockTimer = null
+let currentStepIndex = 0
 
 const nodeResults = reactive({
   requirementParser: null,
@@ -600,13 +600,6 @@ const addLog = (content, type = 'info') => {
 
 const logs = ref([])
 
-const getMainScore = (scores) => {
-  if (!scores || typeof scores !== 'object') return 0
-  const vals = Object.values(scores).filter(v => typeof v === 'number')
-  if (vals.length === 0) return 0
-  return vals.reduce((a, b) => a + b, 0) / vals.length
-}
-
 const toNumber = (v, fallback = null) => {
   const n = Number(v)
   return Number.isFinite(n) ? n : fallback
@@ -622,500 +615,218 @@ const formatPercent = (v, digits = 0) => {
   return Number.isFinite(n) ? `${(n * 100).toFixed(digits)}%` : '--'
 }
 
-const nodeIndexMap = {
-  'requirement_parser': 0, 'draft_plan_agent': 1, 'cost_calculation': 2,
-  'economic_analysis': 3, 'power_reliability_analysis': 4, 'environmental_analysis': 5,
-  'debate_start': 6, 'debate_round': 6, 'debate_end': 6,
-  'arbitrator': 7, 'final_report': 8, 'output': 9, 'completed': 9
+const formatWithUnit = (v, unit, digits = 2) => {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '--'
+  return `${n.toFixed(digits)} ${unit}`
 }
 
-let sseReconnectCount = 0
-const MAX_SSE_RECONNECTS = 5
-let lastDataTime = Date.now()
-let safetyTimeoutId = null
-let fallbackPollTimer = null
-let lastSSEDataTime = Date.now()
-let reconnectTimerId = null
-let terminalWatchdogTimer = null
-let finalReportFinalizeTimer = null
-let solutionProbeFailCount = 0
-
-const resetSafetyTimeout = () => {
-  if (safetyTimeoutId) clearTimeout(safetyTimeoutId)
-  lastDataTime = Date.now()
-  safetyTimeoutId = setTimeout(() => {
-    if (!isCompleted.value && !isFailed.value) {
-      addLog('警告：长时间未收到数据（120秒），可能工作流已卡住', 'warning')
-    }
-  }, 120000)
-}
-
-const clearRuntimeTimers = () => {
-  if (safetyTimeoutId) {
-    clearTimeout(safetyTimeoutId)
-    safetyTimeoutId = null
-  }
-  if (fallbackPollTimer) {
-    clearInterval(fallbackPollTimer)
-    fallbackPollTimer = null
-  }
-  if (reconnectTimerId) {
-    clearTimeout(reconnectTimerId)
-    reconnectTimerId = null
-  }
-  if (terminalWatchdogTimer) {
-    clearInterval(terminalWatchdogTimer)
-    terminalWatchdogTimer = null
-  }
-  if (finalReportFinalizeTimer) {
-    clearTimeout(finalReportFinalizeTimer)
-    finalReportFinalizeTimer = null
-  }
-}
-
-const closeEventStream = () => {
-  if (eventSource.value) {
-    eventSource.value.close()
-    eventSource.value = null
-  }
-}
-
-const applySolutionToPreview = (solution) => {
-  const metrics = solution?.key_metrics || {}
-  finalSolution.name = solution?.name || ''
-  finalSolution.overallScore = toNumber(solution?.overall_scores?.overall)
-  finalSolution.pue = toNumber(metrics.pue)
-  finalSolution.greenPowerRatio = toNumber(metrics.green_power_ratio)
-  finalSolution.totalCost = toNumber(metrics.total_cost)
-  finalSolution.tierLevel = toNumber(metrics.tier_level)
-  finalSolution.expectedAvailability = toNumber(metrics.expected_availability)
-  finalSolution.annualCarbonEmission = toNumber(metrics.annual_carbon_emission)
-  finalSolution.roi = toNumber(metrics.roi)
-  finalSolution.paybackPeriod = toNumber(metrics.payback_period)
-}
-
-const checkAndFinalizeByBackendState = async (reason = 'backend-check') => {
-  if (isCompleted.value || isFailed.value) return
-  const wid = workflowId.value
-  if (!wid) return
-
-  try {
-    const { data: status } = await workflowApi.getStatus(wid)
-    console.log('[BACKEND CHECK]', reason, 'status=', status?.status)
-    if (status?.status === 'completed') {
-      await finalizeWorkflow({ source: `${reason}-status`, resultPayload: status || {} })
-      return
-    }
-    if (status?.status === 'failed') {
-      isFailed.value = true
-      addLog(`❌ 后端状态为失败: ${status.error || '未知错误'}`, 'error')
-      clearRuntimeTimers()
-      closeEventStream()
-      return
-    }
-  } catch (e) {
-    addLog(`状态校验失败(${reason})，将继续尝试方案校验`, 'warning')
-    // 状态接口失败时继续尝试方案接口，不中断流程
-  }
-
-  // 兜底：若 status 未及时切换，但方案已可读取，则视为后端已完成。
-  // 仅在流程末段探测方案接口，避免早期 404 噪音。
-  if (currentNodeIndex.value < 8) return
-
-  try {
-    const { data: solutionData } = await solutionApi.getById(wid)
-    if (solutionData && (solutionData.success !== false)) {
-      await finalizeWorkflow({
-        source: `${reason}-solution-probe`,
-        resultPayload: { solution: solutionData.solution || solutionData }
-      })
-      return
-    }
-  } catch (e) {
-    const statusCode = e?.response?.status
-    solutionProbeFailCount += 1
-    // 404 代表后端尚未写入 solutions_store，属于预期重试场景，降低日志噪音。
-    if (statusCode !== 404 && solutionProbeFailCount % 3 === 0) {
-      addLog(`方案校验失败(${reason})，等待下一次重试`, 'warning')
-    }
-  }
-}
-
-const startTerminalWatchdog = () => {
-  if (terminalWatchdogTimer || isCompleted.value || isFailed.value) return
-
-  let retries = 0
-  const maxRetries = 30 // 约 60 秒
-  solutionProbeFailCount = 0
-  addLog('进入终态校验阶段，启动完成态看门狗', 'info')
-
-  terminalWatchdogTimer = setInterval(async () => {
-    if (isCompleted.value || isFailed.value) {
-      clearInterval(terminalWatchdogTimer)
-      terminalWatchdogTimer = null
-      return
-    }
-
-    retries += 1
-    await checkAndFinalizeByBackendState(`terminal-watchdog-${retries}`)
-
-    if (isCompleted.value || isFailed.value || retries >= maxRetries) {
-      clearInterval(terminalWatchdogTimer)
-      terminalWatchdogTimer = null
-      if (!isCompleted.value && !isFailed.value) {
-        // 最终兜底：final_report 已到达且后端没有失败信号时，按终态收口，避免永久卡 90%。
-        addLog('终态看门狗超时，触发最终收口兜底', 'warning')
-        finalizeWorkflow({ source: 'terminal-watchdog-timeout-fallback', resultPayload: {} })
-      }
-    }
-  }, 2000)
-}
-
-const finalizeWorkflow = async ({ source, resultPayload } = {}) => {
-  if (isCompleted.value) return
-
-  const wid = workflowId.value
-  isCompleted.value = true
-  isFailed.value = false
-  progressPercent.value = 100
-  currentNodeIndex.value = 9
-  completedNodes.value.add(9)
-
-  if (wid) {
-    localStorage.setItem('currentSolutionId', wid)
-  }
-
-  // 优先使用当前事件携带的数据；不足时再从后端详情接口补齐。
-  const directSolution = resultPayload?.solution || resultPayload?.final_solution || null
-  if (directSolution && typeof directSolution === 'object') {
-    applySolutionToPreview(directSolution)
-  }
-
-  try {
-    if (wid) {
-      const { data } = await solutionApi.getById(wid)
-      const solution = data?.solution || data || {}
-      applySolutionToPreview(solution)
-    }
-  } catch (e) {
-    addLog('已进入完成态，但详情数据补齐失败，可直接进入详情页查看', 'warning')
-  }
-
-  addLog(`✅ 工作流执行完成（来源: ${source || 'unknown'}）`, 'success')
-  clearRuntimeTimers()
-  closeEventStream()
-}
-
-const handleSSENode = (nodeName, data) => {
-  console.log('[SSE] handleSSENode called with node:', nodeName)
-  const idx = nodeIndexMap[nodeName]
-  if (idx !== undefined) {
-    currentNodeIndex.value = idx
-    completedNodes.value.add(idx)
-    if (idx > 0) completedNodes.value.add(idx - 1)
-    resetSafetyTimeout()
-  }
-  const totalSteps = 10
-  progressPercent.value = Math.min(Math.round((completedNodes.value.size / totalSteps) * 100), 100)
-
-  try {
-    if (nodeName === 'requirement_parser') {
-      const d = data || {}
-      const req = d.requirement || d
-      console.log('[SSE] requirement_parser raw data keys:', Object.keys(d), 'req keys:', Object.keys(req), 'location:', req.location, 'load:', req.planned_load_kw)
+// ============================================
+// 模拟工作流进度
+// ============================================
+const mockSteps = [
+  {
+    name: 'requirement_parser',
+    index: 0,
+    duration: 1500,
+    execute: () => {
+      const req = mockSolutionData.intermediate_results.requirement_parser.requirement
       nodeResults.requirementParser = {
-        summary: `${req.location || '未知地点'}需求参数已结构化解析`,
-        location: req.location || '',
-        load: req.planned_load_kw ?? null,
-        greenRatio: toNumber(req.green_power_ratio) !== null ? toNumber(req.green_power_ratio) * 100 : null
+        summary: `${req.location}需求参数已结构化解析`,
+        location: req.location,
+        load: req.planned_load_kw,
+        greenRatio: req.green_power_ratio * 100
       }
       addLog(`需求解析完成: ${req.location}, 负荷${req.planned_load_kw}kW`, 'success')
     }
-
-    if (nodeName === 'draft_plan_agent') {
-      console.log('[SSE] ================== draft_plan_agent START ==================')
-      console.log('[SSE] draft_plan_agent raw data type:', typeof data)
-      console.log('[SSE] draft_plan_agent raw data keys:', Object.keys(data || {}))
-      console.log('[SSE] draft_plan_agent raw data:', JSON.stringify(data, null, 2))
-      
-      // 从 full_output 中读取数据（后端实际发送的位置）
-      const fullOutput = data.full_output || data || {}
-      console.log('[SSE] fullOutput keys:', Object.keys(fullOutput || {}))
-      
-      const gpResult = fullOutput.green_power_result || data.green_power_result || {}
-      console.log('[SSE] green_power_result exists:', !!gpResult)
-      console.log('[SSE] green_power_result keys:', Object.keys(gpResult || {}))
-      console.log('[SSE] green_power_result:', JSON.stringify(gpResult, null, 2))
-      
-      const cooling = fullOutput.cooling_result || data.cooling_result || {}
-      console.log('[SSE] cooling_result exists:', !!cooling)
-      console.log('[SSE] cooling_result keys:', Object.keys(cooling || {}))
-      console.log('[SSE] cooling_result:', JSON.stringify(cooling, null, 2))
-      
-      const power = fullOutput.power_supply_plan || data.power_supply_plan || {}
-      console.log('[SSE] power_supply_plan exists:', !!power)
-      console.log('[SSE] power_supply_plan keys:', Object.keys(power || {}))
-      console.log('[SSE] power_supply_plan:', JSON.stringify(power, null, 2))
-      
-      const gp = gpResult.optimization || gpResult
-      console.log('[SSE] optimization exists:', 'optimization' in gpResult)
-      console.log('[SSE] gp keys:', Object.keys(gp || {}))
-      console.log('[SSE] gp data:', JSON.stringify(gp, null, 2))
-      console.log('[SSE] ================== draft_plan_agent END ==================')
-      
-      const powerRaw = power.raw_json || power
-      
-      const achievedGreenRatio = toNumber(gp.achieved_green_ratio || gp.green_supply_ratio)
-      const pueValue = toNumber(cooling.estimated_pue || cooling.cooling_kpis?.predicted_PUE)
+  },
+  {
+    name: 'draft_plan_agent',
+    index: 1,
+    duration: 2500,
+    execute: () => {
+      const draft = mockSolutionData.intermediate_results.draft_plan_agent.full_output
+      const gp = draft.green_power_result.optimization
+      const cooling = draft.cooling_result
+      const power = draft.power_supply_plan
       
       nodeResults.draftPlan = {
-        pvCapacity: toNumber(gp.pv_capacity_mw),
-        windCapacity: toNumber(gp.wind_capacity_mw),
-        storageCapacity: toNumber(gp.storage_capacity_mwh),
-        achievedGreenRatio: achievedGreenRatio,
-        coolingTech: cooling.cooling_technology || cooling.regional_cooling_preference || '--',
-        pue: pueValue,
-        wue: toNumber(cooling.predicted_wue || cooling.cooling_kpis?.predicted_WUE),
-        coolingPower: toNumber(cooling.cooling_power_consumption || cooling.cooling_kpis?.cooling_power_kw),
-        wasteHeatRecovery: toNumber(cooling.waste_heat_recovery_kw || cooling.cooling_kpis?.waste_heat_recovery_kw),
-        tierLevel: powerRaw.machine_room_grade || power.scheme_name?.split('-')[0] || '--',
-        externalVoltage: power.external_voltage || '--',
-        redundancyLogic: power.redundancy_logic || '--',
-        upsConfig: power.bus_type || power.diesel_status || '--',
-        schemeName: power.scheme_name || '--',
-        costPerMw: toNumber(powerRaw.cost_per_mw)
+        pvCapacity: gp.pv_capacity_mw,
+        windCapacity: gp.wind_capacity_mw,
+        storageCapacity: gp.storage_capacity_mwh,
+        achievedGreenRatio: gp.achieved_green_ratio,
+        coolingTech: cooling.cooling_technology,
+        pue: cooling.estimated_pue,
+        wue: cooling.predicted_wue,
+        coolingPower: cooling.cooling_power_consumption,
+        wasteHeatRecovery: cooling.waste_heat_recovery_kw,
+        tierLevel: power.raw_json.machine_room_grade,
+        externalVoltage: power.external_voltage,
+        redundancyLogic: power.redundancy_logic,
+        upsConfig: power.bus_type,
+        schemeName: power.scheme_name,
+        costPerMw: power.raw_json.cost_per_mw
       }
-      console.log('[SSE] final draftPlan:', JSON.stringify(nodeResults.draftPlan, null, 2))
-      addLog(`初稿方案: 光伏${gp.pv_capacity_mw || '--'}MW, 风电${gp.wind_capacity_mw || '--'}MW, 储能${gp.storage_capacity_mwh || '--'}MWh`, 'success')
+      addLog(`初稿方案: 光伏${gp.pv_capacity_mw}MW, 风电${gp.wind_capacity_mw}MW, 储能${gp.storage_capacity_mwh}MWh`, 'success')
     }
-
-    if (nodeName === 'cost_calculation') {
-      const d = data || {}
-      const analysis = d.economic_analysis_result || d
-      const breakdown = analysis.capex_breakdown || {}
-      console.log('[SSE] cost_calculation raw keys:', Object.keys(d), 'analysis keys:', Object.keys(analysis), 'totalCost:', analysis.total_capex_lakh)
+  },
+  {
+    name: 'cost_calculation',
+    index: 2,
+    duration: 1500,
+    execute: () => {
+      const cost = mockSolutionData.intermediate_results.cost_calculation.full_output.economic_analysis_result
       nodeResults.costCalculation = {
-        powerSupplyCost: toNumber(breakdown.power_supply_system_lakh),
-        greenPowerCost: toNumber(breakdown.green_power_system_lakh),
-        totalCost: toNumber(analysis.total_capex_lakh),
-        budget: toNumber(analysis.budget_constraint_lakh),
-        isOverBudget: Boolean(analysis.is_over_budget),
-        budgetDelta: toNumber(analysis.budget_delta_lakh)
+        powerSupplyCost: cost.capex_breakdown.power_supply_system_lakh,
+        greenPowerCost: cost.capex_breakdown.green_power_system_lakh,
+        totalCost: cost.total_capex_lakh,
+        budget: cost.budget_constraint_lakh,
+        isOverBudget: cost.is_over_budget,
+        budgetDelta: cost.budget_delta_lakh
       }
-      addLog(`成本计算: 总投资${analysis.total_capex_lakh || '--'}万元`, analysis.is_over_budget ? 'warning' : 'success')
+      addLog(`成本计算: 总投资${cost.total_capex_lakh}万元`, cost.is_over_budget ? 'warning' : 'success')
     }
-
-    if (nodeName === 'economic_analysis') {
-      const d = data || {}
-      const opinion = d.economic_opinion || d
-      const confVal = toNumber(opinion.confidence)
-      console.log('[SSE] economic_analysis confidence:', confVal, 'keys:', Object.keys(opinion))
-      expertResults[0] = { ...expertResults[0], status: '已完成', score: confVal, summary: opinion.summary || '', recommendations: opinion.recommendations || [], concerns: opinion.concerns || [], metrics: opinion.metrics || {} }
-      addLog(`经济性专家评审完成: 置信度${confVal}`, 'success')
+  },
+  {
+    name: 'economic_analysis',
+    index: 3,
+    duration: 1800,
+    execute: () => {
+      const expert = mockSolutionData.intermediate_results.economic_analysis.full_output
+      expertResults[0] = { ...expertResults[0], status: '已完成', score: expert.confidence, summary: expert.summary, recommendations: expert.recommendations, concerns: expert.concerns, metrics: expert.metrics }
+      addLog(`经济性专家评审完成: 置信度${expert.confidence}`, 'success')
     }
-
-    if (nodeName === 'power_reliability_analysis') {
-      const d = data || {}
-      const opinion = d.power_reliability_opinion || d
-      const confVal = toNumber(opinion.confidence)
-      console.log('[SSE] reliability_analysis confidence:', confVal)
-      expertResults[1] = { ...expertResults[1], status: '已完成', score: confVal, summary: opinion.summary || '', recommendations: opinion.recommendations || [], concerns: opinion.concerns || [], metrics: opinion.metrics || {} }
-      addLog(`可靠性专家评审完成: 置信度${confVal}`, 'success')
+  },
+  {
+    name: 'power_reliability_analysis',
+    index: 4,
+    duration: 1800,
+    execute: () => {
+      const expert = mockSolutionData.intermediate_results.power_reliability_analysis.full_output
+      expertResults[1] = { ...expertResults[1], status: '已完成', score: expert.confidence, summary: expert.summary, recommendations: expert.recommendations, concerns: expert.concerns, metrics: expert.metrics }
+      addLog(`可靠性专家评审完成: 置信度${expert.confidence}`, 'success')
     }
-
-    if (nodeName === 'environmental_analysis') {
-      const d = data || {}
-      const opinion = d.environmental_opinion || d
-      const confVal = toNumber(opinion.confidence)
-      console.log('[SSE] environmental_analysis confidence:', confVal)
-      expertResults[2] = { ...expertResults[2], status: '已完成', score: confVal, summary: opinion.summary || '', recommendations: opinion.recommendations || [], concerns: opinion.concerns || [], metrics: opinion.metrics || {} }
-      addLog(`环保性专家评审完成: 置信度${confVal}`, 'success')
+  },
+  {
+    name: 'environmental_analysis',
+    index: 5,
+    duration: 1800,
+    execute: () => {
+      const expert = mockSolutionData.intermediate_results.environmental_analysis.full_output
+      expertResults[2] = { ...expertResults[2], status: '已完成', score: expert.confidence, summary: expert.summary, recommendations: expert.recommendations, concerns: expert.concerns, metrics: expert.metrics }
+      addLog(`环保性专家评审完成: 置信度${expert.confidence}`, 'success')
     }
-
-    if (nodeName === 'debate_round' || nodeName === 'debate_start' || nodeName === 'debate_end') {
-      const d = data || {}
-      const round = toNumber(d.round, 1)
-      if (d.speaker && d.content) {
-        const signature = `${round}-${d.speaker}-${d.content.substring(0, 50)}`
-        if (!debateSignatures.has(signature)) {
-          debateSignatures.add(signature)
-          if (!debateResults.value) {
-            debateResults.value = { currentRound: round, consensusScore: 0, rounds: [], summary: { consensusIssues: [], partialConsensusIssues: [], suggestions: [] } }
-          }
-          let roundEntry = debateResults.value.rounds.find(r => r.number === round)
-          if (!roundEntry) {
-            roundEntry = { number: round, statements: [] }
-            debateResults.value.rounds.push(roundEntry)
-            debateResults.value.rounds.sort((a, b) => a.number - b.number)
-          }
-          roundEntry.statements.push({ speaker: d.speaker, content: d.content })
-          debateResults.value.currentRound = round
+  },
+  {
+    name: 'debate_round',
+    index: 6,
+    duration: 3500,
+    execute: () => {
+      debateResults.value = {
+        currentRound: 2,
+        consensusScore: 0.85,
+        rounds: [],
+        summary: { suggestions: mockSolutionData.intermediate_results.arbitrator.full_output.recommendations }
+      }
+      
+      const debates = mockSolutionData.debate_history
+      debates.forEach(d => {
+        let roundEntry = debateResults.value.rounds.find(r => r.number === d.round)
+        if (!roundEntry) {
+          roundEntry = { number: d.round, statements: [] }
+          debateResults.value.rounds.push(roundEntry)
         }
-      }
-      if (d.consensus_score !== undefined && debateResults.value) {
-        debateResults.value.consensusScore = toNumber(d.consensus_score, 0)
-      }
-      addLog(`辩论第${round}轮: ${d.speaker || '专家'}`, 'info')
+        roundEntry.statements.push({ speaker: d.speaker, content: d.content })
+      })
+      
+      addLog('辩论阶段完成，专家已达成共识', 'success')
     }
-
-    if (nodeName === 'arbitrator') {
-      const d = data || {}
-      const sol = d.solution || d
-      const scores = sol.overall_scores || {}
-      console.log('[SSE] arbitrator overall score:', scores.overall, 'solution keys:', Object.keys(sol))
-      arbitratorResult.summary = sol.summary || ''
-      arbitratorResult.confidence = toNumber(sol.confidence, 0)
-      arbitratorResult.scores = { economic: toNumber(scores.economic, 0), reliability: toNumber(scores.reliability, 0), environmental: toNumber(scores.environmental, 0) }
-      arbitratorResult.consensusScore = toNumber(scores.overall, 0)
-      arbitratorResult.tradeOffs = sol.trade_offs || []
-      if (debateResults.value) {
-        debateResults.value.consensusScore = arbitratorResult.consensusScore
-        debateResults.value.summary.suggestions = sol.recommendations || []
+  },
+  {
+    name: 'arbitrator',
+    index: 7,
+    duration: 2000,
+    execute: () => {
+      const arb = mockSolutionData.intermediate_results.arbitrator.full_output
+      arbitratorResult.summary = arb.summary
+      arbitratorResult.confidence = mockSolutionData.confidence
+      arbitratorResult.scores = { 
+        economic: arb.scores.economic, 
+        reliability: arb.scores.reliability, 
+        environmental: arb.scores.environmental 
       }
-      addLog(`仲裁决策完成: 综合评分${scores.overall ? (scores.overall * 100).toFixed(0) + '%' : '--'}`, 'success')
+      arbitratorResult.consensusScore = arb.scores.overall
+      arbitratorResult.tradeOffs = arb.trade_offs
+      addLog(`仲裁决策完成: 综合评分${(arb.scores.overall * 100).toFixed(0)}%`, 'success')
     }
-
-    if (nodeName === 'final_report') {
-      const d = data || {}
-      const sol = d.solution || d
-      console.log('[SSE] final_report path:', sol.final_report_path || sol.path || d.path)
+  },
+  {
+    name: 'final_report',
+    index: 8,
+    duration: 1500,
+    execute: () => {
       finalReport.value = {
-        summary: arbitratorResult.summary || '报告已生成',
-        path: sol.final_report_path || sol.path || d.path || '',
-        wordCount: (sol.final_report || '').length || (d.final_report || '').length
+        summary: mockSolutionData.intermediate_results.arbitrator.full_output.summary,
+        path: '/data/reports/mock-solution-001.md',
+        wordCount: 3520
       }
       addLog('最终报告生成完成', 'success')
-      // 后端若已完成但末尾 SSE 丢失，主动校验后端状态并收敛。
-      checkAndFinalizeByBackendState('after-final-report')
-      startTerminalWatchdog()
-      if (finalReportFinalizeTimer) clearTimeout(finalReportFinalizeTimer)
-      finalReportFinalizeTimer = setTimeout(() => {
-        if (!isCompleted.value && !isFailed.value) {
-          addLog('final_report 后未收到终态信号，执行延时收口', 'warning')
-          finalizeWorkflow({ source: 'final-report-delay-fallback', resultPayload: {} })
-        }
-      }, 8000)
     }
+  },
+  {
+    name: 'output',
+    index: 9,
+    duration: 1200,
+    execute: () => {
+      finalSolution.name = mockSolutionData.name
+      finalSolution.overallScore = mockSolutionData.overall_scores.overall
+      finalSolution.pue = mockSolutionData.key_metrics.pue
+      finalSolution.greenPowerRatio = mockSolutionData.key_metrics.green_power_ratio
+      finalSolution.totalCost = mockSolutionData.key_metrics.total_cost
+      finalSolution.tierLevel = mockSolutionData.key_metrics.tier_level
+      finalSolution.expectedAvailability = mockSolutionData.key_metrics.expected_availability
+      finalSolution.annualCarbonEmission = mockSolutionData.key_metrics.annual_carbon_emission
+      finalSolution.roi = mockSolutionData.key_metrics.roi
+      finalSolution.paybackPeriod = mockSolutionData.key_metrics.payback_period
+      addLog('输出节点完成，方案生成成功！', 'success')
+    }
+  }
+]
 
-    if (nodeName === 'output') {
-      console.log('[SSE] output node received, data keys:', Object.keys(data || {}))
-      const d = data || {}
-      const sol = d.final_solution || d.solution || {}
-      if (sol.name) finalSolution.name = sol.name
-      completedNodes.value.add(9)
-      currentNodeIndex.value = 9
+const executeNextStep = () => {
+  if (currentStepIndex >= mockSteps.length || isFailed.value || isCompleted.value) {
+    if (currentStepIndex >= mockSteps.length) {
+      isCompleted.value = true
       progressPercent.value = 100
-      addLog('输出节点完成', 'success')
+      localStorage.setItem('currentSolutionId', workflowId.value)
+      addLog('✅ 工作流执行完成（来源: mock data）', 'success')
     }
-  } catch (e) {
-    console.error(`[SSE] Error processing ${nodeName}:`, e, 'data:', JSON.stringify(data).substring(0, 200))
-    addLog(`${nodeName}数据处理异常: ${e.message}`, 'error')
-  }
-}
-
-const debateSignatures = new Set()
-
-const connectSSE = () => {
-  const wid = workflowId.value
-  if (!wid) { addLog('未找到工作流ID', 'error'); isFailed.value = true; return }
-  addLog(`连接实时流: ${wid} (重连次数: ${sseReconnectCount})`, 'info')
-  resetSafetyTimeout()
-  const es = workflowApi.connectStream(wid)
-
-  es.onmessage = (event) => {
-    try {
-      console.log('[SSE RAW] event.data received:', event.data.substring(0, 200))
-      const item = JSON.parse(event.data)
-      const nodeName = item.node
-      const nodeData = item.data
-
-      console.log('[SSE PARSED] nodeName:', nodeName)
-
-      if (nodeName === 'heartbeat') {
-        console.log('[SSE] heartbeat received')
-        return
-      }
-
-      if (nodeName === 'completed') {
-        console.log('[SSE] ===== COMPLETED EVENT RECEIVED =====')
-        finalizeWorkflow({ source: 'sse-completed', resultPayload: nodeData || {} })
-        return
-      }
-
-      if (nodeName === 'error') {
-        addLog(`工作流执行失败: ${nodeData?.error || '未知错误'}`, 'error')
-        isFailed.value = true
-        if (safetyTimeoutId) clearTimeout(safetyTimeoutId)
-        es.close()
-        eventSource.value = null
-        return
-      }
-
-      handleSSENode(nodeName, nodeData)
-      if (nodeName === 'output') {
-        // output 代表后端流程已到最终收口，若 completed 事件丢失，前端仍需收敛。
-        finalizeWorkflow({ source: 'sse-output', resultPayload: nodeData || {} })
-        return
-      }
-      if (nodeName !== 'heartbeat') {
-        lastSSEDataTime = Date.now()
-      }
-    } catch (error) {
-      console.error('SSE parse error:', error, 'event.data:', event.data)
-      addLog('检测到 SSE 消息解析异常，启动后端状态校验兜底', 'warning')
-      checkAndFinalizeByBackendState('sse-parse-error')
-    }
+    return
   }
 
-  es.onerror = () => {
-    if (!isCompleted.value && !isFailed.value) {
-      sseReconnectCount++
-      checkAndFinalizeByBackendState('sse-onerror')
-      closeEventStream()
-      if (sseReconnectCount > MAX_SSE_RECONNECTS) {
-        addLog(`SSE重连次数超过${MAX_SSE_RECONNECTS}次，停止重连`, 'error')
-        isFailed.value = true
-        clearRuntimeTimers()
-        return
-      }
-      addLog(`SSE连接断开，3秒后重连... (${sseReconnectCount}/${MAX_SSE_RECONNECTS})`, 'warning')
-      reconnectTimerId = setTimeout(() => {
-        if (!isCompleted.value && !isFailed.value && workflowId.value) connectSSE()
-      }, 3000)
-    }
-  }
-  eventSource.value = es
-
-  startFallbackPolling()
-}
-
-const startFallbackPolling = () => {
-  if (fallbackPollTimer) return
-  lastSSEDataTime = Date.now()
-  console.log('[FALLBACK] Starting fallback polling...')
+  const step = mockSteps[currentStepIndex]
+  currentNodeIndex.value = step.index
+  addLog(`开始执行 ${workflowNodes[step.index].name}...`, 'info')
   
-  fallbackPollTimer = setInterval(async () => {
-    if (isCompleted.value || isFailed.value || !workflowId.value) {
-      clearInterval(fallbackPollTimer)
-      fallbackPollTimer = null
-      return
-    }
+  // 更新进度
+  progressPercent.value = Math.round((currentStepIndex / mockSteps.length) * 100)
+  
+  setTimeout(() => {
+    step.execute()
+    completedNodes.value.add(step.index)
+    progressPercent.value = Math.round(((currentStepIndex + 1) / mockSteps.length) * 100)
+    currentStepIndex++
     
-    checkAndFinalizeByBackendState('fallback-poll')
-  }, 5000) // 每5秒检查一次
+    mockTimer = setTimeout(executeNextStep, 500)
+  }, step.duration)
 }
 
-const startWorkflow = async () => {
-  const wid = localStorage.getItem('currentWorkflowId')
-  if (wid) {
-    sseReconnectCount = 0
-    workflowId.value = wid
-    addLog(`使用工作流ID: ${wid}`, 'info')
-    connectSSE()
-  } else {
-    addLog('未找到工作流ID，请先在配置页提交参数', 'error')
-    isFailed.value = true
-  }
+const startMockWorkflow = () => {
+  addLog('系统启动，开始生成方案（模拟模式）...', 'info')
+  addLog('使用工作流ID: mock-workflow-001', 'info')
+  addLog('开始模拟工作流进度...', 'info')
+  
+  setTimeout(executeNextStep, 800)
 }
 
 const clearLogs = () => { logs.value = [] }
@@ -1130,25 +841,58 @@ const downloadLogs = () => {
 }
 
 const cancelGenerate = () => {
-  clearRuntimeTimers()
-  closeEventStream()
+  if (mockTimer) clearTimeout(mockTimer)
   router.push('/config')
 }
 
 const regenerate = () => {
+  if (mockTimer) clearTimeout(mockTimer)
   progressPercent.value = 0; currentNodeIndex.value = -1; isCompleted.value = false; isFailed.value = false
-  logs.value = []; completedNodes.value = new Set(); debateSignatures.clear()
+  logs.value = []; completedNodes.value = new Set(); currentStepIndex = 0
   nodeResults.requirementParser = null; nodeResults.draftPlan = null; nodeResults.costCalculation = null
   expertResults.forEach(e => { e.status = '等待中'; e.score = 0; e.summary = ''; e.recommendations = []; e.concerns = []; e.metrics = {} })
   debateResults.value = null
   arbitratorResult.summary = ''; arbitratorResult.confidence = 0; arbitratorResult.scores = { economic: 0, reliability: 0, environmental: 0 }; arbitratorResult.tradeOffs = []; arbitratorResult.consensusScore = 0
   finalReport.value = null
   Object.assign(finalSolution, { name: '', overallScore: 0, pue: 0, greenPowerRatio: 0, totalCost: 0, tierLevel: 0, expectedAvailability: 0, annualCarbonEmission: 0, roi: 0, paybackPeriod: 0 })
-  localStorage.removeItem('currentWorkflowId')
   router.push('/config')
 }
 
 const viewError = () => { ElMessage.error('请查看下方实时日志中的错误信息') }
+
+const expertColors = {
+  'Economic Analysis Expert-Zhang': { color: '#00b894', bg: '#ecfdf5', class: 'expert-economic' },
+  'Power Reliability Expert-Li': { color: '#00cec9', bg: '#cffafe', class: 'expert-reliability' },
+  'Environmental Analysis Expert-Wang': { color: '#f39c12', bg: '#fff7ed', class: 'expert-environmental' },
+  '经济性专家': { color: '#00b894', bg: '#ecfdf5', class: 'expert-economic' },
+  '供电可靠性专家': { color: '#00cec9', bg: '#cffafe', class: 'expert-reliability' },
+  '环保性专家': { color: '#f39c12', bg: '#fff7ed', class: 'expert-environmental' },
+}
+
+const getExpertColor = (speaker) => {
+  for (const [name, config] of Object.entries(expertColors)) {
+    if (speaker.includes(name.split('-')[0].split(' ')[0]) || speaker.includes(name.split('-')[1]) || name.includes(speaker)) {
+      return config.color
+    }
+  }
+  return '#636e72'
+}
+
+const getExpertClass = (speaker) => {
+  for (const [name, config] of Object.entries(expertColors)) {
+    if (speaker.includes(name.split('-')[0].split(' ')[0]) || speaker.includes(name.split('-')[1]) || name.includes(speaker)) {
+      return config.class
+    }
+  }
+  return 'expert-default'
+}
+
+const getExpertInitial = (speaker) => {
+  if (speaker.includes('Economic') || speaker.includes('Zhang') || speaker.includes('经济性')) return '经'
+  if (speaker.includes('Reliability') || speaker.includes('Li') || speaker.includes('可靠性')) return '电'
+  if (speaker.includes('Environmental') || speaker.includes('Wang') || speaker.includes('环保性')) return '环'
+  return speaker.charAt(0)
+}
 
 const goToDetail = () => {
   const solutionId = localStorage.getItem('currentSolutionId') || workflowId.value
@@ -1160,13 +904,11 @@ const goToDetail = () => {
 }
 
 onMounted(() => {
-  addLog('系统启动，开始连接后端工作流...', 'info')
-  startWorkflow()
+  startMockWorkflow()
 })
 
 onUnmounted(() => {
-  clearRuntimeTimers()
-  closeEventStream()
+  if (mockTimer) clearTimeout(mockTimer)
 })
 </script>
 
@@ -1200,7 +942,7 @@ onUnmounted(() => {
 .progress-percent {
   font-size: 24px;
   font-weight: 600;
-  color: #165DFF;
+  color: #00b894;
 }
 
 .full-workflow {
@@ -1253,12 +995,12 @@ onUnmounted(() => {
 }
 
 .workflow-node.active .node-icon {
-  background: #165DFF;
+  background: #00b894;
   color: white;
 }
 
 .workflow-node.completed .node-icon {
-  background: #00B42A;
+  background: #00cec9;
   color: white;
 }
 
@@ -1326,8 +1068,8 @@ onUnmounted(() => {
 }
 
 .stage-panel.active {
-  border-color: #165DFF;
-  box-shadow: 0 4px 20px rgba(22, 93, 255, 0.1);
+  border-color: #00b894;
+  box-shadow: 0 4px 20px rgba(0, 184, 148, 0.1);
 }
 
 .stage-header {
@@ -1346,7 +1088,7 @@ onUnmounted(() => {
 }
 
 .stage-icon {
-  color: #165DFF;
+  color: #00b894;
 }
 
 .result-card {
@@ -1365,24 +1107,8 @@ onUnmounted(() => {
   gap: 30px;
 }
 
-.metric-item {
-  display: flex;
-  flex-direction: column;
-}
-
-.metric-label {
-  font-size: 12px;
-  color: #8F959E;
-}
-
-.metric-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: #165DFF;
-}
-
 .agent-result-card {
-  height: 200px;
+  margin-bottom: 16px;
 }
 
 .agent-header {
@@ -1393,49 +1119,48 @@ onUnmounted(() => {
 }
 
 .agent-icon {
-  font-size: 20px;
-  color: #165DFF;
+  color: #00b894;
 }
 
 .agent-name {
-  font-size: 14px;
   font-weight: 600;
+  font-size: 14px;
 }
 
 .agent-content {
-  padding-left: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .agent-detail {
   font-size: 13px;
   color: #4E5969;
-  margin-bottom: 6px;
-}
-
-.cost-card {
-  background: #F5F7FA;
 }
 
 .cost-summary {
-  padding: 20px;
-  border-bottom: 1px solid #E4E7ED;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .cost-row {
   display: flex;
   justify-content: space-between;
-  padding: 10px 0;
+  align-items: center;
+  padding: 12px;
+  background: #F5F7FA;
+  border-radius: 8px;
 }
 
-.cost-row.total .cost-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: #165DFF;
+.cost-row.total {
+  background: linear-gradient(135deg, #00b89415 0%, #00cec915 100%);
+  font-weight: 600;
 }
 
 .cost-label {
-  font-size: 14px;
   color: #8F959E;
+  font-size: 14px;
 }
 
 .cost-value {
@@ -1444,111 +1169,142 @@ onUnmounted(() => {
   color: #1F2329;
 }
 
-.cost-value.over-budget {
-  color: #F53F3F;
+.over-budget {
+  color: #F53F3F !important;
 }
 
-.cost-value.under-budget {
-  color: #00B42A;
+.under-budget {
+  color: #00b894 !important;
 }
 
-.budget-warning, .budget-success {
+.budget-warning,
+.budget-success {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: 8px;
   margin-top: 16px;
+  padding: 12px;
   border-radius: 8px;
 }
 
 .budget-warning {
-  background: #FFF7E6;
-  color: #D46B08;
+  background: #FFF2F0;
+  color: #F53F3F;
 }
 
 .budget-success {
-  background: #E8F8E8;
-  color: #00B42A;
+  background: #ECFDF5;
+  color: #00b894;
 }
 
 .expert-card {
-  height: 220px;
-  border-color: #E4E7ED;
+  transition: all 0.3s;
 }
 
-.expert-card.waiting { border-color: #E4E7ED; }
-.expert-card.running { border-color: #FF7D00; }
-.expert-card.completed { border-color: #00B42A; }
+.expert-card.waiting {
+  opacity: 0.6;
+}
+
+.expert-card.running {
+  border: 2px solid #f39c12;
+}
 
 .expert-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
 .expert-icon {
-  font-size: 20px;
-  color: #165DFF;
+  color: #00b894;
 }
 
 .expert-name {
-  font-size: 14px;
   font-weight: 600;
+  font-size: 14px;
 }
 
 .expert-status {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .expert-score {
-  margin-bottom: 10px;
+  background: #F5F7FA;
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 12px;
 }
 
 .score-label {
   font-size: 12px;
   color: #8F959E;
-  display: block;
+  margin-bottom: 4px;
 }
 
 .score-value {
   font-size: 20px;
   font-weight: 600;
-  color: #165DFF;
+  color: #00b894;
 }
 
 .expert-summary {
   font-size: 13px;
-  color: #646A76;
-  line-height: 1.5;
-  margin-bottom: 10px;
+  color: #4E5969;
+  line-height: 1.6;
+  margin-bottom: 12px;
 }
 
-.expert-recommendations {
-  padding-top: 10px;
-  border-top: 1px solid #E4E7ED;
+.expert-recommendations,
+.expert-concerns {
+  margin-bottom: 12px;
 }
 
-.recommendation-label {
+.recommendation-label,
+.concern-label,
+.metrics-label {
   font-size: 12px;
-  color: #8F959E;
-  margin-bottom: 6px;
-  display: block;
+  font-weight: 600;
+  color: #1F2329;
+  margin-bottom: 8px;
 }
 
-.expert-recommendations ul {
+.expert-recommendations ul,
+.expert-concerns ul {
   margin: 0;
   padding-left: 20px;
 }
 
-.expert-recommendations li {
+.expert-recommendations li,
+.expert-concerns li {
   font-size: 12px;
   color: #4E5969;
   margin-bottom: 4px;
 }
 
-.debate-panel {
-  margin-top: 10px;
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.metrics-grid .metric-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #F5F7FA;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.metric-key {
+  color: #8F959E;
+}
+
+.metric-val {
+  color: #1F2329;
+  font-weight: 500;
 }
 
 .debate-header {
@@ -1558,95 +1314,119 @@ onUnmounted(() => {
   margin-bottom: 16px;
 }
 
-.debate-round {
-  font-size: 14px;
-  font-weight: 600;
-  color: #165DFF;
-}
-
+.debate-round,
 .consensus-score {
   font-size: 14px;
-  color: #00B42A;
-  font-weight: 500;
+  font-weight: 600;
+  color: #00b894;
 }
 
-.debate-card {
-  margin-bottom: 16px;
+.debate-chat-container {
+  margin-bottom: 20px;
 }
 
-.debate-timeline {
-  max-height: 200px;
+.debate-chat-messages {
+  max-height: 400px;
   overflow-y: auto;
 }
 
-.debate-round-item {
-  padding: 12px;
-  margin-bottom: 12px;
+.round-divider {
+  text-align: center;
+  margin: 16px 0;
+  color: #8F959E;
+  font-size: 12px;
+}
+
+.round-label {
   background: #F5F7FA;
-  border-radius: 8px;
+  padding: 4px 16px;
+  border-radius: 12px;
 }
 
-.debate-round-item.active {
-  background: #E8F0FE;
+.chat-message {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.round-header {
+.avatar-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.speaker-name {
+  font-size: 11px;
+  color: #8F959E;
+}
+
+.message-bubble {
+  flex: 1;
+  background: #F5F7FA;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border-top-left-radius: 4px;
+}
+
+.message-content {
   font-size: 13px;
-  font-weight: 600;
-  color: #165DFF;
-  margin-bottom: 10px;
-}
-
-.statement-item {
-  margin-bottom: 8px;
-}
-
-.speaker {
-  font-weight: 600;
-  color: #1F2329;
-}
-
-.content {
   color: #4E5969;
-  font-size: 13px;
+  line-height: 1.6;
+}
+
+.empty-chat {
+  text-align: center;
+  color: #8F959E;
+  padding: 40px;
 }
 
 .debate-summary-card {
+  padding: 20px;
   background: #F5F7FA;
-  padding: 16px;
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 .debate-summary-card h4 {
   font-size: 14px;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.debate-summary-card h5 {
-  font-size: 13px;
-  font-weight: 500;
-  color: #165DFF;
-  margin-bottom: 8px;
+.suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.debate-summary-card ul {
-  margin: 0;
-  padding-left: 20px;
-}
-
-.debate-summary-card li {
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   color: #4E5969;
-  margin-bottom: 6px;
+  background: white;
+  padding: 10px 14px;
+  border-radius: 8px;
 }
 
-.arbitrator-panel {
-  margin-top: 10px;
-}
-
-.arbitrator-card {
-  background: #F5F7FA;
+.suggestion-icon {
+  color: #00b894;
 }
 
 .arbitrator-header {
@@ -1654,19 +1434,23 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #E4E7ED;
 }
 
 .arbitrator-title {
   font-size: 16px;
   font-weight: 600;
+  color: #1F2329;
 }
 
 .confidence-badge {
-  background: #00B42A;
-  color: white;
-  padding: 4px 12px;
+  background: #ECFDF5;
+  color: #00b894;
+  padding: 6px 12px;
   border-radius: 20px;
   font-size: 13px;
+  font-weight: 600;
 }
 
 .consensus-indicator {
@@ -1674,27 +1458,28 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: white;
-  border-radius: 8px;
-  margin-bottom: 16px;
+  background: #F5F7FA;
+  border-radius: 10px;
+  margin-bottom: 20px;
 }
 
 .consensus-indicator .label {
-  font-size: 14px;
   color: #8F959E;
+  font-size: 14px;
 }
 
 .consensus-indicator .value {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 600;
+  color: #f39c12;
 }
 
 .consensus-indicator .value.high {
-  color: #00B42A;
+  color: #00b894;
 }
 
-.consensus-indicator .value.medium {
-  color: #FF7D00;
+.decision-summary {
+  margin-bottom: 24px;
 }
 
 .decision-summary p {
@@ -1703,47 +1488,49 @@ onUnmounted(() => {
   line-height: 1.7;
 }
 
-.overall-scores {
-  margin-top: 20px;
-}
-
 .overall-scores h4 {
   font-size: 14px;
   font-weight: 600;
-  margin-bottom: 12px;
+  color: #1F2329;
+  margin-bottom: 16px;
 }
 
 .score-card {
-  background: white;
-  padding: 16px;
-  border-radius: 8px;
+  background: #F5F7FA;
+  padding: 20px;
+  border-radius: 12px;
   text-align: center;
 }
 
 .score-card.highlight {
-  background: #E8F8E8;
+  background: linear-gradient(135deg, #00b89415 0%, #00cec915 100%);
 }
 
-.score-card .score-label {
-  font-size: 12px;
-  color: #8F959E;
+.score-label {
   display: block;
-  margin-bottom: 6px;
+  font-size: 13px;
+  color: #8F959E;
+  margin-bottom: 8px;
 }
 
-.score-card .score-value {
-  font-size: 20px;
+.score-value {
+  font-size: 24px;
   font-weight: 600;
-  color: #165DFF;
+  color: #1F2329;
+}
+
+.score-card.highlight .score-value {
+  color: #00b894;
 }
 
 .trade-offs {
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 .trade-offs h4 {
   font-size: 14px;
   font-weight: 600;
+  color: #1F2329;
   margin-bottom: 12px;
 }
 
@@ -1755,45 +1542,49 @@ onUnmounted(() => {
 .trade-offs li {
   font-size: 13px;
   color: #4E5969;
+  line-height: 1.7;
   margin-bottom: 8px;
 }
 
 .report-panel {
-  margin-top: 10px;
+  margin-bottom: 20px;
 }
 
 .report-preview {
-  margin-top: 16px;
+  margin-top: 20px;
 }
 
 .report-preview h4 {
   font-size: 14px;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .report-content {
-  font-size: 14px;
+  font-size: 13px;
   color: #4E5969;
   line-height: 1.7;
+  margin-bottom: 20px;
 }
 
 .report-metrics {
-  display: flex;
-  gap: 30px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #E4E7ED;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
 .report-metric {
-  display: flex;
-  flex-direction: column;
+  background: #F5F7FA;
+  padding: 16px;
+  border-radius: 10px;
+  text-align: center;
 }
 
 .report-metric .metric-label {
+  display: block;
   font-size: 12px;
   color: #8F959E;
+  margin-bottom: 6px;
 }
 
 .report-metric .metric-value {
@@ -1803,29 +1594,27 @@ onUnmounted(() => {
 }
 
 .report-metric .metric-value.success {
-  color: #00B42A;
-}
-
-.solution-preview {
-  margin-top: 20px;
+  color: #00b894;
 }
 
 .solution-preview h4 {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  color: #1F2329;
 }
 
 .preview-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 16px;
 }
 
 .preview-item {
   background: #F5F7FA;
   padding: 16px;
-  border-radius: 8px;
+  border-radius: 10px;
+  text-align: center;
 }
 
 .preview-label {
@@ -1836,23 +1625,19 @@ onUnmounted(() => {
 }
 
 .preview-value {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   color: #1F2329;
 }
 
 .preview-value.highlight {
-  color: #165DFF;
+  color: #00b894;
 }
 
 .logs-section {
-  flex: 1;
   background: white;
   border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  padding: 24px;
   margin-bottom: 20px;
 }
 
@@ -1871,57 +1656,98 @@ onUnmounted(() => {
   gap: 10px;
 }
 
+.logs-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .logs-container {
-  flex: 1;
+  background: #1F2329;
+  border-radius: 10px;
+  padding: 16px;
+  max-height: 300px;
   overflow-y: auto;
-  background: #F5F7FA;
-  border-radius: 8px;
-  padding: 12px;
 }
 
 .log-item {
   display: flex;
   gap: 12px;
   padding: 6px 0;
+  font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
 }
 
-.log-item.info .log-type { color: #165DFF; }
-.log-item.warning .log-type { color: #FF7D00; }
-.log-item.success .log-type { color: #00B42A; }
-.log-item.error .log-type { color: #F53F3F; }
-
 .log-time {
   color: #8F959E;
-  width: 70px;
+  min-width: 80px;
 }
 
 .log-type {
+  min-width: 60px;
   font-weight: 600;
-  width: 60px;
+}
+
+.log-type.info {
+  color: #00b894;
+}
+
+.log-type.success {
+  color: #00cec9;
+}
+
+.log-type.warning {
+  color: #f39c12;
+}
+
+.log-type.error {
+  color: #F53F3F;
 }
 
 .log-content {
   flex: 1;
-  color: #1F2329;
+  color: #E4E7ED;
+  line-height: 1.5;
 }
 
 .generate-footer {
   display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-  padding-top: 16px;
-  border-top: 1px solid #E4E7ED;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px 0;
 }
 
 .primary-btn {
-  background: #FF7D00;
-  border: none;
-  color: white;
+  background: #00b894 !important;
+  border-color: #00b894 !important;
 }
 
 .primary-btn:hover {
-  background: #E67E22;
-  color: white;
+  background: #00cec9 !important;
+  border-color: #00cec9 !important;
+}
+
+@media (max-width: 1200px) {
+  .preview-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .full-workflow {
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+  
+  .workflow-node {
+    flex: 0 0 30%;
+  }
+  
+  .preview-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .report-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 </style>

@@ -39,25 +39,57 @@
         :data="filteredProjects"
         border
         @selection-change="handleSelectionChange"
+        class="project-table"
       >
         <el-table-column type="selection" />
-        <el-table-column prop="name" label="项目名称" />
-        <el-table-column prop="createTime" label="创建时间" />
-        <el-table-column prop="status" label="状态">
-          <template #default="scope">
-            <el-tag :type="getStatusType(scope.row.status)">{{ scope.row.status }}</el-tag>
+        <el-table-column prop="name" label="项目名称" min-width="200">
+          <template #default="{ row }">
+            <div class="project-name-cell">
+              <div class="project-icon" :style="{ background: getProjectIconBg(row.status) }">
+                <el-icon><Document /></el-icon>
+              </div>
+              <span class="project-name">{{ row.name }}</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="cabinetPower" label="单机柜功率(kW)" />
-        <el-table-column prop="pue" label="预测PUE" />
-        <el-table-column prop="greenRate" label="绿电消纳率(%)" />
-        <el-table-column prop="investment" label="总投资(万元)" />
-        <el-table-column prop="actions" label="操作">
+        <el-table-column prop="createTime" label="创建时间" width="180" />
+        <el-table-column prop="status" label="状态" width="100">
           <template #default="scope">
-            <el-button type="text" @click="viewDetail(scope.row)">查看详情</el-button>
-            <el-button type="text" @click="editParams(scope.row)">编辑参数</el-button>
-            <el-button type="text" @click="copyProject(scope.row)">复制项目</el-button>
-            <el-button type="text" danger @click="deleteProject(scope.row)">删除</el-button>
+            <el-tag :type="getStatusType(scope.row.status)" size="small" round>
+              {{ scope.row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="cabinetPower" label="单机柜功率(kW)" width="140" />
+        <el-table-column prop="pue" label="预测PUE" width="100">
+          <template #default="scope">
+            <span :class="{ highlight: isGoodPue(scope.row.pue) }">{{ scope.row.pue }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="greenRate" label="绿电消纳率(%)" width="130">
+          <template #default="scope">
+            <span :class="{ highlight: isGoodGreenRate(scope.row.greenRate) }">{{ scope.row.greenRate }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="investment" label="总投资(万元)" width="130" />
+        <el-table-column prop="actions" label="操作" width="240">
+          <template #default="scope">
+            <div class="actions-cell">
+              <el-button type="primary" link size="small" @click="viewDetail(scope.row)">
+                查看详情
+              </el-button>
+              <el-button type="primary" link size="small" @click="editParams(scope.row)">
+                编辑参数
+              </el-button>
+              <el-button type="primary" link size="small" @click="copyProject(scope.row)">
+                复制项目
+              </el-button>
+              <el-popconfirm title="确定要删除该项目吗？" @confirm="deleteProject(scope.row)">
+                <template #reference>
+                  <el-button type="danger" link size="small" @click.stop>删除</el-button>
+                </template>
+              </el-popconfirm>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -84,6 +116,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { Document } from '@element-plus/icons-vue'
 import { solutionApi } from '@/api'
 import { ElMessage } from 'element-plus'
 
@@ -123,6 +156,26 @@ const getStatusType = (status) => {
     '失败': 'danger'
   }
   return types[status] || 'info'
+}
+
+const getProjectIconBg = (status) => {
+  const colors = {
+    '已完成': 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+    '生成中': 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+    '待配置': 'linear-gradient(135deg, #6B7280 0%, #4B5563 100%)',
+    '失败': 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)'
+  }
+  return colors[status] || colors['待配置']
+}
+
+const isGoodPue = (pue) => {
+  const num = parseFloat(pue)
+  return !isNaN(num) && num <= 1.3
+}
+
+const isGoodGreenRate = (rate) => {
+  const num = parseFloat(rate)
+  return !isNaN(num) && num >= 80
 }
 
 const handleSelectionChange = (val) => {
@@ -204,14 +257,27 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: white;
-  border-radius: 12px;
-  padding: 16px 20px;
+  background: linear-gradient(135deg, #FFFFFF 0%, #F0FDF4 100%);
+  border-radius: 14px;
+  padding: 20px 24px;
   margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.08);
 }
 
 .search-box {
-  width: 300px;
+  width: 320px;
+}
+
+.search-box :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-color: rgba(16, 185, 129, 0.1);
+}
+
+.search-box :deep(.el-input__wrapper:hover) {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.08);
 }
 
 .filter-options {
@@ -219,26 +285,136 @@ onMounted(() => {
   gap: 16px;
 }
 
+.filter-options :deep(.el-select) {
+  min-width: 140px;
+}
+
+.filter-options :deep(.el-select .el-input__wrapper) {
+  border-radius: 10px;
+  border-color: rgba(16, 185, 129, 0.1);
+}
+
+.filter-options :deep(.el-date-picker .el-input__wrapper) {
+  border-radius: 10px;
+  border-color: rgba(16, 185, 129, 0.1);
+}
+
 .table-section {
   flex: 1;
   background: white;
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.08);
+}
+
+.project-table :deep(.el-table__header th) {
+  background: linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%) !important;
+  color: #4B5563;
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.1);
+}
+
+.project-table :deep(.el-table__body td) {
+  border-color: rgba(16, 185, 129, 0.06);
+}
+
+.project-table :deep(.el-table__body tr:hover) {
+  background: rgba(16, 185, 129, 0.03);
+}
+
+.project-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.project-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.project-name {
+  font-weight: 500;
+  color: #1F2937;
+  font-size: 14px;
+}
+
+.highlight {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 4px;
 }
 
 .pagination-section {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
+  padding: 20px 24px;
   background: white;
-  border-radius: 12px;
+  border-radius: 14px;
   margin-top: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.08);
+}
+
+.pagination-section :deep(.el-pagination) {
+  --el-pagination-button-bg-color: transparent;
+}
+
+.pagination-section :deep(.el-pager li.is-active) {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  color: white;
+  border-radius: 8px;
+}
+
+.pagination-section :deep(.el-pagination button:hover:not(.is-disabled)) {
+  color: var(--primary-color);
 }
 
 .batch-actions {
   display: flex;
   align-items: center;
   gap: 12px;
+  color: #4B5563;
+  font-size: 14px;
+}
+
+.batch-actions :deep(.el-button) {
+  background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+  border: none;
+  color: white;
+}
+
+.batch-actions :deep(.el-button:hover) {
+  background: linear-gradient(135deg, #F87171 0%, #EF4444 100%);
+}
+
+@media (max-width: 768px) {
+  .filter-section {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+
+  .search-box {
+    width: 100%;
+  }
+
+  .filter-options {
+    flex-wrap: wrap;
+  }
 }
 </style>

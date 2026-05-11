@@ -11,29 +11,10 @@
       <el-tab-pane label="方案概览" name="overview">
         <div class="overview-section">
           <div class="metrics-grid">
-            <div class="metric-card">
-              <div class="metric-label">推荐制冷技术</div>
-              <div class="metric-value">{{ coolingResult.cooling_technology || '-' }}</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">预测PUE</div>
-              <div class="metric-value highlight">{{ formatNumber(coolingResult.estimated_pue, 3) }}</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">预测WUE</div>
-              <div class="metric-value">{{ formatNumber(coolingResult.predicted_wue, 3) }} <span class="unit">L/kWh</span></div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">绿电消纳率</div>
-              <div class="metric-value highlight">{{ formatPercent(keyMetrics.green_power_ratio) }}</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">总初始投资</div>
-              <div class="metric-value">{{ formatNumber(costResult.total_capex_lakh || keyMetrics.total_cost, 2) }} <span class="unit">万元</span></div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">综合评分</div>
-              <div class="metric-value">{{ formatPercent(overallScores.overall) }}</div>
+            <div class="metric-card" v-for="(metric, index) in overviewMetrics" :key="index" :style="{ animationDelay: `${index * 100}ms` }">
+              <div class="metric-label">{{ metric.label }}</div>
+              <div class="metric-value" :class="{ highlight: metric.highlight }">{{ metric.value }}</div>
+              <div v-if="metric.unit" class="metric-unit">{{ metric.unit }}</div>
             </div>
           </div>
 
@@ -443,14 +424,14 @@ import { useRoute } from 'vue-router'
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
-import { solutionApi } from '@/api'
+import { mockSolutionData } from '@/mock/data.js'
 
 const route = useRoute()
 const activeTab = ref('overview')
 const searchKeyword = ref('')
-const solutionId = ref(route.params.id || '')
-const solutionData = ref({})
-const reportMarkdown = ref('')
+const solutionId = ref(route.params.id || 'mock-solution-001')
+const solutionData = ref(mockSolutionData)
+const reportMarkdown = ref(mockSolutionData.final_report)
 
 const optimizationChartRef = ref(null)
 const powerBalanceChartRef = ref(null)
@@ -588,7 +569,6 @@ const expertOpinions = computed(() => {
     }))
   }
 
-  // 若中间专家节点缺失，回退展示最终方案三段内容，保证与后端最终输出一致。
   const fallback = [
     { expert_name: '经济性结论', expert_type: 'economic', summary: economicSection.value.description || '', metrics: economicContent.value, recommendations: economicSection.value.recommendations || [] },
     { expert_name: '可靠性结论', expert_type: 'power_reliability', summary: powerSection.value.description || '', metrics: powerContent.value, recommendations: powerSection.value.recommendations || [] },
@@ -671,6 +651,15 @@ const costBreakdown = computed(() => {
   return []
 })
 
+const overviewMetrics = computed(() => [
+  { label: '推荐制冷技术', value: coolingResult.cooling_technology || '-', highlight: false },
+  { label: '预测PUE', value: formatNumber(coolingResult.estimated_pue, 3), highlight: true },
+  { label: '预测WUE', value: `${formatNumber(coolingResult.predicted_wue, 3)}`, unit: 'L/kWh', highlight: false },
+  { label: '绿电消纳率', value: formatPercent(keyMetrics.green_power_ratio), highlight: true },
+  { label: '总初始投资', value: formatNumber(costResult.total_capex_lakh || keyMetrics.total_cost, 2), unit: '万元', highlight: false },
+  { label: '综合评分', value: formatPercent(overallScores.overall), highlight: false }
+])
+
 const filteredMarkdown = computed(() => {
   if (!searchKeyword.value) return reportMarkdown.value
   const kw = searchKeyword.value.toLowerCase()
@@ -742,16 +731,15 @@ const markdownToHtml = (md) => {
 const reportHtml = computed(() => markdownToHtml(filteredMarkdown.value))
 
 const getExpertColor = (type) => {
-  if (type?.includes('economic')) return 'linear-gradient(135deg, #165DFF 0%, #4080FF 100%)'
-  if (type?.includes('reliability')) return 'linear-gradient(135deg, #00B42A 0%, #23C343 100%)'
-  return 'linear-gradient(135deg, #FF7D00 0%, #FF9E40 100%)'
+  if (type?.includes('economic')) return 'linear-gradient(135deg, #10B981 0%, #059669 100%)'
+  if (type?.includes('reliability')) return 'linear-gradient(135deg, #059669 0%, #10B981 100%)'
+  return 'linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)'
 }
 
 const loadSolutionData = async () => {
   try {
     const { data } = await solutionApi.getById(solutionId.value)
     solutionData.value = data || {}
-    // 直接使用后端落库的最终完整报告，避免展示摘要替代正文
     if (solutionData.value?.final_report) {
       reportMarkdown.value = solutionData.value.final_report
     }
@@ -797,7 +785,7 @@ const initOptimizationChart = () => {
     tooltip: { trigger: 'axis' },
     xAxis: { type: 'category', data: points.map(p => p.x) },
     yAxis: { type: 'value' },
-    series: [{ type: 'line', data: points.map(p => p.y), smooth: true, areaStyle: {} }]
+    series: [{ type: 'line', data: points.map(p => p.y), smooth: true, areaStyle: {}, color: '#10B981' }]
   })
   charts.optimization = chart
 }
@@ -812,7 +800,8 @@ const initPowerBalanceChart = () => {
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],
-      data: source.map(item => ({ name: item.type, value: toNumber(item.ratio, 0) }))
+      data: source.map(item => ({ name: item.type, value: toNumber(item.ratio, 0) })),
+      color: ['#10B981', '#34D399', '#06B6D4']
     }]
   })
   charts.powerBalance = chart
@@ -827,7 +816,8 @@ const initCostChart = () => {
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],
-      data: costBreakdown.value.map(i => ({ name: i.item, value: i.amount }))
+      data: costBreakdown.value.map(i => ({ name: i.item, value: i.amount })),
+      color: ['#10B981', '#34D399', '#06B6D4', '#059669', '#22D3EE']
     }]
   })
   charts.cost = chart
@@ -846,7 +836,6 @@ const handleResize = () => {
 }
 
 onMounted(async () => {
-  await loadSolutionData()
   await nextTick()
   if (activeTab.value === 'overview') initCostChart()
   window.addEventListener('resize', handleResize)
@@ -875,6 +864,7 @@ onUnmounted(() => {
 .detail-header h1 {
   font-size: 20px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .header-actions {
@@ -882,9 +872,33 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+.header-actions :deep(.el-button) {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  border: none;
+  color: white;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+}
+
+.header-actions :deep(.el-button:hover) {
+  background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-color) 100%);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
 .detail-tabs {
   flex: 1;
   overflow: hidden;
+}
+
+.detail-tabs :deep(.el-tabs__item) {
+  font-weight: 500;
+}
+
+.detail-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--primary-color);
+}
+
+.detail-tabs :deep(.el-tabs__active-bar) {
+  background-color: var(--primary-color);
 }
 
 .metrics-grid {
@@ -895,56 +909,65 @@ onUnmounted(() => {
 }
 
 .metric-card {
-  background: white;
-  border-radius: 12px;
+  background: linear-gradient(135deg, #FFFFFF 0%, #F0FDF4 100%);
+  border-radius: 14px;
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0;
+  animation: slideInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.12);
 }
 
 .metric-label {
-  font-size: 14px;
-  color: #8F959E;
+  font-size: 13px;
+  color: #6B7280;
   margin-bottom: 8px;
+  font-weight: 500;
 }
 
 .metric-value {
   font-size: 24px;
-  font-weight: 600;
-  color: #1F2329;
+  font-weight: 700;
+  color: #1F2937;
+  line-height: 1.2;
 }
 
 .metric-value.highlight {
-  color: #165DFF;
+  color: var(--primary-color);
 }
 
-.unit {
-  font-size: 14px;
-  font-weight: normal;
-  color: #8F959E;
-}
-
-.metric-note {
-  font-size: 12px;
-  color: #00B42A;
+.metric-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: #9CA3AF;
   margin-top: 4px;
 }
 
 .summary-section {
   background: white;
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 14px;
+  padding: 24px;
   margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.08);
 }
 
 .summary-section h3 {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 12px;
+  color: var(--text-primary);
+  margin-bottom: 16px;
 }
 
 .summary-text {
   font-size: 14px;
-  color: #4E5969;
+  color: #4B5563;
   line-height: 1.8;
   margin-bottom: 16px;
 }
@@ -953,53 +976,82 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px;
-  border-radius: 8px;
+  padding: 12px 16px;
+  border-radius: 10px;
   margin-bottom: 12px;
+  transition: all 0.3s ease;
 }
 
 .budget-status.success {
-  background: #E8F8E8;
-  color: #00B42A;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+  color: var(--success-color);
+  border-left: 3px solid var(--success-color);
 }
 
 .budget-status.fail {
-  background: #FFECE8;
-  color: #F53F3F;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+  color: var(--danger-color);
+  border-left: 3px solid var(--danger-color);
 }
 
 .risk-warning {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px;
-  background: #FFF7E6;
-  color: #D46B08;
-  border-radius: 8px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
+  color: var(--warning-color);
+  border-radius: 10px;
+  border-left: 3px solid var(--warning-color);
+}
+
+.expert-recommendations {
+  margin-top: 16px;
+}
+
+.expert-recommendations h5 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.expert-recommendations ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.expert-recommendations li {
+  font-size: 14px;
+  color: #4B5563;
+  margin-bottom: 8px;
 }
 
 .info-section {
   background: white;
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.08);
 }
 
 .info-section h3 {
   font-size: 16px;
   font-weight: 600;
+  color: var(--text-primary);
   margin-bottom: 16px;
 }
 
 .info-item {
   font-size: 13px;
-  color: #8F959E;
-  margin-bottom: 4px;
+  color: #6B7280;
+  margin-bottom: 6px;
 }
 
 .info-value {
   font-size: 14px;
   font-weight: 600;
-  color: #1F2329;
+  color: var(--text-primary);
 }
 
 .param-cards {
@@ -1010,27 +1062,34 @@ onUnmounted(() => {
 
 .param-card {
   flex: 1;
+  background: white;
+  border-radius: 14px;
+  border: 1px solid rgba(16, 185, 129, 0.08);
 }
 
 .param-card h4 {
   font-size: 14px;
   font-weight: 600;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
 .param-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .param-item {
   font-size: 14px;
-  color: #4E5969;
+  color: #4B5563;
 }
 
-.table-card, .chart-card, .guide-card, .recovery-card {
+.table-card, .chart-card {
   margin-bottom: 20px;
+  background: white;
+  border-radius: 14px;
+  border: 1px solid rgba(16, 185, 129, 0.08);
 }
 
 .chart-container {
@@ -1039,64 +1098,43 @@ onUnmounted(() => {
   min-height: 300px;
 }
 
-.guide-content {
-  display: flex;
-  gap: 20px;
-}
-
-.guide-section {
-  flex: 1;
-}
-
-.guide-section h5 {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.guide-section p {
-  font-size: 13px;
-  color: #4E5969;
-}
-
-.recovery-content {
-  display: flex;
-  gap: 40px;
-}
-
-.recovery-item {
-  font-size: 14px;
-  color: #4E5969;
-}
-
 .architecture-diagram {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 16px;
-  padding: 20px;
-  background: #F5F7FA;
-  border-radius: 8px;
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(6, 182, 212, 0.05) 100%);
+  border-radius: 12px;
 }
 
 .arch-item {
   padding: 12px 24px;
-  background: #165DFF;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
   color: white;
-  border-radius: 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+}
+
+.arch-arrow {
+  color: #9CA3AF;
+  font-size: 18px;
 }
 
 .availability-stats, .reliability-stats, .carbon-stats {
   display: flex;
-  gap: 20px;
+  gap: 16px;
 }
 
 .stat-card {
   flex: 1;
   padding: 16px;
-  background: #F5F7FA;
-  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(6, 182, 212, 0.05) 100%);
+  border-radius: 10px;
   text-align: center;
+  font-size: 14px;
+  color: #4B5563;
 }
 
 .report-section {
@@ -1117,155 +1155,18 @@ onUnmounted(() => {
   overflow-y: auto;
 }
 
-.report-chapter {
-  margin-bottom: 24px;
-}
-
-.report-chapter h2 {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.report-chapter p {
-  font-size: 14px;
-  color: #4E5969;
-  line-height: 1.8;
-}
-
-.expert-opinions {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.expert-opinion-card {
-  background: #F5F7FA;
-  border-radius: 8px;
-  padding: 16px;
-}
-
-.expert-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.expert-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 600;
-}
-
-.expert-info {
-  flex: 1;
-}
-
-.expert-name {
-  font-weight: 600;
-}
-
-.expert-type {
-  font-size: 12px;
-  color: #8F959E;
-}
-
-.expert-summary {
-  font-size: 14px;
-  color: #4E5969;
-  margin-bottom: 12px;
-}
-
-.expert-metrics {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 12px;
-  font-size: 13px;
-  color: #646A76;
-}
-
-.expert-recommendations h5 {
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.expert-recommendations ul {
-  margin: 0;
-  padding-left: 20px;
-}
-
-.expert-recommendations li {
-  font-size: 13px;
-  color: #4E5969;
-}
-
-.debate-history {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.debate-round {
-  background: #F5F7FA;
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.round-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #165DFF;
-  margin-bottom: 10px;
-}
-
-.debate-message {
-  margin-bottom: 8px;
-}
-
-.debate-message .speaker {
-  font-weight: 600;
-}
-
-.debate-message .content {
-  color: #4E5969;
-}
-
-.arbitration-result {
-  padding: 16px;
-  background: #E8F8E8;
-  border-radius: 8px;
-}
-
-.consensus-score {
-  font-size: 18px;
-  font-weight: 600;
-  color: #00B42A;
-  margin-bottom: 8px;
-}
-
-.arbitration-summary {
-  font-size: 14px;
-  color: #4E5969;
-}
-
 .report-title-section {
   text-align: center;
-  padding: 20px;
-  border-bottom: 2px solid #165DFF;
+  padding: 24px;
+  border-bottom: 2px solid var(--primary-color);
   margin-bottom: 24px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, transparent 100%);
 }
 
 .report-title {
   font-size: 24px;
   font-weight: 700;
-  color: #1F2329;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
@@ -1274,21 +1175,21 @@ onUnmounted(() => {
   justify-content: center;
   gap: 30px;
   font-size: 13px;
-  color: #8F959E;
+  color: #6B7280;
 }
 
 .report-executive-summary {
-  background: #F5F7FA;
-  border-radius: 12px;
-  padding: 20px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(6, 182, 212, 0.05) 100%);
+  border-radius: 14px;
+  padding: 24px;
   margin-bottom: 24px;
 }
 
 .report-executive-summary h2 {
   font-size: 16px;
   font-weight: 600;
+  color: var(--text-primary);
   margin-bottom: 16px;
-  color: #1F2329;
 }
 
 .executive-grid {
@@ -1300,24 +1201,25 @@ onUnmounted(() => {
 .executive-item {
   background: white;
   padding: 16px;
-  border-radius: 8px;
+  border-radius: 10px;
   text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .executive-label {
   font-size: 13px;
-  color: #8F959E;
+  color: #6B7280;
   margin-bottom: 8px;
 }
 
 .executive-value {
   font-size: 18px;
   font-weight: 600;
-  color: #1F2329;
+  color: var(--text-primary);
 }
 
 .executive-value.highlight {
-  color: #165DFF;
+  color: var(--primary-color);
 }
 
 .report-chapter {
@@ -1327,52 +1229,149 @@ onUnmounted(() => {
 .report-chapter h2 {
   font-size: 18px;
   font-weight: 600;
-  color: #1F2329;
+  color: var(--text-primary);
   margin-bottom: 16px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #E5E6EB;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .report-section-item {
   margin-bottom: 16px;
 }
 
-.report-section-item h3 {
-  font-size: 15px;
-  font-weight: 600;
-  color: #4E5969;
-  margin-bottom: 8px;
-}
-
 .report-section-item p {
   font-size: 14px;
-  color: #4E5969;
+  color: #4B5563;
   line-height: 1.8;
 }
 
-.markdown-preview {
-  white-space: pre-wrap;
+.expert-opinions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.expert-opinion-card {
+  background: linear-gradient(135deg, #F9FAFB 0%, #F0FDF4 100%);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba(16, 185, 129, 0.08);
+}
+
+.expert-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.expert-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.expert-info {
+  flex: 1;
+}
+
+.expert-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.expert-type {
+  font-size: 12px;
+  color: #6B7280;
+}
+
+.expert-summary {
+  font-size: 14px;
+  color: #4B5563;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.expert-metrics {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 12px;
   font-size: 13px;
-  line-height: 1.7;
-  color: #4E5969;
-  background: #F5F7FA;
-  padding: 12px;
-  border-radius: 8px;
+  color: #6B7280;
+}
+
+.debate-history {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.debate-round {
+  background: linear-gradient(135deg, #F9FAFB 0%, #F0FDF4 100%);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid rgba(16, 185, 129, 0.08);
+}
+
+.round-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin-bottom: 12px;
+}
+
+.debate-message {
+  margin-bottom: 10px;
+}
+
+.debate-message .speaker {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-right: 8px;
+}
+
+.debate-message .content {
+  color: #4B5563;
+}
+
+.arbitration-result {
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(6, 182, 212, 0.05) 100%);
+  border-radius: 12px;
+}
+
+.consensus-score {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin-bottom: 12px;
+}
+
+.arbitration-summary {
+  font-size: 14px;
+  color: #4B5563;
+  line-height: 1.6;
 }
 
 .markdown-rendered {
   font-size: 14px;
   line-height: 1.8;
-  color: #4E5969;
-  background: #F5F7FA;
-  padding: 16px;
-  border-radius: 8px;
+  color: #4B5563;
+  background: #F9FAFB;
+  padding: 20px;
+  border-radius: 12px;
 }
 
 .markdown-rendered :deep(h1),
 .markdown-rendered :deep(h2),
 .markdown-rendered :deep(h3) {
-  color: #1F2329;
+  color: var(--text-primary);
   margin: 12px 0 8px;
 }
 
@@ -1403,79 +1402,7 @@ onUnmounted(() => {
 
 .report-section-item li {
   font-size: 14px;
-  color: #4E5969;
-  margin-bottom: 8px;
-}
-
-.report-table {
-  margin-top: 12px;
-  overflow-x: auto;
-}
-
-.report-table table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.report-table th,
-.report-table td {
-  padding: 12px 16px;
-  text-align: left;
-  border-bottom: 1px solid #E5E6EB;
-}
-
-.report-table th {
-  background: #F5F7FA;
-  font-weight: 600;
-  color: #4E5969;
-}
-
-.report-table td {
-  color: #4E5969;
-}
-
-.report-conclusion {
-  background: #E8F8E8;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 24px;
-}
-
-.report-conclusion h2 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #00B42A;
-  margin-bottom: 12px;
-}
-
-.report-conclusion p {
-  font-size: 14px;
-  color: #4E5969;
-  line-height: 1.8;
-}
-
-.report-next-steps {
-  background: #FFFBE6;
-  border-radius: 8px;
-  padding: 20px;
-}
-
-.report-next-steps h2 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #D46B08;
-  margin-bottom: 12px;
-}
-
-.report-next-steps ul {
-  margin: 0;
-  padding-left: 20px;
-}
-
-.report-next-steps li {
-  font-size: 14px;
-  color: #4E5969;
+  color: #4B5563;
   margin-bottom: 8px;
 }
 
@@ -1483,6 +1410,50 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 400px;
+  height: 200px;
+  color: #6B7280;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 992px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .executive-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .param-cards {
+    flex-direction: column;
+  }
+  
+  .availability-stats, .reliability-stats, .carbon-stats {
+    flex-direction: column;
+  }
+  
+  .architecture-diagram {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .executive-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
