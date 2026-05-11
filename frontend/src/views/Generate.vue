@@ -122,33 +122,106 @@
         </div>
         <div v-if="nodeResults.costCalculation" class="cost-panel">
           <el-card class="cost-card">
-            <div class="cost-summary">
-              <div class="cost-row">
-                <span class="cost-label">供电系统成本</span>
-                <span class="cost-value">{{ nodeResults.costCalculation.powerSupplyCost }} 万元</span>
-              </div>
-              <div class="cost-row">
-                <span class="cost-label">绿电系统成本</span>
-                <span class="cost-value">{{ nodeResults.costCalculation.greenPowerCost }} 万元</span>
-              </div>
-              <div class="cost-row total">
-                <span class="cost-label">项目总投资</span>
-                <span class="cost-value">{{ nodeResults.costCalculation.totalCost }} 万元</span>
-              </div>
-              <div class="cost-row budget">
-                <span class="cost-label">预算约束</span>
-                <span class="cost-value" :class="nodeResults.costCalculation.isOverBudget ? 'over-budget' : 'under-budget'">
-                  {{ nodeResults.costCalculation.budget }} 万元
-                </span>
-              </div>
+            <div class="cost-layout">
+              <section class="cost-visual-block">
+                <div class="cost-block-header">
+                  <div>
+                    <div class="cost-block-title">成本项视图</div>
+                    <div class="cost-block-subtitle">点击扇区查看该部分的成本细化与测算口径</div>
+                  </div>
+                  <el-tag effect="plain" round>总投资与预算口径保留原始计算结果</el-tag>
+                </div>
+                <div class="cost-chart-shell">
+                  <div ref="costChartRef" class="cost-chart"></div>
+                </div>
+                <div class="cost-chart-note">
+                  当前总投资口径已统一为供电系统、绿电系统与制冷系统三部分之和，点击任一扇区可查看该部分的真实成本细化。
+                </div>
+                <div class="cost-legend">
+                  <button
+                    v-for="segment in costStructureSegments"
+                    :key="segment.key"
+                    type="button"
+                    class="cost-legend-item"
+                    @click="openCostDetail(segment.key)"
+                  >
+                    <span class="legend-swatch" :style="{ background: segment.color }"></span>
+                    <span class="legend-copy">
+                      <span class="legend-title">{{ segment.name }}</span>
+                      <span class="legend-desc">{{ segment.shortDescription }}</span>
+                    </span>
+                    <span class="legend-meta">
+                      <span class="legend-value">{{ formatWithUnit(segment.amount, '万元', 0) }}</span>
+                      <span class="legend-tag">
+                        纳入总投资
+                      </span>
+                    </span>
+                  </button>
+                </div>
+              </section>
+
+              <aside class="cost-summary-panel">
+                <div class="cost-kpi-grid">
+                  <div class="cost-kpi-card strong span-wide">
+                    <span class="kpi-label">项目总投资</span>
+                    <span class="kpi-value">{{ formatWithUnit(nodeResults.costCalculation.totalCost, '万元', 0) }}</span>
+                    <span class="kpi-note">经济分析口径</span>
+                  </div>
+                  <div class="cost-kpi-card">
+                    <span class="kpi-label">预算约束</span>
+                    <span class="kpi-value" :class="nodeResults.costCalculation.isOverBudget ? 'over-budget' : 'under-budget'">
+                      {{ formatWithUnit(nodeResults.costCalculation.budget, '万元', 0) }}
+                    </span>
+                    <span class="kpi-note">配置参数基准</span>
+                  </div>
+                  <div class="cost-kpi-card">
+                    <span class="kpi-label">预算差额</span>
+                    <span class="kpi-value" :class="nodeResults.costCalculation.isOverBudget ? 'over-budget' : 'under-budget'">
+                      {{ formatWithUnit(Math.abs(nodeResults.costCalculation.budgetDelta), '万元', 0) }}
+                    </span>
+                    <span class="kpi-note">
+                      {{
+                        nodeResults.costCalculation.isOverBudget
+                          ? '超预算'
+                          : Number(nodeResults.costCalculation.budgetDelta) === 0
+                            ? '预算持平'
+                            : '预算结余'
+                      }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="cost-summary-heading">
+                  <span class="summary-heading-title">成本清单</span>
+                  <span class="summary-heading-note">与左侧图表使用同一投资口径</span>
+                </div>
+                <div class="cost-summary-strip">
+                  <div
+                    v-for="segment in includedCostSegments"
+                    :key="segment.key"
+                    class="cost-summary-row"
+                  >
+                    <span class="summary-dot" :style="{ background: segment.color }"></span>
+                    <span class="summary-label">{{ segment.name }}</span>
+                    <span class="summary-value">{{ formatWithUnit(segment.amount, '万元', 0) }}</span>
+                  </div>
+                </div>
+              </aside>
             </div>
+
             <div v-if="nodeResults.costCalculation.isOverBudget" class="budget-warning">
               <el-icon class="warning-icon"><Warning /></el-icon>
               <span>超出预算 {{ nodeResults.costCalculation.budgetDelta }} 万元，正在重新优化方案...</span>
             </div>
             <div v-else class="budget-success">
               <el-icon class="success-icon"><Check /></el-icon>
-              <span>预算校验通过，结余 {{ Math.abs(nodeResults.costCalculation.budgetDelta) }} 万元</span>
+              <span>
+                {{
+                  Number(nodeResults.costCalculation.budgetDelta) === 0
+                    ? '预算校验通过，当前方案与预算上限持平'
+                    : `预算校验通过，结余 ${Math.abs(nodeResults.costCalculation.budgetDelta)} 万元`
+                }}
+              </span>
             </div>
           </el-card>
         </div>
@@ -208,46 +281,101 @@
           <el-tag :type="getNodeTagType(6)">{{ getNodeStatus(6) }}</el-tag>
         </div>
         <div v-if="debateResults" class="debate-panel">
-          <div class="debate-header">
-            <span class="debate-round">第 {{ debateResults.currentRound }} 轮辩论</span>
-            <span class="consensus-score">共识度: {{ formatPercent(debateResults.consensusScore, 0) }}</span>
+          <section class="debate-overview">
+            <div class="debate-overview-copy">
+              <span class="debate-eyebrow">Multi-Agent Debate Review</span>
+              <h4>专家观点在这里完成交叉校验与共识收敛</h4>
+              <p>
+                以轮次为单位展示多位专家的发言、观点冲突与收束结果，让辩论过程从流水记录变成可读的评审面板。
+              </p>
+            </div>
+            <div class="debate-metrics">
+              <div class="debate-metric primary">
+                <span class="debate-metric-label">当前轮次</span>
+                <span class="debate-metric-value">第 {{ debateResults.currentRound }} 轮</span>
+              </div>
+              <div class="debate-metric">
+                <span class="debate-metric-label">共识度</span>
+                <span class="debate-metric-value consensus">{{ formatPercent(debateResults.consensusScore, 0) }}</span>
+              </div>
+              <div class="debate-metric">
+                <span class="debate-metric-label">发言条数</span>
+                <span class="debate-metric-value">{{ debateStatementCount }}</span>
+              </div>
+            </div>
+          </section>
+
+          <div v-if="debateParticipants.length" class="debate-participant-strip">
+            <div
+              v-for="participant in debateParticipants"
+              :key="participant.name"
+              class="debate-participant"
+              :class="participant.className"
+            >
+              <span class="participant-dot" :style="{ background: participant.color }"></span>
+              <span class="participant-name">{{ participant.name }}</span>
+            </div>
           </div>
-          <el-card class="debate-chat-container">
-            <div ref="debateChatRef" class="debate-chat-messages">
-              <template v-for="(round, roundIndex) in debateResults.rounds" :key="roundIndex">
-                <div class="round-divider">
-                  <span class="round-label">第 {{ round.number }} 轮辩论</span>
-                </div>
-                <div 
-                  v-for="(statement, stmtIndex) in round.statements" 
-                  :key="stmtIndex" 
-                  class="chat-message"
-                  :class="getExpertClass(statement.speaker)"
-                >
-                  <div class="avatar-wrapper">
-                    <div class="avatar" :style="{ background: getExpertColor(statement.speaker) }">
-                      <span class="avatar-text">{{ getExpertInitial(statement.speaker) }}</span>
+
+          <div class="debate-board">
+            <section class="debate-main-column">
+              <div ref="debateChatRef" class="debate-chat-messages">
+                <template v-for="(round, roundIndex) in debateResults.rounds" :key="roundIndex">
+                  <article class="debate-round-block">
+                    <div class="round-divider">
+                      <div class="round-badge">Round {{ String(round.number).padStart(2, '0') }}</div>
+                      <div class="round-copy">
+                        <span class="round-label">第 {{ round.number }} 轮辩论</span>
+                        <span class="round-meta">{{ round.statements.length }} 条发言</span>
+                      </div>
                     </div>
-                    <span class="speaker-name">{{ statement.speaker }}</span>
-                  </div>
-                  <div class="message-bubble">
-                    <span class="message-content">{{ statement.content }}</span>
-                  </div>
+                    <div class="round-statements">
+                      <div
+                        v-for="(statement, stmtIndex) in round.statements"
+                        :key="stmtIndex"
+                        class="chat-message"
+                        :class="getExpertClass(statement.speaker)"
+                      >
+                        <div class="avatar-wrapper">
+                          <div class="avatar" :style="{ background: getExpertColor(statement.speaker) }">
+                            <span class="avatar-text">{{ getExpertInitial(statement.speaker) }}</span>
+                          </div>
+                          <div class="speaker-meta">
+                            <span class="speaker-name">{{ statement.speaker }}</span>
+                            <span class="speaker-role">{{ getExpertRole(statement.speaker) }}</span>
+                          </div>
+                        </div>
+                        <div class="message-bubble">
+                          <span class="message-content">{{ statement.content }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                </template>
+                <div v-if="debateResults.rounds.length === 0" class="empty-chat">
+                  <p>辩论尚未开始...</p>
                 </div>
-              </template>
-              <div v-if="debateResults.rounds.length === 0" class="empty-chat">
-                <p>辩论尚未开始...</p>
               </div>
-            </div>
-          </el-card>
-          <div v-if="debateResults.summary && debateResults.summary.suggestions.length > 0" class="debate-summary-card">
-            <h4><el-icon><Lightbulb /></el-icon> 辩论纪要与建议</h4>
-            <div class="suggestions-list">
-              <div v-for="(suggestion, i) in debateResults.summary.suggestions" :key="i" class="suggestion-item">
-                <el-icon class="suggestion-icon"><CheckCircle /></el-icon>
-                <span>{{ suggestion }}</span>
+            </section>
+
+            <aside
+              v-if="debateResults.summary && debateResults.summary.suggestions.length > 0"
+              class="debate-summary-card"
+            >
+              <div class="debate-summary-header">
+                <div class="debate-summary-title">
+                  <h4><el-icon><Lightbulb /></el-icon> 辩论纪要</h4>
+                  <p>汇总仲裁前保留下来的关键建议，用于快速查看辩论输出。</p>
+                </div>
+                <div class="debate-summary-badge">共 {{ debateResults.summary.suggestions.length }} 条</div>
               </div>
-            </div>
+              <div class="suggestions-list">
+                <div v-for="(suggestion, i) in debateResults.summary.suggestions" :key="i" class="suggestion-item">
+                  <el-icon class="suggestion-icon"><CheckCircle /></el-icon>
+                  <span>{{ suggestion }}</span>
+                </div>
+              </div>
+            </aside>
           </div>
         </div>
       </div>
@@ -442,12 +570,54 @@
         <el-button type="text" @click="viewError">查看错误详情</el-button>
       </template>
     </div>
+
+    <el-dialog
+      v-model="costDetailDialogVisible"
+      width="560px"
+      destroy-on-close
+      class="cost-detail-dialog"
+    >
+      <template #header>
+        <div class="cost-detail-header">
+          <span class="detail-dot" :style="{ background: activeCostSegment.color }"></span>
+          <div class="detail-header-copy">
+            <div class="detail-title">{{ activeCostSegment.name }}</div>
+            <div class="detail-subtitle">{{ activeCostSegment.summary }}</div>
+          </div>
+        </div>
+      </template>
+
+      <div class="cost-detail-body">
+        <div class="cost-detail-kpi">
+          <div class="detail-kpi-item">
+            <span class="detail-kpi-label">当前金额</span>
+            <span class="detail-kpi-value">{{ formatWithUnit(activeCostSegment.amount, '万元', 0) }}</span>
+          </div>
+          <div class="detail-kpi-item">
+            <span class="detail-kpi-label">计入口径</span>
+            <span class="detail-kpi-value">纳入项目总投资</span>
+          </div>
+        </div>
+
+        <div class="cost-detail-list">
+          <div
+            v-for="detail in activeCostSegment.details"
+            :key="detail.label"
+            class="cost-detail-row"
+          >
+            <span class="detail-row-label">{{ detail.label }}</span>
+            <span class="detail-row-value">{{ detail.value }}</span>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import * as echarts from 'echarts'
 import { 
   Check, Document, Edit, User, Files, Download, Refresh, Warning, Tools 
 } from '@element-plus/icons-vue'
@@ -475,10 +645,12 @@ const progressPercent = ref(0)
 const isCompleted = ref(false)
 const isFailed = ref(false)
 const logsContainer = ref(null)
+const costChartRef = ref(null)
 const workflowId = ref('mock-workflow-001')
 const completedNodes = ref(new Set())
 let mockTimer = null
 let currentStepIndex = 0
+let costChart = null
 
 const nodeResults = reactive({
   requirementParser: null,
@@ -503,6 +675,8 @@ const arbitratorResult = reactive({
 })
 
 const finalReport = ref(null)
+const costDetailDialogVisible = ref(false)
+const activeCostDetailKey = ref('green_power')
 
 const finalSolution = reactive({
   name: '',
@@ -515,6 +689,108 @@ const finalSolution = reactive({
   annualCarbonEmission: 0,
   roi: 0,
   paybackPeriod: 0
+})
+
+const coolingCostSnapshot = computed(() => {
+  const coolingEco = mockSolutionData.intermediate_results.draft_plan_agent.full_output.cooling_result.economic_indicators || {}
+  return {
+    initialInvestment: toNumber(coolingEco.initial_investment, 0),
+    annualOpCost: toNumber(coolingEco.annual_op_cost, 0),
+    annualElectricityCost: toNumber(coolingEco.annual_electricity_cost, 0),
+    lcoe: toNumber(coolingEco.lcoe, null)
+  }
+})
+
+const costStructureSegments = computed(() => {
+  if (!nodeResults.costCalculation) return []
+
+  const draft = mockSolutionData.intermediate_results.draft_plan_agent.full_output
+  const cost = mockSolutionData.intermediate_results.cost_calculation.full_output.economic_analysis_result
+  const greenDetails = cost.capex_breakdown?.details || {}
+  const coolingEco = draft.cooling_result?.economic_indicators || {}
+
+  return [
+    {
+      key: 'power_supply',
+      name: '供电系统成本',
+      amount: toNumber(cost.capex_breakdown?.power_supply_system_lakh, 0),
+      color: '#16b8c4',
+      includedInTotal: true,
+      shortDescription: '35kV 双路接入与高可靠供配电架构',
+      summary: '当前总投资口径中的供电系统建设成本，反映电压等级、冗余与配电架构带来的 CAPEX。',
+      details: [
+        { label: '系统方案', value: draft.power_supply_plan?.scheme_name || '--' },
+        { label: '外部电压', value: draft.power_supply_plan?.external_voltage || '--' },
+        { label: '冗余配置', value: draft.power_supply_plan?.redundancy_logic || '--' },
+        { label: '母线类型', value: draft.power_supply_plan?.bus_type || '--' },
+        { label: '单位成本', value: `${formatNumber(draft.power_supply_plan?.raw_json?.cost_per_mw, 2)} 万元/MW` }
+      ]
+    },
+    {
+      key: 'green_power',
+      name: '绿电系统成本',
+      amount: toNumber(cost.capex_breakdown?.green_power_system_lakh, 0),
+      color: '#18b26b',
+      includedInTotal: true,
+      shortDescription: '风光储协同配置的绿电建设成本',
+      summary: '当前总投资口径中的绿电系统建设成本，点击后可查看风电、光伏和储能的真实拆分。',
+      details: [
+        { label: '风电 CAPEX', value: `${formatNumber(greenDetails.wind_capex_lakh, 0)} 万元` },
+        { label: '光伏 CAPEX', value: `${formatNumber(greenDetails.pv_capex_lakh, 0)} 万元` },
+        { label: '储能 CAPEX', value: `${formatNumber(greenDetails.storage_capex_lakh, 0)} 万元` },
+        { label: '风电装机容量', value: `${formatNumber(draft.green_power_result?.optimization?.wind_capacity_mw, 2)} MW` },
+        { label: '光伏装机容量', value: `${formatNumber(draft.green_power_result?.optimization?.pv_capacity_mw, 2)} MW` },
+        { label: '储能容量', value: `${formatNumber(draft.green_power_result?.optimization?.storage_capacity_mwh, 2)} MWh` }
+      ]
+    },
+    {
+      key: 'cooling',
+      name: '制冷系统成本',
+      amount: toNumber(coolingEco.initial_investment, 0),
+      color: '#d99a27',
+      includedInTotal: true,
+      shortDescription: '制冷方案经济指标中的建设投入',
+      summary: '制冷系统投资现已并入总投资口径，用于与供电、绿电系统共同构成完整 CAPEX 视图。',
+      details: [
+        { label: '推荐技术', value: draft.cooling_result?.cooling_technology || '--' },
+        { label: '初始投资', value: `${formatNumber(coolingEco.initial_investment, 0)} 万元` },
+        { label: '年运维成本', value: `${formatNumber(coolingEco.annual_op_cost, 0)} 万元` },
+        { label: '年电费', value: `${formatNumber(coolingEco.annual_electricity_cost, 0)} 万元` },
+        { label: 'LCOE', value: coolingEco.lcoe != null ? `${formatNumber(coolingEco.lcoe, 2)} 元/kWh` : '--' }
+      ]
+    }
+  ]
+})
+
+const includedCostSegments = computed(() => costStructureSegments.value.filter(segment => segment.includedInTotal))
+
+const totalInvestmentWithCooling = computed(() => {
+  return includedCostSegments.value.reduce((sum, segment) => sum + toNumber(segment.amount, 0), 0)
+})
+
+const activeCostSegment = computed(() => {
+  return costStructureSegments.value.find(segment => segment.key === activeCostDetailKey.value) || costStructureSegments.value[0] || {
+    key: '',
+    name: '--',
+    amount: 0,
+    color: '#18b26b',
+    includedInTotal: true,
+    summary: '',
+    details: []
+  }
+})
+
+const debateStatementCount = computed(() => {
+  return debateResults.value?.rounds?.reduce((sum, round) => sum + round.statements.length, 0) ?? 0
+})
+
+const debateParticipants = computed(() => {
+  const speakers = debateResults.value?.rounds?.flatMap(round => round.statements.map(statement => statement.speaker)) ?? []
+  return Array.from(new Set(speakers)).map((name) => ({
+    name,
+    color: getExpertColor(name),
+    className: getExpertClass(name)
+  }))
 })
 
 const progressStatus = computed(() => {
@@ -621,6 +897,127 @@ const formatWithUnit = (v, unit, digits = 2) => {
   return `${n.toFixed(digits)} ${unit}`
 }
 
+const openCostDetail = (segmentKey) => {
+  activeCostDetailKey.value = segmentKey
+  costDetailDialogVisible.value = true
+}
+
+const initCostChart = () => {
+  if (!costChartRef.value || !nodeResults.costCalculation || !costStructureSegments.value.length) return
+  if (costChart) {
+    costChart.dispose()
+  }
+
+  costChart = echarts.init(costChartRef.value)
+  costChart.setOption({
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: 'rgba(10, 24, 18, 0.94)',
+      borderColor: 'rgba(24, 178, 107, 0.24)',
+      textStyle: { color: '#eefaf3' },
+      formatter: (params) => {
+        const segment = costStructureSegments.value.find(item => item.name === params.name)
+        if (!segment) return params.name
+        return [
+          `<div style="font-weight:600;margin-bottom:6px;">${segment.name}</div>`,
+          `<div style="color:rgba(238,250,243,0.72);margin-bottom:4px;">${segment.shortDescription}</div>`,
+          `<div>金额：${formatWithUnit(segment.amount, '万元', 0)}</div>`,
+          `<div style="margin-top:4px;color:#9fe3bf;">纳入项目总投资</div>`
+        ].join('')
+      }
+    },
+    series: [
+      {
+        type: 'pie',
+        radius: ['54%', '74%'],
+        center: ['50%', '48%'],
+        padAngle: 1.2,
+        minAngle: 12,
+        avoidLabelOverlap: true,
+        selectedOffset: 6,
+        itemStyle: {
+          borderRadius: 10,
+          borderColor: '#f4fbf7',
+          borderWidth: 4
+        },
+        label: {
+          color: '#17201c',
+          formatter: ({ name, value }) => `${name}\n${value} 万元`,
+          fontSize: 12,
+          lineHeight: 18
+        },
+        labelLine: {
+          length: 14,
+          length2: 10,
+          lineStyle: {
+            color: 'rgba(80, 97, 90, 0.36)'
+          }
+        },
+        emphasis: {
+          scale: true,
+          scaleSize: 5
+        },
+        data: costStructureSegments.value.map(segment => ({
+          value: segment.amount,
+          name: segment.name,
+          itemStyle: { color: segment.color }
+        }))
+      }
+    ],
+    graphic: [
+      {
+        type: 'group',
+        left: 'center',
+        top: '40%',
+        children: [
+          {
+            type: 'text',
+            style: {
+              text: '成本项视图',
+              fill: '#50615a',
+              fontSize: 12,
+              fontWeight: 500,
+              textAlign: 'center'
+            },
+            left: 'center'
+          },
+          {
+            type: 'text',
+            top: 20,
+            style: {
+              text: formatWithUnit(totalInvestmentWithCooling.value, '万元', 0),
+              fill: '#17201c',
+              fontSize: 22,
+              fontWeight: 700,
+              textAlign: 'center'
+            },
+            left: 'center'
+          },
+          {
+            type: 'text',
+            top: 50,
+            style: {
+              text: '当前总投资',
+              fill: '#7a8d85',
+              fontSize: 12,
+              textAlign: 'center'
+            },
+            left: 'center'
+          }
+        ]
+      }
+    ]
+  })
+
+  costChart.off('click')
+  costChart.on('click', (params) => {
+    const segment = costStructureSegments.value.find(item => item.name === params.name)
+    if (segment) {
+      openCostDetail(segment.key)
+    }
+  })
+}
+
 // ============================================
 // 模拟工作流进度
 // ============================================
@@ -676,15 +1073,26 @@ const mockSteps = [
     duration: 1500,
     execute: () => {
       const cost = mockSolutionData.intermediate_results.cost_calculation.full_output.economic_analysis_result
+      const coolingInvestment = toNumber(mockSolutionData.intermediate_results.draft_plan_agent.full_output.cooling_result?.economic_indicators?.initial_investment, 0)
+      const recalculatedTotal = toNumber(cost.capex_breakdown.power_supply_system_lakh, 0) +
+        toNumber(cost.capex_breakdown.green_power_system_lakh, 0) +
+        coolingInvestment
+      const budgetConstraint = toNumber(cost.budget_constraint_lakh, 0)
+      const budgetDelta = budgetConstraint - recalculatedTotal
       nodeResults.costCalculation = {
         powerSupplyCost: cost.capex_breakdown.power_supply_system_lakh,
         greenPowerCost: cost.capex_breakdown.green_power_system_lakh,
-        totalCost: cost.total_capex_lakh,
-        budget: cost.budget_constraint_lakh,
-        isOverBudget: cost.is_over_budget,
-        budgetDelta: cost.budget_delta_lakh
+        coolingCost: coolingInvestment,
+        totalCost: recalculatedTotal,
+        budget: budgetConstraint,
+        isOverBudget: budgetDelta < 0,
+        budgetDelta
       }
-      addLog(`成本计算: 总投资${cost.total_capex_lakh}万元`, cost.is_over_budget ? 'warning' : 'success')
+      addLog(`成本计算: 总投资${recalculatedTotal}万元`, budgetDelta < 0 ? 'warning' : 'success')
+      nextTick(() => {
+        activeCostDetailKey.value = 'green_power'
+        initCostChart()
+      })
     }
   },
   {
@@ -782,7 +1190,7 @@ const mockSteps = [
       finalSolution.overallScore = mockSolutionData.overall_scores.overall
       finalSolution.pue = mockSolutionData.key_metrics.pue
       finalSolution.greenPowerRatio = mockSolutionData.key_metrics.green_power_ratio
-      finalSolution.totalCost = mockSolutionData.key_metrics.total_cost
+      finalSolution.totalCost = nodeResults.costCalculation?.totalCost ?? totalInvestmentWithCooling.value
       finalSolution.tierLevel = mockSolutionData.key_metrics.tier_level
       finalSolution.expectedAvailability = mockSolutionData.key_metrics.expected_availability
       finalSolution.annualCarbonEmission = mockSolutionData.key_metrics.annual_carbon_emission
@@ -850,6 +1258,12 @@ const regenerate = () => {
   progressPercent.value = 0; currentNodeIndex.value = -1; isCompleted.value = false; isFailed.value = false
   logs.value = []; completedNodes.value = new Set(); currentStepIndex = 0
   nodeResults.requirementParser = null; nodeResults.draftPlan = null; nodeResults.costCalculation = null
+  activeCostDetailKey.value = 'green_power'
+  costDetailDialogVisible.value = false
+  if (costChart) {
+    costChart.dispose()
+    costChart = null
+  }
   expertResults.forEach(e => { e.status = '等待中'; e.score = 0; e.summary = ''; e.recommendations = []; e.concerns = []; e.metrics = {} })
   debateResults.value = null
   arbitratorResult.summary = ''; arbitratorResult.confidence = 0; arbitratorResult.scores = { economic: 0, reliability: 0, environmental: 0 }; arbitratorResult.tradeOffs = []; arbitratorResult.consensusScore = 0
@@ -894,6 +1308,13 @@ const getExpertInitial = (speaker) => {
   return speaker.charAt(0)
 }
 
+const getExpertRole = (speaker) => {
+  if (speaker.includes('Economic') || speaker.includes('Zhang') || speaker.includes('经济性')) return '经济性视角'
+  if (speaker.includes('Reliability') || speaker.includes('Li') || speaker.includes('可靠性')) return '供电可靠性视角'
+  if (speaker.includes('Environmental') || speaker.includes('Wang') || speaker.includes('环保性')) return '环保性视角'
+  return '综合评审视角'
+}
+
 const goToDetail = () => {
   const solutionId = localStorage.getItem('currentSolutionId') || workflowId.value
   if (!solutionId) {
@@ -903,12 +1324,24 @@ const goToDetail = () => {
   router.push(`/detail/${solutionId}`)
 }
 
+const handleResize = () => {
+  if (costChart) {
+    costChart.resize()
+  }
+}
+
 onMounted(() => {
   startMockWorkflow()
+  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   if (mockTimer) clearTimeout(mockTimer)
+  window.removeEventListener('resize', handleResize)
+  if (costChart) {
+    costChart.dispose()
+    costChart = null
+  }
 })
 </script>
 
@@ -916,41 +1349,45 @@ onUnmounted(() => {
 .generate-page {
   display: flex;
   flex-direction: column;
-  height: calc(100% - 20px);
+  gap: 22px;
+  min-height: calc(100% - 20px);
   overflow-y: auto;
 }
 
 .progress-section {
-  background: white;
-  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 100%);
+  border-radius: 22px;
   padding: 24px;
-  margin-bottom: 20px;
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
 }
 
 .progress-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .progress-header h2 {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .progress-percent {
-  font-size: 24px;
-  font-weight: 600;
-  color: #00b894;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary-dark);
 }
 
 .full-workflow {
   display: flex;
   justify-content: space-between;
-  margin-top: 24px;
+  gap: 12px;
+  margin-top: 26px;
   position: relative;
-  padding-bottom: 50px;
+  padding-bottom: 36px;
 }
 
 .full-workflow::before {
@@ -960,7 +1397,7 @@ onUnmounted(() => {
   left: 3%;
   right: 3%;
   height: 2px;
-  background: #E4E7ED;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--primary-color) 20%, var(--border-default)) 0%, var(--border-default) 100%);
   z-index: 0;
 }
 
@@ -981,27 +1418,31 @@ onUnmounted(() => {
 }
 
 .node-icon {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background: #E4E7ED;
+  background: color-mix(in oklab, var(--bg-panel) 84%, var(--border-default) 16%);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  color: #8F959E;
+  color: var(--text-placeholder);
   font-weight: 600;
-  transition: all 0.3s;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--border-light);
 }
 
 .workflow-node.active .node-icon {
-  background: #00b894;
-  color: white;
+  background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  color: rgba(249, 253, 250, 0.98);
+  border-color: color-mix(in oklab, var(--primary-color) 32%, transparent);
+  box-shadow: 0 14px 24px color-mix(in oklab, var(--primary-color) 20%, transparent);
 }
 
 .workflow-node.completed .node-icon {
-  background: #00cec9;
-  color: white;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--accent-color) 86%, white) 0%, var(--accent-dark) 100%);
+  color: rgba(249, 253, 250, 0.98);
+  border-color: color-mix(in oklab, var(--accent-color) 28%, transparent);
 }
 
 .node-spinner {
@@ -1015,14 +1456,15 @@ onUnmounted(() => {
 
 .node-name {
   font-size: 12px;
-  color: #8F959E;
+  color: var(--text-secondary);
   text-align: center;
   max-width: 80px;
+  line-height: 1.5;
 }
 
 .workflow-node.active .node-name,
 .workflow-node.completed .node-name {
-  color: #1F2329;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -1032,14 +1474,14 @@ onUnmounted(() => {
   left: 50%;
   transform: translateX(-50%);
   background: #1F2329;
-  color: white;
+  color: rgba(247, 252, 248, 0.96);
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: 10px;
   font-size: 12px;
   white-space: nowrap;
   opacity: 0;
   visibility: hidden;
-  transition: all 0.3s;
+  transition: all var(--transition-fast);
   z-index: 10;
 }
 
@@ -1055,32 +1497,35 @@ onUnmounted(() => {
 }
 
 .node-detail-section {
-  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
 .stage-panel {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 20px;
-  border: 2px solid transparent;
-  transition: all 0.3s;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 20px;
+  padding: 22px;
+  border: 1px solid var(--border-light);
+  transition: all var(--transition-normal);
+  box-shadow: var(--shadow-sm);
 }
 
 .stage-panel.active {
-  border-color: #00b894;
-  box-shadow: 0 4px 20px rgba(0, 184, 148, 0.1);
+  border-color: color-mix(in oklab, var(--primary-color) 22%, var(--border-default));
+  box-shadow: var(--shadow-hover);
 }
 
 .stage-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
 .stage-header h3 {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -1088,16 +1533,16 @@ onUnmounted(() => {
 }
 
 .stage-icon {
-  color: #00b894;
+  color: var(--primary-dark);
 }
 
 .result-card {
-  background: #F5F7FA;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
 }
 
 .result-content p {
   font-size: 14px;
-  color: #4E5969;
+  color: var(--text-secondary);
   line-height: 1.7;
   margin-bottom: 16px;
 }
@@ -1108,18 +1553,18 @@ onUnmounted(() => {
 }
 
 .agent-result-card {
-  margin-bottom: 16px;
+  height: 100%;
 }
 
 .agent-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .agent-icon {
-  color: #00b894;
+  color: var(--primary-dark);
 }
 
 .agent-name {
@@ -1135,7 +1580,8 @@ onUnmounted(() => {
 
 .agent-detail {
   font-size: 13px;
-  color: #4E5969;
+  color: var(--text-secondary);
+  line-height: 1.65;
 }
 
 .cost-summary {
@@ -1144,37 +1590,274 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+.cost-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr);
+  gap: 18px;
+}
+
+.cost-visual-block,
+.cost-summary-panel {
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cost-block-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cost-block-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cost-block-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.cost-chart-shell {
+  min-height: 320px;
+}
+
+.cost-chart {
+  width: 100%;
+  height: 320px;
+}
+
+.cost-chart-note {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+  border: 1px solid var(--border-light);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.cost-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.cost-legend-item {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.cost-legend-item:hover {
+  background: color-mix(in oklab, var(--primary-color) 6%, var(--bg-card));
+  border-color: color-mix(in oklab, var(--primary-color) 18%, var(--border-default));
+  transform: translateY(-1px);
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.6);
+}
+
+.legend-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.legend-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.legend-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.legend-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.legend-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.legend-tag {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary-color) 10%, var(--bg-card));
+  color: var(--primary-dark);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.legend-tag.muted {
+  background: color-mix(in oklab, var(--warning-color) 12%, var(--bg-card));
+  color: var(--warning-color);
+}
+
+.cost-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cost-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 108px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.cost-kpi-card.strong {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 10%, var(--bg-card)) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+}
+
+.cost-kpi-card.span-wide {
+  grid-column: 1 / -1;
+  min-height: 124px;
+  justify-content: center;
+}
+
+.kpi-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.kpi-value {
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.kpi-note {
+  font-size: 12px;
+  color: var(--text-placeholder);
+}
+
+.cost-summary-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+
+.summary-heading-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.summary-heading-note {
+  font-size: 12px;
+  color: var(--text-placeholder);
+}
+
+.cost-summary-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cost-summary-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+}
+
+.summary-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.summary-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.summary-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 .cost-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: #F5F7FA;
-  border-radius: 8px;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
 }
 
 .cost-row.total {
-  background: linear-gradient(135deg, #00b89415 0%, #00cec915 100%);
+  background: color-mix(in oklab, var(--primary-color) 10%, var(--bg-card));
   font-weight: 600;
 }
 
 .cost-label {
-  color: #8F959E;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
 .cost-value {
   font-size: 16px;
   font-weight: 600;
-  color: #1F2329;
+  color: var(--text-primary);
 }
 
 .over-budget {
-  color: #F53F3F !important;
+  color: var(--danger-color) !important;
 }
 
 .under-budget {
-  color: #00b894 !important;
+  color: var(--success-color) !important;
 }
 
 .budget-warning,
@@ -1184,21 +1867,121 @@ onUnmounted(() => {
   gap: 8px;
   margin-top: 16px;
   padding: 12px;
-  border-radius: 8px;
+  border-radius: 14px;
 }
 
 .budget-warning {
-  background: #FFF2F0;
-  color: #F53F3F;
+  background: var(--danger-bg);
+  color: var(--danger-color);
 }
 
 .budget-success {
-  background: #ECFDF5;
-  color: #00b894;
+  background: var(--success-bg);
+  color: var(--success-color);
+}
+
+.cost-detail-dialog :deep(.el-dialog) {
+  border-radius: 22px;
+}
+
+.cost-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.detail-dot {
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  border-radius: 50%;
+}
+
+.detail-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.detail-subtitle {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.cost-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cost-detail-kpi {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detail-kpi-item {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+}
+
+.detail-kpi-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.detail-kpi-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.cost-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cost-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.detail-row-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.detail-row-value {
+  font-size: 13px;
+  line-height: 1.65;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
 }
 
 .expert-card {
-  transition: all 0.3s;
+  height: 100%;
+  transition: all var(--transition-normal);
+  border-radius: 18px;
 }
 
 .expert-card.waiting {
@@ -1206,7 +1989,12 @@ onUnmounted(() => {
 }
 
 .expert-card.running {
-  border: 2px solid #f39c12;
+  border: 1px solid color-mix(in oklab, var(--warning-color) 44%, var(--border-default));
+  box-shadow: 0 12px 24px color-mix(in oklab, var(--warning-color) 16%, transparent);
+}
+
+.expert-card.completed {
+  border: 1px solid color-mix(in oklab, var(--primary-color) 18%, var(--border-default));
 }
 
 .expert-header {
@@ -1217,7 +2005,7 @@ onUnmounted(() => {
 }
 
 .expert-icon {
-  color: #00b894;
+  color: var(--primary-dark);
 }
 
 .expert-name {
@@ -1230,28 +2018,28 @@ onUnmounted(() => {
 }
 
 .expert-score {
-  background: #F5F7FA;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
   padding: 12px;
-  border-radius: 8px;
+  border-radius: 14px;
   text-align: center;
   margin-bottom: 12px;
 }
 
 .score-label {
   font-size: 12px;
-  color: #8F959E;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
 .score-value {
   font-size: 20px;
   font-weight: 600;
-  color: #00b894;
+  color: var(--primary-dark);
 }
 
 .expert-summary {
   font-size: 13px;
-  color: #4E5969;
+  color: var(--text-secondary);
   line-height: 1.6;
   margin-bottom: 12px;
 }
@@ -1266,7 +2054,7 @@ onUnmounted(() => {
 .metrics-label {
   font-size: 12px;
   font-weight: 600;
-  color: #1F2329;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
@@ -1279,8 +2067,9 @@ onUnmounted(() => {
 .expert-recommendations li,
 .expert-concerns li {
   font-size: 12px;
-  color: #4E5969;
+  color: var(--text-secondary);
   margin-bottom: 4px;
+  line-height: 1.6;
 }
 
 .metrics-grid {
@@ -1293,140 +2082,399 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   padding: 6px 10px;
-  background: #F5F7FA;
-  border-radius: 6px;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border-radius: 10px;
   font-size: 12px;
 }
 
 .metric-key {
-  color: #8F959E;
+  color: var(--text-secondary);
 }
 
 .metric-val {
-  color: #1F2329;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
-.debate-header {
+.debate-panel {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.debate-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr);
+  gap: 16px;
+  padding: 20px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, color-mix(in oklab, var(--primary-color) 12%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 95%, var(--primary-color) 5%) 0%, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 100%);
+  border: 1px solid color-mix(in oklab, var(--primary-color) 14%, var(--border-default));
+}
+
+.debate-overview-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 62ch;
+}
+
+.debate-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.debate-overview-copy h4 {
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-wrap: balance;
+}
+
+.debate-overview-copy p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.debate-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-self: stretch;
+}
+
+.debate-metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 110px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.debate-metric.primary {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 10%, var(--bg-card)) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+}
+
+.debate-metric-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.debate-metric-value {
+  font-size: 22px;
+  line-height: 1.15;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.debate-metric-value.consensus {
+  color: var(--primary-dark);
+}
+
+.debate-participant-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.debate-participant {
+  display: inline-flex;
   align-items: center;
-  margin-bottom: 16px;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
 }
 
-.debate-round,
-.consensus-score {
-  font-size: 14px;
+.participant-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--bg-card) 86%, white);
+}
+
+.participant-name {
+  font-size: 12px;
   font-weight: 600;
-  color: #00b894;
+  color: var(--text-secondary);
 }
 
-.debate-chat-container {
-  margin-bottom: 20px;
+.debate-participant.expert-economic {
+  background: color-mix(in oklab, #00b894 10%, var(--bg-card));
+}
+
+.debate-participant.expert-reliability {
+  background: color-mix(in oklab, #00cec9 10%, var(--bg-card));
+}
+
+.debate-participant.expert-environmental {
+  background: color-mix(in oklab, #f39c12 10%, var(--bg-card));
+}
+
+.debate-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.78fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.debate-main-column,
+.debate-summary-card {
+  border-radius: 20px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 95%, var(--primary-color) 5%);
+}
+
+.debate-main-column {
+  padding: 18px;
 }
 
 .debate-chat-messages {
-  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: 520px;
   overflow-y: auto;
+  padding-right: 4px;
 }
 
 .round-divider {
-  text-align: center;
-  margin: 16px 0;
-  color: #8F959E;
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.debate-round-block {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.round-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary-color) 12%, var(--bg-card));
+  color: var(--primary-dark);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.round-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .round-label {
-  background: #F5F7FA;
-  padding: 4px 16px;
-  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.round-meta {
+  font-size: 12px;
+  color: var(--text-placeholder);
+}
+
+.round-statements {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .chat-message {
-  display: flex;
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
   gap: 12px;
-  margin-bottom: 16px;
 }
 
 .avatar-wrapper {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border: 1px solid color-mix(in oklab, var(--border-light) 88%, var(--primary-color) 12%);
 }
 
 .avatar {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: rgba(249, 253, 250, 0.98);
   font-weight: 600;
   font-size: 14px;
+  box-shadow: 0 10px 22px color-mix(in oklab, var(--primary-color) 16%, transparent);
+}
+
+.speaker-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .speaker-name {
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.speaker-role {
   font-size: 11px;
-  color: #8F959E;
+  line-height: 1.5;
+  color: var(--text-placeholder);
 }
 
 .message-bubble {
-  flex: 1;
-  background: #F5F7FA;
-  padding: 12px 16px;
-  border-radius: 12px;
-  border-top-left-radius: 4px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--border-light);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 0%, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 100%);
 }
 
 .message-content {
+  display: block;
   font-size: 13px;
-  color: #4E5969;
-  line-height: 1.6;
+  color: var(--text-secondary);
+  line-height: 1.72;
+}
+
+.chat-message.expert-economic .avatar-wrapper {
+  background: color-mix(in oklab, #00b894 8%, var(--bg-panel));
+}
+
+.chat-message.expert-economic .message-bubble {
+  background: linear-gradient(180deg, color-mix(in oklab, #00b894 7%, var(--bg-panel)) 0%, color-mix(in oklab, #00b894 4%, var(--bg-card)) 100%);
+  border-color: color-mix(in oklab, #00b894 20%, var(--border-default));
+}
+
+.chat-message.expert-reliability .avatar-wrapper {
+  background: color-mix(in oklab, #00cec9 8%, var(--bg-panel));
+}
+
+.chat-message.expert-reliability .message-bubble {
+  background: linear-gradient(180deg, color-mix(in oklab, #00cec9 7%, var(--bg-panel)) 0%, color-mix(in oklab, #00cec9 4%, var(--bg-card)) 100%);
+  border-color: color-mix(in oklab, #00cec9 20%, var(--border-default));
+}
+
+.chat-message.expert-environmental .avatar-wrapper {
+  background: color-mix(in oklab, #f39c12 8%, var(--bg-panel));
+}
+
+.chat-message.expert-environmental .message-bubble {
+  background: linear-gradient(180deg, color-mix(in oklab, #f39c12 9%, var(--bg-panel)) 0%, color-mix(in oklab, #f39c12 4%, var(--bg-card)) 100%);
+  border-color: color-mix(in oklab, #f39c12 22%, var(--border-default));
 }
 
 .empty-chat {
   text-align: center;
-  color: #8F959E;
+  color: var(--text-placeholder);
   padding: 40px;
 }
 
 .debate-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   padding: 20px;
-  background: #F5F7FA;
-  border-radius: 12px;
+  position: sticky;
+  top: 18px;
 }
 
-.debate-summary-card h4 {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 16px;
+.debate-summary-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.debate-summary-title {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.debate-summary-title h4 {
+  font-size: 16px;
+  font-weight: 700;
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--text-primary);
+}
+
+.debate-summary-title p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.debate-summary-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary-color) 10%, var(--bg-card));
+  color: var(--primary-dark);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .suggestions-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .suggestion-item {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
   font-size: 13px;
-  color: #4E5969;
-  background: white;
-  padding: 10px 14px;
-  border-radius: 8px;
+  color: var(--text-secondary);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  line-height: 1.7;
 }
 
 .suggestion-icon {
-  color: #00b894;
+  color: var(--primary-dark);
+  margin-top: 3px;
 }
 
 .arbitrator-header {
@@ -1435,18 +2483,18 @@ onUnmounted(() => {
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #E4E7ED;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .arbitrator-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1F2329;
+  color: var(--text-primary);
 }
 
 .confidence-badge {
-  background: #ECFDF5;
-  color: #00b894;
+  background: color-mix(in oklab, var(--success-color) 10%, var(--bg-card));
+  color: var(--success-color);
   padding: 6px 12px;
   border-radius: 20px;
   font-size: 13px;
@@ -1458,24 +2506,24 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: #F5F7FA;
-  border-radius: 10px;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border-radius: 14px;
   margin-bottom: 20px;
 }
 
 .consensus-indicator .label {
-  color: #8F959E;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
 .consensus-indicator .value {
   font-size: 22px;
   font-weight: 600;
-  color: #f39c12;
+  color: var(--warning-color);
 }
 
 .consensus-indicator .value.high {
-  color: #00b894;
+  color: var(--success-color);
 }
 
 .decision-summary {
@@ -1484,43 +2532,43 @@ onUnmounted(() => {
 
 .decision-summary p {
   font-size: 14px;
-  color: #4E5969;
+  color: var(--text-secondary);
   line-height: 1.7;
 }
 
 .overall-scores h4 {
   font-size: 14px;
   font-weight: 600;
-  color: #1F2329;
+  color: var(--text-primary);
   margin-bottom: 16px;
 }
 
 .score-card {
-  background: #F5F7FA;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
   padding: 20px;
-  border-radius: 12px;
+  border-radius: 16px;
   text-align: center;
 }
 
 .score-card.highlight {
-  background: linear-gradient(135deg, #00b89415 0%, #00cec915 100%);
+  background: color-mix(in oklab, var(--primary-color) 10%, var(--bg-card));
 }
 
 .score-label {
   display: block;
   font-size: 13px;
-  color: #8F959E;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
 .score-value {
   font-size: 24px;
   font-weight: 600;
-  color: #1F2329;
+  color: var(--text-primary);
 }
 
 .score-card.highlight .score-value {
-  color: #00b894;
+  color: var(--primary-dark);
 }
 
 .trade-offs {
@@ -1530,7 +2578,7 @@ onUnmounted(() => {
 .trade-offs h4 {
   font-size: 14px;
   font-weight: 600;
-  color: #1F2329;
+  color: var(--text-primary);
   margin-bottom: 12px;
 }
 
@@ -1541,17 +2589,15 @@ onUnmounted(() => {
 
 .trade-offs li {
   font-size: 13px;
-  color: #4E5969;
+  color: var(--text-secondary);
   line-height: 1.7;
   margin-bottom: 8px;
 }
 
 .report-panel {
-  margin-bottom: 20px;
-}
-
-.report-preview {
-  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .report-preview h4 {
@@ -1562,7 +2608,7 @@ onUnmounted(() => {
 
 .report-content {
   font-size: 13px;
-  color: #4E5969;
+  color: var(--text-secondary);
   line-height: 1.7;
   margin-bottom: 20px;
 }
@@ -1574,34 +2620,34 @@ onUnmounted(() => {
 }
 
 .report-metric {
-  background: #F5F7FA;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
   padding: 16px;
-  border-radius: 10px;
+  border-radius: 14px;
   text-align: center;
 }
 
 .report-metric .metric-label {
   display: block;
   font-size: 12px;
-  color: #8F959E;
+  color: var(--text-secondary);
   margin-bottom: 6px;
 }
 
 .report-metric .metric-value {
   font-size: 14px;
   font-weight: 600;
-  color: #1F2329;
+  color: var(--text-primary);
 }
 
 .report-metric .metric-value.success {
-  color: #00b894;
+  color: var(--success-color);
 }
 
 .solution-preview h4 {
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 20px;
-  color: #1F2329;
+  color: var(--text-primary);
 }
 
 .preview-grid {
@@ -1611,40 +2657,44 @@ onUnmounted(() => {
 }
 
 .preview-item {
-  background: #F5F7FA;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
   padding: 16px;
-  border-radius: 10px;
+  border-radius: 14px;
   text-align: center;
 }
 
 .preview-label {
   display: block;
   font-size: 12px;
-  color: #8F959E;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
 .preview-value {
   font-size: 15px;
   font-weight: 600;
-  color: #1F2329;
+  color: var(--text-primary);
 }
 
 .preview-value.highlight {
-  color: #00b894;
+  color: var(--primary-dark);
 }
 
 .logs-section {
-  background: white;
-  border-radius: 12px;
+  background:
+    radial-gradient(circle at top right, color-mix(in oklab, var(--primary-color) 10%, transparent), transparent 24%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-stage-soft) 88%, var(--primary-color) 12%) 0%, var(--bg-stage) 100%);
+  border-radius: 22px;
   padding: 24px;
-  margin-bottom: 20px;
+  border: 1px solid color-mix(in oklab, var(--primary-color) 18%, transparent);
+  box-shadow: var(--shadow-lg);
 }
 
 .logs-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
@@ -1654,6 +2704,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+  color: rgba(243, 251, 245, 0.96);
 }
 
 .logs-actions {
@@ -1662,11 +2713,12 @@ onUnmounted(() => {
 }
 
 .logs-container {
-  background: #1F2329;
-  border-radius: 10px;
+  background: rgba(8, 19, 14, 0.52);
+  border-radius: 18px;
   padding: 16px;
   max-height: 300px;
   overflow-y: auto;
+  border: 1px solid rgba(234, 246, 239, 0.1);
 }
 
 .log-item {
@@ -1678,7 +2730,7 @@ onUnmounted(() => {
 }
 
 .log-time {
-  color: #8F959E;
+  color: rgba(214, 228, 219, 0.56);
   min-width: 80px;
 }
 
@@ -1687,48 +2739,46 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-.log-type.info {
-  color: #00b894;
-}
-
-.log-type.success {
-  color: #00cec9;
-}
-
-.log-type.warning {
-  color: #f39c12;
-}
-
-.log-type.error {
-  color: #F53F3F;
-}
+.log-item.info .log-type { color: var(--primary-light); }
+.log-item.success .log-type { color: var(--accent-light); }
+.log-item.warning .log-type { color: color-mix(in oklab, var(--warning-color) 82%, white); }
+.log-item.error .log-type { color: color-mix(in oklab, var(--danger-color) 78%, white); }
 
 .log-content {
   flex: 1;
-  color: #E4E7ED;
+  color: rgba(240, 248, 243, 0.88);
   line-height: 1.5;
 }
 
 .generate-footer {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 16px;
   padding: 20px 0;
 }
 
 .primary-btn {
-  background: #00b894 !important;
-  border-color: #00b894 !important;
+  background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%) !important;
+  border-color: var(--primary-color) !important;
 }
 
 .primary-btn:hover {
-  background: #00cec9 !important;
-  border-color: #00cec9 !important;
+  background: linear-gradient(180deg, var(--primary-light) 0%, var(--primary-color) 100%) !important;
+  border-color: var(--primary-light) !important;
 }
 
 @media (max-width: 1200px) {
+  .cost-layout {
+    grid-template-columns: 1fr;
+  }
+
   .preview-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .report-metrics {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -1739,7 +2789,7 @@ onUnmounted(() => {
   }
   
   .workflow-node {
-    flex: 0 0 30%;
+    flex: 0 0 calc(33.333% - 14px);
   }
   
   .preview-grid {
@@ -1748,6 +2798,100 @@ onUnmounted(() => {
   
   .report-metrics {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .cost-kpi-grid,
+  .cost-detail-kpi {
+    grid-template-columns: 1fr;
+  }
+
+  .cost-kpi-card.span-wide {
+    grid-column: auto;
+    min-height: 108px;
+  }
+
+  .progress-section,
+  .stage-panel,
+  .logs-section {
+    padding: 18px;
+  }
+
+  .stage-header,
+  .progress-header,
+  .logs-header,
+  .arbitrator-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .result-metrics {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .cost-visual-block,
+  .cost-summary-panel {
+    padding: 16px;
+  }
+
+  .cost-block-header {
+    flex-direction: column;
+  }
+
+  .cost-summary-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cost-chart {
+    height: 280px;
+  }
+
+  .debate-overview,
+  .debate-board,
+  .debate-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .debate-main-column,
+  .debate-summary-card {
+    padding: 16px;
+  }
+
+  .chat-message {
+    grid-template-columns: 1fr;
+  }
+
+  .avatar-wrapper {
+    align-items: center;
+  }
+
+  .debate-summary-card {
+    position: static;
+  }
+
+  .cost-legend-item,
+  .cost-summary-row,
+  .cost-detail-row {
+    grid-template-columns: 12px 1fr;
+  }
+
+  .legend-meta,
+  .detail-row-value {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+@media (max-width: 560px) {
+  .workflow-node {
+    flex: 0 0 calc(50% - 10px);
+  }
+
+  .preview-grid,
+  .report-metrics,
+  .metrics-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

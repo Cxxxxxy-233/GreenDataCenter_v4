@@ -250,78 +250,60 @@ onMounted(() => {
 .history-page {
   display: flex;
   flex-direction: column;
-  height: calc(100% - 20px);
+  gap: 20px;
+  min-height: calc(100% - 20px);
 }
 
 .filter-section {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #FFFFFF 0%, #F0FDF4 100%);
-  border-radius: 14px;
-  padding: 20px 24px;
-  margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(16, 185, 129, 0.08);
+  gap: 16px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 97%, var(--primary-color) 3%) 0%, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 100%);
+  border-radius: 22px;
+  padding: 22px 24px;
+  margin-bottom: 0;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .search-box {
   width: 320px;
 }
 
-.search-box :deep(.el-input__wrapper) {
-  border-radius: 10px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-color: rgba(16, 185, 129, 0.1);
-}
-
-.search-box :deep(.el-input__wrapper:hover) {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.08);
-}
-
 .filter-options {
   display: flex;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .filter-options :deep(.el-select) {
   min-width: 140px;
 }
 
-.filter-options :deep(.el-select .el-input__wrapper) {
-  border-radius: 10px;
-  border-color: rgba(16, 185, 129, 0.1);
-}
-
-.filter-options :deep(.el-date-picker .el-input__wrapper) {
-  border-radius: 10px;
-  border-color: rgba(16, 185, 129, 0.1);
-}
-
 .table-section {
   flex: 1;
-  background: white;
-  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 22px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(16, 185, 129, 0.08);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .project-table :deep(.el-table__header th) {
-  background: linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%) !important;
-  color: #4B5563;
+  background: color-mix(in oklab, var(--bg-panel) 90%, var(--primary-color) 10%) !important;
+  color: var(--text-secondary);
   font-weight: 600;
   font-size: 13px;
-  border-bottom: 1px solid rgba(16, 185, 129, 0.1);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .project-table :deep(.el-table__body td) {
-  border-color: rgba(16, 185, 129, 0.06);
+  border-color: var(--border-light);
 }
 
 .project-table :deep(.el-table__body tr:hover) {
-  background: rgba(16, 185, 129, 0.03);
+  background: color-mix(in oklab, var(--primary-color) 6%, var(--bg-card));
 }
 
 .project-name-cell {
@@ -333,23 +315,24 @@ onMounted(() => {
 .project-icon {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: rgba(248, 253, 249, 0.98);
   font-size: 14px;
   flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 .project-name {
   font-weight: 500;
-  color: #1F2937;
+  color: var(--text-primary);
   font-size: 14px;
 }
 
 .highlight {
-  color: var(--primary-color);
+  color: var(--primary-dark);
   font-weight: 600;
 }
 
@@ -362,12 +345,14 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
-  background: white;
-  border-radius: 14px;
-  margin-top: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(16, 185, 129, 0.08);
+  gap: 16px;
+  padding: 18px 22px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 97%, var(--primary-color) 3%) 0%, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 100%);
+  border-radius: 20px;
+  margin-top: 0;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+  flex-wrap: wrap;
 }
 
 .pagination-section :deep(.el-pagination) {
@@ -375,31 +360,44 @@ onMounted(() => {
 }
 
 .pagination-section :deep(.el-pager li.is-active) {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  color: white;
-  border-radius: 8px;
+  background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  color: rgba(249, 253, 250, 0.98);
+  border-radius: 10px;
 }
 
 .pagination-section :deep(.el-pagination button:hover:not(.is-disabled)) {
-  color: var(--primary-color);
+  color: var(--primary-dark);
 }
 
 .batch-actions {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #4B5563;
+  color: var(--text-secondary);
   font-size: 14px;
+  flex-wrap: wrap;
 }
 
 .batch-actions :deep(.el-button) {
   background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
   border: none;
-  color: white;
+  color: rgba(249, 253, 250, 0.98);
 }
 
 .batch-actions :deep(.el-button:hover) {
   background: linear-gradient(135deg, #F87171 0%, #EF4444 100%);
+}
+
+@media (max-width: 1024px) {
+  .filter-section,
+  .pagination-section {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .search-box {
+    width: 100%;
+  }
 }
 
 @media (max-width: 768px) {
@@ -407,6 +405,7 @@ onMounted(() => {
     flex-direction: column;
     gap: 16px;
     align-items: stretch;
+    padding: 16px;
   }
 
   .search-box {
@@ -415,6 +414,22 @@ onMounted(() => {
 
   .filter-options {
     flex-wrap: wrap;
+  }
+
+  .filter-options :deep(.el-select),
+  .filter-options :deep(.el-date-editor),
+  .filter-options :deep(.el-date-editor.el-input) {
+    width: 100%;
+  }
+
+  .pagination-section {
+    padding: 16px;
+  }
+
+  .batch-actions,
+  .pagination-section :deep(.el-pagination) {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

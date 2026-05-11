@@ -2,35 +2,72 @@
   <div class="config-page">
     <div class="config-layout">
       <aside class="config-sidebar">
+        <div class="config-sidebar-head">
+          <span class="sidebar-eyebrow">Parameter Setup</span>
+          <h2>参数配置</h2>
+          <p>保留现有配置内容，通过更清晰的模块引导和表单层次提升录入体验。</p>
+        </div>
+
         <el-menu
           :default-active="activeModule"
           class="config-menu"
           mode="vertical"
         >
-          <el-menu-item index="basic" @click="activeModule = 'basic'">
-            <el-icon><Files /></el-icon>
-            <span>项目基础</span>
-          </el-menu-item>
-          <el-menu-item index="environment" @click="activeModule = 'environment'">
-            <el-icon><Location /></el-icon>
-            <span>环境地域</span>
-          </el-menu-item>
-          <el-menu-item index="target" @click="activeModule = 'target'">
-            <el-icon><Aim /></el-icon>
-            <span>目标约束</span>
-          </el-menu-item>
-          <el-menu-item index="green" @click="activeModule = 'green'">
-            <el-icon><Operation /></el-icon>
-            <span>绿电规划</span>
-          </el-menu-item>
-          <el-menu-item index="advanced" @click="activeModule = 'advanced'">
-            <el-icon><Setting /></el-icon>
-            <span>高级参数</span>
+          <el-menu-item
+            v-for="module in moduleList"
+            :key="module.key"
+            :index="module.key"
+            @click="activeModule = module.key"
+          >
+            <div class="menu-item-shell">
+              <span class="menu-item-icon">
+                <el-icon><component :is="module.icon" /></el-icon>
+              </span>
+              <span class="menu-item-copy">
+                <span class="menu-item-title-row">
+                  <span class="menu-item-title">{{ module.title }}</span>
+                  <span class="menu-item-order">{{ module.order }}</span>
+                </span>
+                <span class="menu-item-note">{{ module.note }}</span>
+              </span>
+            </div>
           </el-menu-item>
         </el-menu>
+        <div class="config-sidebar-note">
+          按模块补齐参数后即可进入方案生成，当前内容会按页面操作保存与复用。
+        </div>
       </aside>
 
       <main class="config-content">
+        <section class="config-active-hero">
+          <div class="active-hero-copy">
+            <span class="active-hero-eyebrow">当前配置模块</span>
+            <div class="active-hero-title-row">
+              <span class="active-hero-icon">
+                <el-icon><component :is="activeModuleMeta.icon" /></el-icon>
+              </span>
+              <div>
+                <h2>{{ activeModuleMeta.title }}</h2>
+                <p>{{ activeModuleMeta.note }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="active-hero-meta-grid">
+            <div class="active-hero-metric">
+              <span class="hero-meta-label">阶段进度</span>
+              <span class="hero-meta-value">{{ activeModuleMeta.order }} / {{ moduleList.length }}</span>
+            </div>
+            <div
+              v-for="item in pageHighlights"
+              :key="item.label"
+              class="active-hero-metric"
+            >
+              <span class="hero-meta-label">{{ item.label }}</span>
+              <span class="hero-meta-value compact">{{ item.value }}</span>
+            </div>
+          </div>
+        </section>
+
         <!-- 基础信息 -->
         <el-card class="config-card" v-show="activeModule === 'basic'">
           <template #header>
@@ -342,14 +379,20 @@
     </div>
 
     <div class="config-footer">
-      <el-button @click="saveParams">保存参数</el-button>
-      <el-button @click="resetParams">重置为默认值</el-button>
-      <el-button @click="loadSampleParams">加载示例参数</el-button>
-      <el-button 
-        class="primary-btn" 
-        @click="nextStep" 
-        :disabled="!canProceed"
-      >下一步：生成方案</el-button>
+      <div class="config-footer-status">
+        <span class="footer-status-label">当前状态</span>
+        <span class="footer-status-value">{{ canProceed ? '核心参数已满足生成条件' : '仍有核心参数待完善' }}</span>
+      </div>
+      <div class="config-footer-actions">
+        <el-button @click="saveParams">保存参数</el-button>
+        <el-button @click="resetParams">重置为默认值</el-button>
+        <el-button @click="loadSampleParams">加载示例参数</el-button>
+        <el-button 
+          class="primary-btn" 
+          @click="nextStep" 
+          :disabled="!canProceed"
+        >下一步：生成方案</el-button>
+      </div>
     </div>
   </div>
 </template>
@@ -357,13 +400,31 @@
 <script setup>
 import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { Files, Lightning, Location, Aim, Operation, Setting } from '@element-plus/icons-vue'
+import { Files, Location, Aim, Operation, Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { workflowApi } from '@/api'
 
 const router = useRouter()
 
 const activeModule = ref('basic')
+
+const moduleList = [
+  { key: 'basic', title: '项目基础', icon: Files, note: '负荷、功率密度与面积等基础参数', order: '01' },
+  { key: 'environment', title: '环境地域', icon: Location, note: '项目所在地域与机房等级条件', order: '02' },
+  { key: 'target', title: '目标约束', icon: Aim, note: 'PUE、绿电目标与预算边界', order: '03' },
+  { key: 'green', title: '绿电规划', icon: Operation, note: '风光储与碳排相关规划参数', order: '04' },
+  { key: 'advanced', title: '高级参数', icon: Setting, note: '仿真时长、价格与优化算法配置', order: '05' }
+]
+
+const activeModuleMeta = computed(() => {
+  return moduleList.find(module => module.key === activeModule.value) || moduleList[0]
+})
+
+const pageHighlights = computed(() => [
+  { label: '项目所在地', value: formData.location || '-' },
+  { label: '机柜总数', value: `${cabinetCount.value} 个` },
+  { label: '预算约束', value: `${formData.budget_constraint} 万元` }
+])
 
 const formData = reactive({
   location: '乌兰察布',
@@ -527,111 +588,607 @@ const nextStep = async () => {
 
 <style scoped>
 .config-page {
-  height: calc(100% - 20px);
   display: flex;
   flex-direction: column;
+  gap: 20px;
+  min-height: calc(100% - 20px);
 }
 
 .config-layout {
   display: flex;
   flex: 1;
-  gap: 20px;
+  gap: 22px;
   overflow: hidden;
+  min-height: 0;
 }
 
 .config-sidebar {
-  width: 180px;
-  background: white;
-  border-radius: var(--radius-lg);
-  padding: 10px;
+  width: 252px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 97%, var(--primary-color) 3%) 0%, color-mix(in oklab, var(--bg-panel) 95%, var(--primary-color) 5%) 100%);
+  border-radius: 20px;
+  padding: 16px;
   flex-shrink: 0;
   box-shadow: var(--shadow-sm);
-  border: 1px solid #D1FAE5;
+  border: 1px solid var(--border-light);
+  overflow: hidden;
+}
+
+.config-sidebar-head {
+  padding: 10px 10px 14px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid color-mix(in oklab, var(--primary-color) 16%, var(--border-default));
+}
+
+.sidebar-eyebrow {
+  display: inline-flex;
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.config-sidebar-head h2 {
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.config-sidebar-head p {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  max-width: 20ch;
 }
 
 .config-menu {
   border: none;
+  background: transparent;
 }
 
 .config-menu :deep(.el-menu-item) {
-  height: 44px;
-  line-height: 44px;
-  border-radius: 8px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  height: auto;
+  line-height: normal;
+  margin: 4px 0;
+  padding: 0 !important;
+  border-radius: 16px;
+  transition: all var(--transition-fast);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.menu-item-shell {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px;
+  border-radius: 16px;
+}
+
+.menu-item-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--bg-panel) 90%, var(--primary-color) 10%);
+  color: var(--primary-dark);
+  border: 1px solid color-mix(in oklab, var(--primary-color) 12%, var(--border-default));
+}
+
+.menu-item-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.menu-item-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.menu-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.menu-item-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-placeholder);
+  word-break: break-word;
+}
+
+.menu-item-order {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-placeholder);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
 }
 
 .config-menu :deep(.el-menu-item:hover) {
-  background: rgba(16, 185, 129, 0.06);
-  color: var(--primary-color);
+  background: color-mix(in oklab, var(--primary-color) 7%, var(--bg-card));
+  color: var(--primary-dark);
 }
 
 .config-menu :deep(.el-menu-item.is-active) {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%);
-  color: var(--primary-color);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 12%, var(--bg-card)) 0%, color-mix(in oklab, var(--primary-color) 8%, var(--bg-panel)) 100%);
+  color: var(--primary-ink);
   font-weight: 600;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary-color) 22%, var(--border-default));
+}
+
+.config-menu :deep(.el-menu-item.is-active) .menu-item-icon {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 16%, var(--bg-card)) 0%, color-mix(in oklab, var(--primary-color) 10%, var(--bg-panel)) 100%);
+  box-shadow: 0 10px 20px color-mix(in oklab, var(--primary-color) 12%, transparent);
+}
+
+.config-menu :deep(.el-menu-item.is-active) .menu-item-title {
+  color: var(--primary-ink);
+}
+
+.config-menu :deep(.el-menu-item.is-active) .menu-item-note,
+.config-menu :deep(.el-menu-item.is-active) .menu-item-order {
+  color: color-mix(in oklab, var(--primary-ink) 72%, var(--text-secondary));
 }
 
 .config-content {
   flex: 1;
   overflow-y: auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.config-sidebar-note {
+  margin-top: 14px;
+  padding: 14px 6px 2px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.config-active-hero {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.35fr);
+  align-items: center;
+  gap: 18px;
+  padding: 16px 20px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in oklab, var(--primary-color) 16%, var(--border-default));
+  background:
+    radial-gradient(circle at top right, color-mix(in oklab, var(--primary-color) 10%, transparent), transparent 32%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.active-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.active-hero-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.active-hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.active-hero-icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 14%, var(--bg-card)) 0%, color-mix(in oklab, var(--primary-color) 10%, var(--bg-panel)) 100%);
+  color: var(--primary-dark);
+  border: 1px solid color-mix(in oklab, var(--primary-color) 20%, var(--border-default));
+  box-shadow: 0 10px 22px color-mix(in oklab, var(--primary-color) 10%, transparent);
+}
+
+.active-hero-title-row h2 {
+  font-size: 18px;
+  line-height: 1.15;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-wrap: balance;
+}
+
+.active-hero-title-row p {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 42ch;
+}
+
+.active-hero-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.active-hero-metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 76px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+  border: 1px solid var(--border-light);
+  min-width: 0;
+}
+
+.active-hero-metric:first-child {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 10%, var(--bg-card)) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+}
+
+.hero-meta-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.hero-meta-value {
+  display: block;
+  font-size: 16px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+
+.hero-meta-value.compact {
+  font-size: 15px;
+  line-height: 1.3;
+  word-break: break-word;
 }
 
 .config-card {
-  margin-bottom: 20px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.config-card:hover {
-  box-shadow: var(--shadow-hover);
+  margin-bottom: 0;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
+.config-card :deep(.el-card__header) {
+  padding: 18px 22px;
+  background:
+    radial-gradient(circle at top right, color-mix(in oklab, var(--primary-color) 9%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 90%, var(--primary-color) 10%) 0%, color-mix(in oklab, var(--bg-card) 96%, var(--primary-color) 4%) 100%);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.config-card :deep(.el-card__body) {
+  padding: 22px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+}
+
+.config-card :deep(.el-form) {
+  max-width: 1120px;
+}
+
+.config-card :deep(.el-form-item) {
+  display: grid;
+  grid-template-columns: minmax(168px, 220px) minmax(0, 1fr);
+  align-items: flex-start;
+  column-gap: 18px;
+  row-gap: 8px;
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%) 0%, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 100%);
+  border: 1px solid color-mix(in oklab, var(--primary-color) 10%, var(--border-default));
+  transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.config-card :deep(.el-form-item:hover) {
+  border-color: color-mix(in oklab, var(--primary-color) 18%, var(--border-default));
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px color-mix(in oklab, var(--primary-color) 8%, transparent);
+}
+
+.config-card :deep(.el-form-item__label) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.6;
+  white-space: normal;
+  text-align: left;
+  width: auto !important;
+  height: auto;
+  padding: 0;
+}
+
+.config-card :deep(.el-form-item__label-wrap) {
+  margin-left: 0 !important;
+  width: auto !important;
+}
+
+.config-card :deep(.el-form-item__content) {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  line-height: 1.6;
+  margin-left: 0 !important;
+}
+
+.config-card :deep(.el-input-number) {
+  width: 220px;
+}
+
+.config-card :deep(.el-select),
+.config-card :deep(.el-date-editor.el-input),
+.config-card :deep(.el-date-editor.el-input__wrapper) {
+  width: 220px;
+}
+
+.config-card :deep(.el-input-number),
+.config-card :deep(.el-input__wrapper),
+.config-card :deep(.el-select__wrapper),
+.config-card :deep(.el-date-editor.el-input__wrapper) {
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.config-card :deep(.el-input-number.is-controls-right .el-input__wrapper),
+.config-card :deep(.el-input__wrapper),
+.config-card :deep(.el-select__wrapper),
+.config-card :deep(.el-date-editor.el-input__wrapper) {
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+}
+
+.config-card :deep(.el-input-number:hover),
+.config-card :deep(.el-input__wrapper:hover),
+.config-card :deep(.el-select__wrapper:hover),
+.config-card :deep(.el-date-editor.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary-color) 18%, var(--border-default));
+}
+
+.config-card :deep(.el-input-number.is-focus),
+.config-card :deep(.el-input__wrapper.is-focus),
+.config-card :deep(.el-select__wrapper.is-focused),
+.config-card :deep(.el-date-editor.el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary-color) 24%, var(--border-default)),
+    0 0 0 4px color-mix(in oklab, var(--primary-color) 12%, transparent);
+}
+
+.config-card :deep(.el-input-number__decrease),
+.config-card :deep(.el-input-number__increase) {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.config-card :deep(.el-row) {
+  width: 100%;
+}
+
+.config-card :deep(.el-col .el-form-item) {
+  grid-template-columns: 1fr;
+  margin-bottom: 12px;
+  padding: 14px 14px 12px;
+}
+
+.config-card :deep(.el-col .el-form-item__content) {
+  align-items: stretch;
+}
+
 .form-hint {
-  margin-left: 12px;
+  display: block;
+  width: 100%;
+  margin-left: 0;
+  margin-top: 2px;
   font-size: 12px;
-  color: #6B7280;
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 
 .disabled-input {
-  background: #F0FDF4;
-  color: #9CA3AF;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  color: var(--text-placeholder);
 }
 
 .config-footer {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  margin-top: auto;
+  background:
+    radial-gradient(circle at top right, color-mix(in oklab, var(--primary-color) 10%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 97%, var(--primary-color) 3%) 0%, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 100%);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.config-footer-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 42ch;
+}
+
+.footer-status-label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-placeholder);
+}
+
+.footer-status-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.config-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   justify-content: flex-end;
-  padding-top: 16px;
-  border-top: 1px solid #D1FAE5;
-  margin-top: auto;
-  background: white;
-  padding: 16px 24px;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  box-shadow: 0 -2px 10px rgba(16, 185, 129, 0.05);
 }
 
 .primary-btn {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  border: none;
-  color: white;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+  background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%) !important;
+  border-color: var(--primary-color) !important;
+  color: rgba(249, 253, 250, 0.98);
 }
 
-.primary-btn:hover {
-  background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-color) 100%);
-  color: white;
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+.primary-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--primary-light) 0%, var(--primary-color) 100%) !important;
+  border-color: var(--primary-light) !important;
 }
 
 .primary-btn:disabled {
-  background: #D1FAE5;
-  color: #9CA3AF;
+  background: color-mix(in oklab, var(--bg-panel) 88%, var(--border-default) 12%);
+  color: var(--text-placeholder);
   box-shadow: none;
   cursor: not-allowed;
+  border-color: var(--border-light);
+}
+
+.config-footer :deep(.primary-btn.is-disabled),
+.config-footer :deep(.primary-btn.is-disabled:hover),
+.config-footer :deep(.primary-btn:disabled),
+.config-footer :deep(.primary-btn:disabled:hover) {
+  background: color-mix(in oklab, var(--bg-panel) 88%, var(--border-default) 12%) !important;
+  border-color: var(--border-light) !important;
+  color: var(--text-secondary) !important;
+  opacity: 1 !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 1024px) {
+  .config-layout {
+    flex-direction: column;
+  }
+
+  .config-active-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .active-hero-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .config-sidebar {
+    width: 100%;
+  }
+
+  .config-menu {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .config-sidebar-head p {
+    max-width: none;
+  }
+
+  .config-menu :deep(.el-menu-item) {
+    margin: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .config-page {
+    gap: 16px;
+  }
+
+  .config-active-hero,
+  .config-card :deep(.el-card__header),
+  .config-card :deep(.el-card__body),
+  .config-footer {
+    padding: 16px;
+  }
+
+  .active-hero-title-row,
+  .config-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .menu-item-shell {
+    min-height: auto;
+  }
+
+  .menu-item-title-row {
+    align-items: flex-start;
+  }
+
+  .active-hero-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .config-card :deep(.el-input-number),
+  .config-card :deep(.el-select),
+  .config-card :deep(.el-date-editor.el-input),
+  .config-card :deep(.el-date-editor.el-input__wrapper) {
+    width: 100%;
+  }
+
+  .config-card :deep(.el-form-item) {
+    grid-template-columns: 1fr;
+  }
+
+  .config-menu {
+    grid-template-columns: 1fr;
+  }
+
+  .config-footer-actions {
+    width: 100%;
+  }
+
+  .config-footer {
+    justify-content: stretch;
+  }
+
+  .config-footer :deep(.el-button) {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 </style>

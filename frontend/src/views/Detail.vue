@@ -23,8 +23,9 @@
             <p class="summary-text">{{ arbitrator.summary || '暂无后端仲裁摘要' }}</p>
             <div class="budget-status" :class="costResult.is_over_budget ? 'fail' : 'success'">
               <el-icon><CircleCheckFilled /></el-icon>
-              <span v-if="costResult.is_over_budget">当前方案超预算 {{ formatNumber(costResult.budget_delta_lakh, 2) }} 万元</span>
-              <span v-else>预算校验通过，预算差额 {{ formatNumber(costResult.budget_delta_lakh, 2) }} 万元</span>
+              <span v-if="costResult.is_over_budget">当前方案超预算 {{ formatNumber(Math.abs(costResult.budget_delta_lakh), 2) }} 万元</span>
+              <span v-else-if="toNumber(costResult.budget_delta_lakh, 0) === 0">预算校验通过，当前方案与预算上限持平</span>
+              <span v-else>预算校验通过，预算结余 {{ formatNumber(costResult.budget_delta_lakh, 2) }} 万元</span>
             </div>
             <div class="risk-warning" v-if="arbitrator.risks && arbitrator.risks.length">
               <el-icon><CircleCloseFilled /></el-icon>
@@ -163,19 +164,96 @@
 
       <el-tab-pane label="经济分析" name="economic">
         <div class="economic-section">
-          <el-card>
-            <h4>全局成本结构图</h4>
-            <div ref="costChartRef" class="chart-container"></div>
-          </el-card>
-          <el-card>
-            <h4>全生命周期成本分解</h4>
-            <el-table :data="costBreakdown" border>
-              <el-table-column prop="item" label="项目" />
-              <el-table-column prop="amount" label="金额(万元)" />
-              <el-table-column prop="ratio" label="占比(%)" />
-            </el-table>
-          </el-card>
-          <el-card>
+          <div class="economic-cost-panel">
+            <section class="economic-cost-main">
+              <div class="economic-cost-header">
+                <div>
+                  <h4>投资构成视图</h4>
+                  <p>点击环形图扇区或下方成本项，可查看该部分的投资组成、设备配置与测算口径。</p>
+                </div>
+                <el-tag effect="plain" round>总投资口径已统一包含制冷系统</el-tag>
+              </div>
+
+              <div class="economic-chart-shell">
+                <div ref="costChartRef" class="economic-cost-chart"></div>
+              </div>
+
+              <div class="economic-chart-note">
+                当前详情页与方案生成页使用同一成本口径，总投资由供电系统、绿电系统和制冷系统三部分构成。
+              </div>
+
+              <div class="economic-cost-list">
+                <button
+                  v-for="segment in costStructureSegments"
+                  :key="segment.key"
+                  type="button"
+                  class="economic-cost-item"
+                  @click="openCostDetail(segment.key)"
+                >
+                  <span class="economic-cost-dot" :style="{ background: segment.color }"></span>
+                  <span class="economic-cost-copy">
+                    <span class="economic-cost-title">{{ segment.name }}</span>
+                    <span class="economic-cost-desc">{{ segment.shortDescription }}</span>
+                  </span>
+                  <span class="economic-cost-meta">
+                    <span class="economic-cost-value">{{ formatNumber(segment.amount, 0) }} 万元</span>
+                    <span class="economic-cost-ratio">{{ segment.ratio }}%</span>
+                  </span>
+                </button>
+              </div>
+            </section>
+
+            <aside class="economic-cost-summary">
+              <div class="economic-kpi-grid">
+                <div class="economic-kpi-card strong">
+                  <span class="economic-kpi-label">项目总投资</span>
+                  <span class="economic-kpi-value">{{ formatNumber(costResult.total_capex_lakh, 0) }} 万元</span>
+                  <span class="economic-kpi-note">供电 + 绿电 + 制冷</span>
+                </div>
+                <div class="economic-kpi-card">
+                  <span class="economic-kpi-label">预算约束</span>
+                  <span class="economic-kpi-value" :class="costResult.is_over_budget ? 'danger' : 'success'">
+                    {{ formatNumber(costResult.budget_constraint_lakh, 0) }} 万元
+                  </span>
+                  <span class="economic-kpi-note">配置参数基准</span>
+                </div>
+                <div class="economic-kpi-card">
+                  <span class="economic-kpi-label">预算差额</span>
+                  <span class="economic-kpi-value" :class="costResult.is_over_budget ? 'danger' : 'success'">
+                    {{ formatNumber(Math.abs(costResult.budget_delta_lakh), 0) }} 万元
+                  </span>
+                  <span class="economic-kpi-note">
+                    {{
+                      costResult.is_over_budget
+                        ? '超预算'
+                        : toNumber(costResult.budget_delta_lakh, 0) === 0
+                          ? '预算持平'
+                          : '预算结余'
+                    }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="economic-summary-heading">
+                <span class="economic-summary-title">成本清单</span>
+                <span class="economic-summary-note">点击左侧图形或下方条目查看细节</span>
+              </div>
+
+              <div class="economic-summary-strip">
+                <div
+                  v-for="segment in costStructureSegments"
+                  :key="segment.key"
+                  class="economic-summary-row"
+                >
+                  <span class="economic-summary-dot" :style="{ background: segment.color }"></span>
+                  <span class="economic-summary-label">{{ segment.name }}</span>
+                  <span class="economic-summary-value">{{ formatNumber(segment.amount, 0) }} 万元</span>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <el-card class="economic-metrics-card">
             <h4>经济专家指标</h4>
             <div class="param-grid">
               <div v-for="(value, key) in economicOpinion.metrics || {}" :key="key" class="param-item">
@@ -415,6 +493,47 @@
         </div>
       </el-tab-pane>
     </el-tabs>
+
+    <el-dialog
+      v-model="costDetailDialogVisible"
+      width="560px"
+      destroy-on-close
+      class="economic-cost-dialog"
+    >
+      <template #header>
+        <div class="economic-detail-header">
+          <span class="economic-detail-dot" :style="{ background: activeCostSegment.color }"></span>
+          <div class="economic-detail-copy">
+            <div class="economic-detail-title">{{ activeCostSegment.name }}</div>
+            <div class="economic-detail-subtitle">{{ activeCostSegment.summary }}</div>
+          </div>
+        </div>
+      </template>
+
+      <div class="economic-detail-body">
+        <div class="economic-detail-kpis">
+          <div class="economic-detail-kpi">
+            <span class="economic-detail-kpi-label">当前金额</span>
+            <span class="economic-detail-kpi-value">{{ formatNumber(activeCostSegment.amount, 0) }} 万元</span>
+          </div>
+          <div class="economic-detail-kpi">
+            <span class="economic-detail-kpi-label">投资占比</span>
+            <span class="economic-detail-kpi-value">{{ activeCostSegment.ratio }}%</span>
+          </div>
+        </div>
+
+        <div class="economic-detail-list">
+          <div
+            v-for="detail in activeCostSegment.details"
+            :key="detail.label"
+            class="economic-detail-row"
+          >
+            <span class="economic-detail-row-label">{{ detail.label }}</span>
+            <span class="economic-detail-row-value">{{ detail.value }}</span>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -425,6 +544,7 @@ import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import { mockSolutionData } from '@/mock/data.js'
+import { solutionApi } from '@/api'
 
 const route = useRoute()
 const activeTab = ref('overview')
@@ -436,6 +556,8 @@ const reportMarkdown = ref(mockSolutionData.final_report)
 const optimizationChartRef = ref(null)
 const powerBalanceChartRef = ref(null)
 const costChartRef = ref(null)
+const costDetailDialogVisible = ref(false)
+const activeCostDetailKey = ref('green_power')
 let charts = { optimization: null, powerBalance: null, cost: null }
 
 const toNumber = (v, fallback = 0) => {
@@ -533,7 +655,36 @@ const powerRaw = computed(() => {
   }
 })
 
-const costResult = computed(() => intermediate.value.cost_calculation?.full_output || {})
+const costResult = computed(() => {
+  const rawCost = intermediate.value.cost_calculation?.full_output || {}
+  const economic = rawCost.economic_analysis_result || rawCost || {}
+  const breakdown = economic.capex_breakdown || {}
+  const coolingCapex = toNumber(coolingResult.value.economic_indicators?.initial_investment, 0)
+  const powerSupplyCapex = toNumber(breakdown.power_supply_system_lakh, 0)
+  const greenPowerCapex = toNumber(breakdown.green_power_system_lakh, 0)
+  const recalculatedTotal = powerSupplyCapex + greenPowerCapex + coolingCapex
+  const budgetConstraint = toNumber(economic.budget_constraint_lakh, 0)
+  const normalizedTotal = recalculatedTotal > 0
+    ? recalculatedTotal
+    : toNumber(economic.total_capex_lakh, toNumber(keyMetrics.value.total_cost, 0))
+  const normalizedBudgetDelta = budgetConstraint > 0
+    ? budgetConstraint - normalizedTotal
+    : toNumber(economic.budget_delta_lakh, 0)
+
+  return {
+    ...economic,
+    total_capex_lakh: normalizedTotal,
+    budget_constraint_lakh: budgetConstraint || toNumber(economic.budget_constraint_lakh, 0),
+    budget_delta_lakh: normalizedBudgetDelta,
+    is_over_budget: budgetConstraint > 0 ? normalizedBudgetDelta < 0 : Boolean(economic.is_over_budget),
+    capex_breakdown: {
+      ...breakdown,
+      power_supply_system_lakh: powerSupplyCapex,
+      green_power_system_lakh: greenPowerCapex,
+      cooling_system_lakh: coolingCapex
+    }
+  }
+})
 const finalReportData = computed(() => ({
   ...arbitrator.value,
   ...solutionData.value
@@ -541,7 +692,7 @@ const finalReportData = computed(() => ({
 const keyMetricsRows = computed(() => {
   const metrics = keyMetrics.value || {}
   return [
-    { label: '总成本(万元)', value: formatNumber(metrics.total_cost, 2) },
+    { label: '总成本(万元)', value: formatNumber(costResult.value.total_capex_lakh || metrics.total_cost, 2) },
     { label: 'PUE', value: formatNumber(metrics.pue, 3) },
     { label: '绿电比例', value: formatPercent(metrics.green_power_ratio) },
     { label: 'Tier 等级', value: metrics.tier_level ?? '-' },
@@ -628,36 +779,85 @@ const coolingTableData = computed(() => {
   return rows
 })
 
-const costBreakdown = computed(() => {
-  const b = costResult.value.capex_breakdown || {}
+const costStructureSegments = computed(() => {
+  const breakdown = costResult.value.capex_breakdown || {}
   const total = toNumber(costResult.value.total_capex_lakh, 0)
-  const items = [
-    { item: '供电系统CAPEX', amount: toNumber(b.power_supply_system_lakh, 0) },
-    { item: '绿电系统CAPEX', amount: toNumber(b.green_power_system_lakh, 0) },
-    { item: '风电CAPEX', amount: toNumber(b.details?.wind_capex_lakh, 0) },
-    { item: '光伏CAPEX', amount: toNumber(b.details?.pv_capex_lakh, 0) },
-    { item: '储能CAPEX', amount: toNumber(b.details?.storage_capex_lakh, 0) }
-  ]
-  const mapped = items.filter(i => i.amount > 0).map(i => ({
-    ...i,
-    ratio: total > 0 ? ((i.amount / total) * 100).toFixed(1) : '0.0'
-  }))
-  if (mapped.length) return mapped
+  const safeRatio = (amount) => (total > 0 ? ((toNumber(amount, 0) / total) * 100).toFixed(1) : '0.0')
 
-  const finalTotal = toNumber(keyMetrics.value.total_cost, 0)
-  if (finalTotal > 0) {
-    return [{ item: '最终方案总成本', amount: finalTotal, ratio: '100.0' }]
+  return [
+    {
+      key: 'power_supply',
+      name: '供电系统CAPEX',
+      amount: toNumber(breakdown.power_supply_system_lakh, 0),
+      ratio: safeRatio(breakdown.power_supply_system_lakh),
+      color: '#16b8c4',
+      shortDescription: '35kV 双路接入与高可靠配电架构',
+      summary: '供电系统投资主要覆盖外部接入、电压等级、冗余配置和母线方案等建设成本。',
+      details: [
+        { label: '系统方案', value: powerPlan.value.scheme_name || '-' },
+        { label: '外部电压', value: powerPlan.value.external_voltage || '-' },
+        { label: '外部电源', value: powerPlan.value.external_source_type || '-' },
+        { label: '冗余配置', value: powerPlan.value.redundancy_logic || '-' },
+        { label: '母线类型', value: powerPlan.value.bus_type || '-' },
+        { label: '单位成本', value: `${formatNumber(powerRaw.value.cost_per_mw, 2)} 万元/MW` }
+      ]
+    },
+    {
+      key: 'green_power',
+      name: '绿电系统CAPEX',
+      amount: toNumber(breakdown.green_power_system_lakh, 0),
+      ratio: safeRatio(breakdown.green_power_system_lakh),
+      color: '#18b26b',
+      shortDescription: '风光储协同的绿电建设投入',
+      summary: '绿电系统投资由风电、光伏与储能构成，对应当前方案的装机容量与消纳目标。',
+      details: [
+        { label: '风电CAPEX', value: `${formatNumber(breakdown.details?.wind_capex_lakh, 0)} 万元` },
+        { label: '光伏CAPEX', value: `${formatNumber(breakdown.details?.pv_capex_lakh, 0)} 万元` },
+        { label: '储能CAPEX', value: `${formatNumber(breakdown.details?.storage_capex_lakh, 0)} 万元` },
+        { label: '风电装机容量', value: `${formatNumber(greenOptimization.value.wind_capacity_mw, 2)} MW` },
+        { label: '光伏装机容量', value: `${formatNumber(greenOptimization.value.pv_capacity_mw, 2)} MW` },
+        { label: '储能容量', value: `${formatNumber(greenOptimization.value.storage_capacity_mwh, 2)} MWh` }
+      ]
+    },
+    {
+      key: 'cooling',
+      name: '制冷系统CAPEX',
+      amount: toNumber(breakdown.cooling_system_lakh, 0),
+      ratio: safeRatio(breakdown.cooling_system_lakh),
+      color: '#d99a27',
+      shortDescription: '制冷工艺与效率优化投入',
+      summary: '制冷系统投资来自当前推荐制冷技术方案的建设成本，并纳入项目总投资统一核算。',
+      details: [
+        { label: '推荐技术', value: coolingResult.value.cooling_technology || '-' },
+        { label: '初始投资', value: `${formatNumber(coolingEconomics.value.initial_investment, 0)} 万元` },
+        { label: '年运维成本', value: `${formatNumber(coolingEconomics.value.annual_op_cost, 0)} 万元` },
+        { label: '年电费', value: `${formatNumber(coolingEconomics.value.annual_electricity_cost, 0)} 万元` },
+        { label: 'LCOE', value: `${formatNumber(coolingEconomics.value.lcoe, 4)} 元/kWh` },
+        { label: '预测PUE', value: formatNumber(coolingResult.value.estimated_pue, 3) }
+      ]
+    }
+  ]
+})
+
+const activeCostSegment = computed(() => {
+  return costStructureSegments.value.find(segment => segment.key === activeCostDetailKey.value) || costStructureSegments.value[0] || {
+    key: '',
+    name: '--',
+    amount: 0,
+    ratio: '0.0',
+    color: '#18b26b',
+    summary: '',
+    details: []
   }
-  return []
 })
 
 const overviewMetrics = computed(() => [
-  { label: '推荐制冷技术', value: coolingResult.cooling_technology || '-', highlight: false },
-  { label: '预测PUE', value: formatNumber(coolingResult.estimated_pue, 3), highlight: true },
-  { label: '预测WUE', value: `${formatNumber(coolingResult.predicted_wue, 3)}`, unit: 'L/kWh', highlight: false },
-  { label: '绿电消纳率', value: formatPercent(keyMetrics.green_power_ratio), highlight: true },
-  { label: '总初始投资', value: formatNumber(costResult.total_capex_lakh || keyMetrics.total_cost, 2), unit: '万元', highlight: false },
-  { label: '综合评分', value: formatPercent(overallScores.overall), highlight: false }
+  { label: '推荐制冷技术', value: coolingResult.value.cooling_technology || '-', highlight: false },
+  { label: '预测PUE', value: formatNumber(coolingResult.value.estimated_pue, 3), highlight: true },
+  { label: '预测WUE', value: `${formatNumber(coolingResult.value.predicted_wue, 3)}`, unit: 'L/kWh', highlight: false },
+  { label: '绿电消纳率', value: formatPercent(keyMetrics.value.green_power_ratio), highlight: true },
+  { label: '总初始投资', value: formatNumber(costResult.value.total_capex_lakh || keyMetrics.value.total_cost, 2), unit: '万元', highlight: false },
+  { label: '综合评分', value: formatPercent(overallScores.value.overall), highlight: false }
 ])
 
 const filteredMarkdown = computed(() => {
@@ -736,6 +936,11 @@ const getExpertColor = (type) => {
   return 'linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)'
 }
 
+const openCostDetail = (segmentKey) => {
+  activeCostDetailKey.value = segmentKey
+  costDetailDialogVisible.value = true
+}
+
 const loadSolutionData = async () => {
   try {
     const { data } = await solutionApi.getById(solutionId.value)
@@ -812,13 +1017,106 @@ const initCostChart = () => {
   if (charts.cost) charts.cost.dispose()
   const chart = echarts.init(costChartRef.value)
   chart.setOption({
-    tooltip: { trigger: 'item' },
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: 'rgba(10, 24, 18, 0.94)',
+      borderColor: 'rgba(24, 178, 107, 0.24)',
+      textStyle: { color: '#eefaf3' },
+      formatter: (params) => {
+        const segment = costStructureSegments.value.find(item => item.name === params.name)
+        if (!segment) return params.name
+        return [
+          `<div style="font-weight:600;margin-bottom:6px;">${segment.name}</div>`,
+          `<div style="color:rgba(238,250,243,0.72);margin-bottom:4px;">${segment.shortDescription}</div>`,
+          `<div>金额：${formatNumber(segment.amount, 0)} 万元</div>`,
+          `<div>占比：${segment.ratio}%</div>`
+        ].join('')
+      }
+    },
     series: [{
       type: 'pie',
-      radius: ['40%', '70%'],
-      data: costBreakdown.value.map(i => ({ name: i.item, value: i.amount })),
-      color: ['#10B981', '#34D399', '#06B6D4', '#059669', '#22D3EE']
-    }]
+      radius: ['54%', '74%'],
+      center: ['50%', '48%'],
+      padAngle: 1.2,
+      minAngle: 12,
+      avoidLabelOverlap: true,
+      selectedOffset: 6,
+      itemStyle: {
+        borderRadius: 10,
+        borderColor: '#f4fbf7',
+        borderWidth: 4
+      },
+      label: {
+        color: '#17201c',
+        formatter: ({ name, value }) => `${name}\n${value} 万元`,
+        fontSize: 12,
+        lineHeight: 18
+      },
+      labelLine: {
+        length: 14,
+        length2: 10,
+        lineStyle: {
+          color: 'rgba(80, 97, 90, 0.36)'
+        }
+      },
+      emphasis: {
+        scale: true,
+        scaleSize: 5
+      },
+      data: costStructureSegments.value.map(segment => ({
+        name: segment.name,
+        value: segment.amount,
+        itemStyle: { color: segment.color }
+      }))
+    }],
+    graphic: [
+      {
+        type: 'group',
+        left: 'center',
+        top: '40%',
+        children: [
+          {
+            type: 'text',
+            style: {
+              text: '项目总投资',
+              fill: '#50615a',
+              fontSize: 12,
+              fontWeight: 500,
+              textAlign: 'center'
+            },
+            left: 'center'
+          },
+          {
+            type: 'text',
+            top: 20,
+            style: {
+              text: `${formatNumber(costResult.value.total_capex_lakh, 0)} 万元`,
+              fill: '#17201c',
+              fontSize: 22,
+              fontWeight: 700,
+              textAlign: 'center'
+            },
+            left: 'center'
+          },
+          {
+            type: 'text',
+            top: 50,
+            style: {
+              text: '点击查看成本细节',
+              fill: '#7a8d85',
+              fontSize: 12,
+              textAlign: 'center'
+            },
+            left: 'center'
+          }
+        ]
+      }
+    ]
+  })
+  chart.off('click')
+  chart.on('click', (params) => {
+    const segment = costStructureSegments.value.find(item => item.name === params.name)
+    if (segment) openCostDetail(segment.key)
   })
   charts.cost = chart
 }
@@ -851,20 +1149,28 @@ onUnmounted(() => {
 .detail-page {
   display: flex;
   flex-direction: column;
-  height: calc(100% - 20px);
+  gap: 20px;
+  min-height: calc(100% - 20px);
 }
 
 .detail-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  gap: 16px;
+  padding: 22px 24px;
+  margin-bottom: 0;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 97%, var(--primary-color) 3%) 0%, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 100%);
+  border: 1px solid var(--border-light);
+  border-radius: 22px;
+  box-shadow: var(--shadow-sm);
 }
 
 .detail-header h1 {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: -0.02em;
 }
 
 .header-actions {
@@ -872,61 +1178,84 @@ onUnmounted(() => {
   gap: 12px;
 }
 
-.header-actions :deep(.el-button) {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  border: none;
-  color: white;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
-}
-
-.header-actions :deep(.el-button:hover) {
-  background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-color) 100%);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
-}
-
 .detail-tabs {
   flex: 1;
   overflow: hidden;
+  background: transparent;
+}
+
+.detail-tabs :deep(.el-tabs__header) {
+  margin-bottom: 16px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 97%, var(--primary-color) 3%) 0%, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 100%);
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  padding: 8px 14px 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.detail-tabs :deep(.el-tabs__nav-wrap::after) {
+  display: none;
 }
 
 .detail-tabs :deep(.el-tabs__item) {
-  font-weight: 500;
+  font-weight: 600;
+  height: 42px;
+  color: var(--text-secondary);
 }
 
 .detail-tabs :deep(.el-tabs__item.is-active) {
-  color: var(--primary-color);
+  color: var(--primary-dark);
 }
 
 .detail-tabs :deep(.el-tabs__active-bar) {
   background-color: var(--primary-color);
 }
 
+.detail-tabs :deep(.el-tab-pane) {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.overview-section,
+.cooling-section,
+.green-section,
+.power-section,
+.economic-section,
+.reliability-section,
+.environment-section,
+.experts-section,
+.report-section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 .metric-card {
-  background: linear-gradient(135deg, #FFFFFF 0%, #F0FDF4 100%);
-  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 100%);
+  border-radius: 18px;
   padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(16, 185, 129, 0.08);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  opacity: 0;
-  animation: slideInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+  transition: all var(--transition-normal);
 }
 
 .metric-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.12);
+  box-shadow: var(--shadow-hover);
+  border-color: color-mix(in oklab, var(--primary-color) 18%, var(--border-default));
 }
 
 .metric-label {
   font-size: 13px;
-  color: #6B7280;
+  color: var(--text-secondary);
   margin-bottom: 8px;
   font-weight: 500;
 }
@@ -934,32 +1263,32 @@ onUnmounted(() => {
 .metric-value {
   font-size: 24px;
   font-weight: 700;
-  color: #1F2937;
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .metric-value.highlight {
-  color: var(--primary-color);
+  color: var(--primary-dark);
 }
 
 .metric-unit {
   font-size: 13px;
   font-weight: 500;
-  color: #9CA3AF;
+  color: var(--text-placeholder);
   margin-top: 4px;
 }
 
 .summary-section {
-  background: white;
-  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 20px;
   padding: 24px;
-  margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(16, 185, 129, 0.08);
+  margin-bottom: 0;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .summary-section h3 {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 16px;
@@ -967,7 +1296,7 @@ onUnmounted(() => {
 
 .summary-text {
   font-size: 14px;
-  color: #4B5563;
+  color: var(--text-secondary);
   line-height: 1.8;
   margin-bottom: 16px;
 }
@@ -977,21 +1306,22 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  border-radius: 10px;
+  border-radius: 14px;
   margin-bottom: 12px;
-  transition: all 0.3s ease;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
 }
 
 .budget-status.success {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+  background: var(--success-bg);
   color: var(--success-color);
-  border-left: 3px solid var(--success-color);
+  border-color: color-mix(in oklab, var(--success-color) 22%, transparent);
 }
 
 .budget-status.fail {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+  background: var(--danger-bg);
   color: var(--danger-color);
-  border-left: 3px solid var(--danger-color);
+  border-color: color-mix(in oklab, var(--danger-color) 22%, transparent);
 }
 
 .risk-warning {
@@ -999,10 +1329,10 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
+  background: var(--warning-bg);
   color: var(--warning-color);
-  border-radius: 10px;
-  border-left: 3px solid var(--warning-color);
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--warning-color) 24%, transparent);
 }
 
 .expert-recommendations {
@@ -1023,20 +1353,21 @@ onUnmounted(() => {
 
 .expert-recommendations li {
   font-size: 14px;
-  color: #4B5563;
+  color: var(--text-secondary);
   margin-bottom: 8px;
+  line-height: 1.7;
 }
 
 .info-section {
-  background: white;
-  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 20px;
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(16, 185, 129, 0.08);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .info-section h3 {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 16px;
@@ -1044,7 +1375,7 @@ onUnmounted(() => {
 
 .info-item {
   font-size: 13px;
-  color: #6B7280;
+  color: var(--text-secondary);
   margin-bottom: 6px;
 }
 
@@ -1057,21 +1388,21 @@ onUnmounted(() => {
 .param-cards {
   display: flex;
   gap: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 .param-card {
   flex: 1;
-  background: white;
-  border-radius: 14px;
-  border: 1px solid rgba(16, 185, 129, 0.08);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 18px;
+  border: 1px solid var(--border-light);
 }
 
 .param-card h4 {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .param-grid {
@@ -1082,14 +1413,24 @@ onUnmounted(() => {
 
 .param-item {
   font-size: 14px;
-  color: #4B5563;
+  color: var(--text-secondary);
+  line-height: 1.7;
 }
 
-.table-card, .chart-card {
-  margin-bottom: 20px;
-  background: white;
-  border-radius: 14px;
-  border: 1px solid rgba(16, 185, 129, 0.08);
+.green-section :deep(.el-card),
+.power-section :deep(.el-card),
+.economic-section :deep(.el-card),
+.reliability-section :deep(.el-card),
+.environment-section :deep(.el-card),
+.experts-section :deep(.el-card) {
+  border-radius: 18px;
+}
+
+.table-card, .chart-card, .economic-metrics-card {
+  margin-bottom: 0;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 18px;
+  border: 1px solid var(--border-light);
 }
 
 .chart-container {
@@ -1098,27 +1439,372 @@ onUnmounted(() => {
   min-height: 300px;
 }
 
+.economic-cost-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.86fr);
+  gap: 18px;
+}
+
+.economic-cost-main,
+.economic-cost-summary {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  padding: 20px;
+}
+
+.economic-cost-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.economic-cost-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.economic-cost-header h4 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.economic-cost-header p {
+  margin-top: 6px;
+  max-width: 60ch;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.economic-chart-shell {
+  min-height: 340px;
+}
+
+.economic-cost-chart {
+  width: 100%;
+  height: 340px;
+}
+
+.economic-chart-note {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border: 1px solid var(--border-light);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.economic-cost-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.economic-cost-item {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.economic-cost-item:hover {
+  background: color-mix(in oklab, var(--primary-color) 6%, var(--bg-card));
+  border-color: color-mix(in oklab, var(--primary-color) 18%, var(--border-default));
+  transform: translateY(-1px);
+}
+
+.economic-cost-item:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--primary-color) 72%, white);
+  outline-offset: 2px;
+}
+
+.economic-cost-dot,
+.economic-summary-dot,
+.economic-detail-dot {
+  border-radius: 50%;
+}
+
+.economic-cost-dot {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.6);
+}
+
+.economic-cost-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.economic-cost-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.economic-cost-desc {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.economic-cost-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.economic-cost-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.economic-cost-ratio {
+  font-size: 12px;
+  color: var(--text-placeholder);
+}
+
+.economic-cost-summary {
+  display: flex;
+  flex-direction: column;
+}
+
+.economic-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.economic-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 108px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.economic-kpi-card.strong {
+  grid-column: 1 / -1;
+  justify-content: center;
+  min-height: 124px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 10%, var(--bg-card)) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+}
+
+.economic-kpi-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.economic-kpi-value {
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.economic-kpi-value.success {
+  color: var(--success-color);
+}
+
+.economic-kpi-value.danger {
+  color: var(--danger-color);
+}
+
+.economic-kpi-note {
+  font-size: 12px;
+  color: var(--text-placeholder);
+}
+
+.economic-summary-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 16px;
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+
+.economic-summary-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.economic-summary-note {
+  font-size: 12px;
+  color: var(--text-placeholder);
+}
+
+.economic-summary-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.economic-summary-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.economic-summary-dot {
+  width: 10px;
+  height: 10px;
+}
+
+.economic-summary-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.economic-summary-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.economic-cost-dialog :deep(.el-dialog) {
+  border-radius: 22px;
+}
+
+.economic-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.economic-detail-dot {
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+}
+
+.economic-detail-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.economic-detail-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.economic-detail-subtitle {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.economic-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.economic-detail-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.economic-detail-kpi {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+}
+
+.economic-detail-kpi-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.economic-detail-kpi-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.economic-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.economic-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.economic-detail-row-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.economic-detail-row-value {
+  font-size: 13px;
+  line-height: 1.65;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+}
+
 .architecture-diagram {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 16px;
   padding: 24px;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(6, 182, 212, 0.05) 100%);
-  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 0%, color-mix(in oklab, var(--bg-card) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 18px;
+  border: 1px solid var(--border-light);
 }
 
 .arch-item {
   padding: 12px 24px;
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  color: white;
-  border-radius: 10px;
+  background: linear-gradient(180deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  color: rgba(249, 253, 250, 0.98);
+  border-radius: 14px;
   font-weight: 500;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+  box-shadow: 0 12px 24px color-mix(in oklab, var(--primary-color) 22%, transparent);
 }
 
 .arch-arrow {
-  color: #9CA3AF;
+  color: var(--text-placeholder);
   font-size: 18px;
 }
 
@@ -1130,15 +1816,16 @@ onUnmounted(() => {
 .stat-card {
   flex: 1;
   padding: 16px;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(6, 182, 212, 0.05) 100%);
-  border-radius: 10px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 0%, color-mix(in oklab, var(--bg-card) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
   text-align: center;
   font-size: 14px;
-  color: #4B5563;
+  color: var(--text-secondary);
 }
 
 .report-section {
-  height: calc(100vh - 200px);
+  min-height: calc(100vh - 240px);
   display: flex;
   flex-direction: column;
 }
@@ -1147,27 +1834,40 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  gap: 12px;
+  padding: 18px 20px;
+  margin-bottom: 0;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 97%, var(--primary-color) 3%) 0%, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 100%);
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  box-shadow: var(--shadow-sm);
 }
 
 .report-content {
   flex: 1;
   overflow-y: auto;
+  padding: 22px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 99%, var(--primary-color) 1%) 0%, color-mix(in oklab, var(--bg-panel) 97%, var(--primary-color) 3%) 100%);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  box-shadow: var(--shadow-sm);
 }
 
 .report-title-section {
   text-align: center;
   padding: 24px;
-  border-bottom: 2px solid var(--primary-color);
+  border-bottom: 1px solid color-mix(in oklab, var(--primary-color) 24%, var(--border-default));
   margin-bottom: 24px;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, transparent 100%);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 0%, transparent 100%);
+  border-radius: 18px;
 }
 
 .report-title {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 12px;
+  letter-spacing: -0.02em;
 }
 
 .report-meta {
@@ -1175,18 +1875,20 @@ onUnmounted(() => {
   justify-content: center;
   gap: 30px;
   font-size: 13px;
-  color: #6B7280;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
 }
 
 .report-executive-summary {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(6, 182, 212, 0.05) 100%);
-  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 0%, color-mix(in oklab, var(--bg-card) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 18px;
   padding: 24px;
   margin-bottom: 24px;
+  border: 1px solid var(--border-light);
 }
 
 .report-executive-summary h2 {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 16px;
@@ -1199,16 +1901,17 @@ onUnmounted(() => {
 }
 
 .executive-item {
-  background: white;
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
   padding: 16px;
-  border-radius: 10px;
+  border-radius: 14px;
   text-align: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .executive-label {
   font-size: 13px;
-  color: #6B7280;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
@@ -1219,7 +1922,7 @@ onUnmounted(() => {
 }
 
 .executive-value.highlight {
-  color: var(--primary-color);
+  color: var(--primary-dark);
 }
 
 .report-chapter {
@@ -1232,7 +1935,7 @@ onUnmounted(() => {
   color: var(--text-primary);
   margin-bottom: 16px;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+  border-bottom: 1px solid color-mix(in oklab, var(--primary-color) 20%, var(--border-default));
 }
 
 .report-section-item {
@@ -1241,7 +1944,7 @@ onUnmounted(() => {
 
 .report-section-item p {
   font-size: 14px;
-  color: #4B5563;
+  color: var(--text-secondary);
   line-height: 1.8;
 }
 
@@ -1252,10 +1955,10 @@ onUnmounted(() => {
 }
 
 .expert-opinion-card {
-  background: linear-gradient(135deg, #F9FAFB 0%, #F0FDF4 100%);
-  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 18px;
   padding: 20px;
-  border: 1px solid rgba(16, 185, 129, 0.08);
+  border: 1px solid var(--border-light);
 }
 
 .expert-header {
@@ -1288,22 +1991,23 @@ onUnmounted(() => {
 
 .expert-type {
   font-size: 12px;
-  color: #6B7280;
+  color: var(--text-secondary);
 }
 
 .expert-summary {
   font-size: 14px;
-  color: #4B5563;
+  color: var(--text-secondary);
   margin-bottom: 12px;
   line-height: 1.6;
 }
 
 .expert-metrics {
   display: flex;
+  flex-wrap: wrap;
   gap: 20px;
   margin-bottom: 12px;
   font-size: 13px;
-  color: #6B7280;
+  color: var(--text-secondary);
 }
 
 .debate-history {
@@ -1313,16 +2017,16 @@ onUnmounted(() => {
 }
 
 .debate-round {
-  background: linear-gradient(135deg, #F9FAFB 0%, #F0FDF4 100%);
-  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 18px;
   padding: 16px;
-  border: 1px solid rgba(16, 185, 129, 0.08);
+  border: 1px solid var(--border-light);
 }
 
 .round-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--primary-color);
+  color: var(--primary-dark);
   margin-bottom: 12px;
 }
 
@@ -1337,35 +2041,37 @@ onUnmounted(() => {
 }
 
 .debate-message .content {
-  color: #4B5563;
+  color: var(--text-secondary);
 }
 
 .arbitration-result {
   padding: 20px;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(6, 182, 212, 0.05) 100%);
-  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 10%, var(--bg-card)) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 18px;
+  border: 1px solid var(--border-light);
 }
 
 .consensus-score {
   font-size: 20px;
   font-weight: 600;
-  color: var(--primary-color);
+  color: var(--primary-dark);
   margin-bottom: 12px;
 }
 
 .arbitration-summary {
   font-size: 14px;
-  color: #4B5563;
+  color: var(--text-secondary);
   line-height: 1.6;
 }
 
 .markdown-rendered {
   font-size: 14px;
   line-height: 1.8;
-  color: #4B5563;
-  background: #F9FAFB;
+  color: var(--text-secondary);
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
   padding: 20px;
-  border-radius: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
 }
 
 .markdown-rendered :deep(h1),
@@ -1402,7 +2108,7 @@ onUnmounted(() => {
 
 .report-section-item li {
   font-size: 14px;
-  color: #4B5563;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
@@ -1411,21 +2117,15 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #6B7280;
-}
-
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  color: var(--text-secondary);
 }
 
 @media (max-width: 992px) {
+  .detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1436,6 +2136,10 @@ onUnmounted(() => {
   
   .param-cards {
     flex-direction: column;
+  }
+
+  .economic-cost-panel {
+    grid-template-columns: 1fr;
   }
   
   .availability-stats, .reliability-stats, .carbon-stats {
@@ -1448,12 +2152,61 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
+  .detail-header,
+  .report-header,
+  .report-content,
+  .summary-section,
+  .info-section {
+    padding: 16px;
+  }
+
   .metrics-grid {
     grid-template-columns: 1fr;
   }
   
   .executive-grid {
     grid-template-columns: 1fr;
+  }
+
+  .economic-cost-header,
+  .economic-summary-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .economic-kpi-grid,
+  .economic-detail-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .economic-kpi-card.strong {
+    grid-column: auto;
+    min-height: 108px;
+  }
+
+  .economic-cost-chart {
+    height: 280px;
+  }
+
+  .economic-cost-item,
+  .economic-summary-row {
+    grid-template-columns: 12px 1fr;
+  }
+
+  .economic-cost-meta,
+  .economic-detail-row-value {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .report-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .detail-tabs :deep(.el-tabs__header) {
+    padding-left: 12px;
+    padding-right: 12px;
   }
 }
 </style>

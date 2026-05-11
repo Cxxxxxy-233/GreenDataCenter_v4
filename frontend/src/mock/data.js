@@ -1,4 +1,22 @@
 // 模拟数据文件
+const mockInvestmentBreakdown = {
+  powerSupplyCapexLakh: 4200,
+  greenPowerCapexLakh: 8600,
+  coolingCapexLakh: 2200
+}
+
+const totalCapexLakh =
+  mockInvestmentBreakdown.powerSupplyCapexLakh +
+  mockInvestmentBreakdown.greenPowerCapexLakh +
+  mockInvestmentBreakdown.coolingCapexLakh
+
+const budgetConstraintLakh = 15000
+const budgetDeltaLakh = budgetConstraintLakh - totalCapexLakh
+const rackCount = 1024
+const costPerRack = Number((totalCapexLakh / rackCount).toFixed(2))
+const roi = 0.102
+const paybackPeriod = 9.8
+
 export const mockSolutionData = {
   id: 'mock-solution-001',
   created_at: new Date().toISOString(),
@@ -11,15 +29,15 @@ export const mockSolutionData = {
     environmental: 0.89
   },
   key_metrics: {
-    total_cost: 12800,
+    total_cost: totalCapexLakh,
     pue: 1.23,
     green_power_ratio: 0.72,
     tier_level: 3,
     expected_availability: 0.9998,
     annual_carbon_emission: 28600,
-    cost_per_rack: 12.5,
-    roi: 0.12,
-    payback_period: 8.5
+    cost_per_rack: costPerRack,
+    roi,
+    payback_period: paybackPeriod
   },
   final_report: `# 乌兰察布数据中心绿电消纳方案报告
 
@@ -31,7 +49,7 @@ export const mockSolutionData = {
 - **推荐制冷技术**: 传统房间级CRAC(上送风)+热通道封闭
 - **预测PUE**: 1.23
 - **绿电消纳率**: 72%
-- **总投资**: 12800万元
+- **总投资**: ${totalCapexLakh}万元
 
 ## 综合评分
 - **经济性**: 82%
@@ -43,7 +61,7 @@ export const mockSolutionData = {
 
 | 指标 | 数值 |
 |------|------|
-| 总成本(万元) | 12800.00 |
+| 总成本(万元) | ${totalCapexLakh.toFixed(2)} |
 | PUE | 1.230 |
 | 绿电比例 | 72.0% |
 | Tier 等级 | 3 |
@@ -53,13 +71,13 @@ export const mockSolutionData = {
 ## 经济性方案
 
 ### 投资结构分析
-本项目总投资为12800万元，其中供电系统投资约4200万元，绿电系统投资约8600万元。
+本项目总投资为${totalCapexLakh}万元，其中供电系统投资约${mockInvestmentBreakdown.powerSupplyCapexLakh}万元，绿电系统投资约${mockInvestmentBreakdown.greenPowerCapexLakh}万元，制冷系统投资约${mockInvestmentBreakdown.coolingCapexLakh}万元。
 
 ### 经济指标
-- **总投资**: 12800万元
-- **单机柜成本**: 12.5万元
-- **投资回报率(ROI)**: 12.0%
-- **投资回收期**: 8.5年
+- **总投资**: ${totalCapexLakh}万元
+- **单机柜成本**: ${costPerRack}万元
+- **投资回报率(ROI)**: ${(roi * 100).toFixed(1)}%
+- **投资回收期**: ${paybackPeriod}年
 
 ### 建议
 1. 考虑分阶段建设，先完成第一期20MW，验证效果后再扩大规模
@@ -198,13 +216,13 @@ export const mockSolutionData = {
     cost_calculation: {
       full_output: {
         economic_analysis_result: {
-          total_capex_lakh: 12800,
+          total_capex_lakh: totalCapexLakh,
           is_over_budget: false,
-          budget_constraint_lakh: 15000,
-          budget_delta_lakh: 2200,
+          budget_constraint_lakh: budgetConstraintLakh,
+          budget_delta_lakh: budgetDeltaLakh,
           capex_breakdown: {
-            power_supply_system_lakh: 4200,
-            green_power_system_lakh: 8600,
+            power_supply_system_lakh: mockInvestmentBreakdown.powerSupplyCapexLakh,
+            green_power_system_lakh: mockInvestmentBreakdown.greenPowerCapexLakh,
             details: {
               wind_capex_lakh: 3500,
               pv_capex_lakh: 3150,
@@ -218,13 +236,13 @@ export const mockSolutionData = {
       full_output: {
         expert_type: 'economic',
         expert_name: 'Economic Analysis Expert-Zhang',
-        summary: '方案经济性良好，总投资12800万元，在预算范围内。投资回报率12%，投资回收期8.5年，具有较好的经济效益。',
+        summary: `方案经济性整体可接受，总投资${totalCapexLakh}万元，已与预算上限持平。投资回报率约${(roi * 100).toFixed(1)}%，投资回收期约${paybackPeriod}年，需在建设节奏与运维优化上继续控制成本。`,
         scores: { cost_efficiency: 0.85, roi: 0.78 },
         metrics: {
-          total_cost: 12800,
-          cost_per_rack: 12.5,
-          roi: 0.12,
-          payback_period: 8.5
+          total_cost: totalCapexLakh,
+          cost_per_rack: costPerRack,
+          roi,
+          payback_period: paybackPeriod
         },
         recommendations: [
           '建议分阶段建设，降低初期投资压力',
@@ -322,7 +340,7 @@ export const mockSolutionData = {
     ],
     arbitrator: {
       full_output: {
-        summary: '综合三位专家的意见，当前方案在经济性、可靠性和环保性方面都表现良好，绿电消纳率72%，PUE1.23，总投资12800万元，在预算范围内，建议采用此方案。',
+        summary: `综合三位专家的意见，当前方案在经济性、可靠性和环保性方面保持均衡，绿电消纳率72%，PUE1.23，总投资${totalCapexLakh}万元，当前已与预算上限持平，建议在控制实施节奏的前提下采用此方案。`,
         consensus_score: 0.85,
         scores: {
           overall: 0.85,
@@ -383,12 +401,12 @@ export const mockSolutionData = {
     }
   ],
   economic_section: {
-    description: '方案经济性良好，总投资12800万元，在预算范围内。投资回报率12%，投资回收期8.5年，具有较好的经济效益。',
+    description: `方案经济性整体可接受，总投资${totalCapexLakh}万元，已与预算上限持平。投资回报率约${(roi * 100).toFixed(1)}%，投资回收期约${paybackPeriod}年，需要通过分阶段建设和运维优化进一步提升收益表现。`,
     content: {
-      total_cost: 12800,
-      cost_per_rack: 12.5,
-      roi: 0.12,
-      payback_period: 8.5
+      total_cost: totalCapexLakh,
+      cost_per_rack: costPerRack,
+      roi,
+      payback_period: paybackPeriod
     },
     recommendations: [
       '建议分阶段建设，降低初期投资压力',
@@ -447,7 +465,7 @@ export const mockSolutionsList = [
     created_at: new Date(Date.now() - 86400000).toISOString(),
     location: '乌兰察布',
     green_ratio: 0.72,
-    total_cost: 12800,
+    total_cost: totalCapexLakh,
     pue: 1.23
   },
   {
