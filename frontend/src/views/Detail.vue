@@ -97,6 +97,81 @@
             </el-card>
           </div>
 
+          <section class="system-trace-shell">
+            <div class="system-trace-header">
+              <div>
+                <h4>方案生成过程与依据</h4>
+                <p>对应后端 `cooling-scheme-generator`，展示输入条件、寻优步骤、权重设置与候选策略排序。</p>
+              </div>
+              <div class="system-trace-badge">Tool 02</div>
+            </div>
+
+            <div class="system-trace-topology">
+              <div class="trace-block">
+                <div class="trace-block-title">输入条件</div>
+                <div class="trace-chip-list">
+                  <span v-for="input in coolingTrace.inputs" :key="input" class="trace-chip">{{ input }}</span>
+                </div>
+              </div>
+              <div class="trace-block">
+                <div class="trace-block-title">关键参数</div>
+                <div class="trace-fact-grid">
+                  <div v-for="fact in coolingTrace.facts" :key="fact.label" class="trace-fact-item">
+                    <span class="trace-fact-label">{{ fact.label }}</span>
+                    <span class="trace-fact-value">{{ fact.value }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="trace-block">
+              <div class="trace-block-title">生成步骤</div>
+              <div class="trace-step-list">
+                <div v-for="(step, index) in coolingTrace.steps" :key="step.title" class="trace-step-item">
+                  <span class="trace-step-index">{{ index + 1 }}</span>
+                  <div class="trace-step-copy">
+                    <div class="trace-step-title">{{ step.title }}</div>
+                    <div class="trace-step-desc">{{ step.description }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="trace-block">
+              <div class="trace-block-title">多目标寻优</div>
+              <div class="trace-weight-grid">
+                <div v-for="weight in coolingTrace.weights" :key="weight.label" class="trace-weight-item">
+                  <span class="trace-weight-label">{{ weight.label }}</span>
+                  <span class="trace-weight-value">{{ weight.value }}</span>
+                </div>
+              </div>
+              <div class="trace-ranking-list">
+                <div
+                  v-for="candidate in coolingTrace.ranking"
+                  :key="candidate.name"
+                  class="trace-ranking-item"
+                  :class="{ 'is-winner': candidate.isWinner }"
+                >
+                  <div class="trace-ranking-head">
+                    <span class="trace-ranking-order">#{{ candidate.rank }}</span>
+                    <span class="trace-ranking-name">{{ candidate.name }}</span>
+                    <span class="trace-ranking-score">综合得分 {{ candidate.score }}</span>
+                  </div>
+                  <div class="trace-ranking-tags">
+                    <span v-for="tag in candidate.tags" :key="tag" class="trace-ranking-tag">{{ tag }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="trace-block">
+              <div class="trace-block-title">判断依据</div>
+              <ul class="trace-evidence-list">
+                <li v-for="evidence in coolingTrace.evidences" :key="evidence">{{ evidence }}</li>
+              </ul>
+            </div>
+          </section>
+
           <el-card class="table-card">
             <h4>寻优结果</h4>
             <el-table :data="coolingTableData" border>
@@ -114,6 +189,54 @@
 
       <el-tab-pane label="绿电系统详情" name="green">
         <div class="green-section">
+          <section class="system-trace-shell">
+            <div class="system-trace-header">
+              <div>
+                <h4>方案生成过程与依据</h4>
+                <p>对应后端 `green_power_allocation`，展示资源曲线生成、负荷输入、DE 参数和容量优化链路。</p>
+              </div>
+              <div class="system-trace-badge">Tool 01</div>
+            </div>
+
+            <div class="system-trace-topology">
+              <div class="trace-block">
+                <div class="trace-block-title">输入条件</div>
+                <div class="trace-chip-list">
+                  <span v-for="input in greenTrace.inputs" :key="input" class="trace-chip">{{ input }}</span>
+                </div>
+              </div>
+              <div class="trace-block">
+                <div class="trace-block-title">优化设定</div>
+                <div class="trace-fact-grid">
+                  <div v-for="fact in greenTrace.facts" :key="fact.label" class="trace-fact-item">
+                    <span class="trace-fact-label">{{ fact.label }}</span>
+                    <span class="trace-fact-value">{{ fact.value }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="trace-block">
+              <div class="trace-block-title">生成步骤</div>
+              <div class="trace-step-list">
+                <div v-for="(step, index) in greenTrace.steps" :key="step.title" class="trace-step-item">
+                  <span class="trace-step-index">{{ index + 1 }}</span>
+                  <div class="trace-step-copy">
+                    <div class="trace-step-title">{{ step.title }}</div>
+                    <div class="trace-step-desc">{{ step.description }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="trace-block">
+              <div class="trace-block-title">判断依据</div>
+              <ul class="trace-evidence-list">
+                <li v-for="evidence in greenTrace.evidences" :key="evidence">{{ evidence }}</li>
+              </ul>
+            </div>
+          </section>
+
           <el-card>
             <h4>风光储容量配置表</h4>
             <el-table :data="greenConfig" border>
@@ -139,6 +262,54 @@
 
       <el-tab-pane label="供电系统详情" name="power">
         <div class="power-section">
+          <section class="system-trace-shell">
+            <div class="system-trace-header">
+              <div>
+                <h4>方案生成过程与依据</h4>
+                <p>对应后端 `power_supply_config`，展示标准模板命中、负荷折算、电压阈值判断与配置理由。</p>
+              </div>
+              <div class="system-trace-badge">Tool 03</div>
+            </div>
+
+            <div class="system-trace-topology">
+              <div class="trace-block">
+                <div class="trace-block-title">输入条件</div>
+                <div class="trace-chip-list">
+                  <span v-for="input in powerTrace.inputs" :key="input" class="trace-chip">{{ input }}</span>
+                </div>
+              </div>
+              <div class="trace-block">
+                <div class="trace-block-title">规则命中</div>
+                <div class="trace-fact-grid">
+                  <div v-for="fact in powerTrace.facts" :key="fact.label" class="trace-fact-item">
+                    <span class="trace-fact-label">{{ fact.label }}</span>
+                    <span class="trace-fact-value">{{ fact.value }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="trace-block">
+              <div class="trace-block-title">生成步骤</div>
+              <div class="trace-step-list">
+                <div v-for="(step, index) in powerTrace.steps" :key="step.title" class="trace-step-item">
+                  <span class="trace-step-index">{{ index + 1 }}</span>
+                  <div class="trace-step-copy">
+                    <div class="trace-step-title">{{ step.title }}</div>
+                    <div class="trace-step-desc">{{ step.description }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="trace-block">
+              <div class="trace-block-title">判断依据</div>
+              <ul class="trace-evidence-list">
+                <li v-for="evidence in powerTrace.evidences" :key="evidence">{{ evidence }}</li>
+              </ul>
+            </div>
+          </section>
+
           <el-card>
             <h4>主备供电架构</h4>
             <div class="architecture-diagram">
@@ -607,6 +778,7 @@ const environmentalSection = computed(() => solutionData.value.environmental_sec
 const economicContent = computed(() => economicSection.value.content || {})
 const powerContent = computed(() => powerSection.value.content || {})
 const environmentalContent = computed(() => environmentalSection.value.content || {})
+const requirement = computed(() => intermediate.value.requirement_parser?.requirement || {})
 
 const coolingResult = computed(() => {
   const draftCooling = draftOutput.value.cooling_result || {}
@@ -703,6 +875,130 @@ const keyMetricsRows = computed(() => {
 const economicRows = computed(() => formatObjectRows(economicContent.value))
 const powerRows = computed(() => formatObjectRows(powerContent.value))
 const environmentalRows = computed(() => formatObjectRows(environmentalContent.value))
+
+const coolingOptimization = computed(() => coolingResult.value.optimization_summary || {})
+const coolingWeights = computed(() => coolingOptimization.value.objective_weights || {})
+const coolingRanking = computed(() => Array.isArray(coolingResult.value.all_strategy_scores) ? coolingResult.value.all_strategy_scores : [])
+const greenInputs = computed(() => greenPowerResult.value.inputs || {})
+const greenProfiles = computed(() => ({
+  pv: greenPowerResult.value.pv_profile || {},
+  wind: greenPowerResult.value.wind_profile || {}
+}))
+const powerFactor = computed(() => toNumber(powerRaw.value.power_factor, 0.9))
+const totalLoadMw = computed(() => toNumber(powerRaw.value.total_load_mw, toNumber(requirement.value.planned_load_kw, 0) / 1000))
+const totalLoadMva = computed(() => toNumber(powerRaw.value.total_load_mva, totalLoadMw.value / powerFactor.value))
+
+const coolingTrace = computed(() => ({
+  inputs: [
+    `项目位置：${requirement.value.location || '-'}`,
+    `IT 负荷：${formatNumber(toNumber(requirement.value.planned_load_kw, 0), 0)} kW`,
+    `功率密度：${formatNumber(requirement.value.computing_power_density, 2)} kW/机柜`,
+    `PUE 目标：${formatNumber(requirement.value.pue_target, 2)}`,
+    `优先级：${coolingOptimization.value.priority_mode || requirement.value.priority || 'economic'}`,
+    '优化目标：PUE / WUE / TCO / CUE / WHR'
+  ],
+  facts: [
+    { label: '可行候选数', value: `${coolingOptimization.value.feasible_strategy_count || coolingRanking.value.length || '-'} 个` },
+    { label: '最终胜出方案', value: coolingOptimization.value.selected_strategy || coolingResult.value.cooling_technology || '-' },
+    { label: '寻优模式', value: coolingOptimization.value.optimization_mode || 'weighted_multi_objective' },
+    { label: '输出内容', value: '技术路线 + KPI + 经济指标' }
+  ],
+  steps: [
+    { title: '归并需求与显式参数', description: '后端先统一项目位置、负荷、功率密度、PUE/WUE 目标与优先级，形成可计算输入。' },
+    { title: '筛掉不适合当前工况的方案', description: '结合环境条件与机柜密度约束，对候选制冷技术先做可行性筛选，只保留可比较路线。' },
+    { title: '执行多目标加权寻优', description: '对每个可行候选同时评估 PUE、WUE、TCO、CUE 与余热回收能力，并按优先级动态加权。' },
+    { title: '输出推荐方案与指标', description: '综合得分最优的路线会被选为推荐技术，并同步返回 KPI、经济指标与寻优轨迹。' }
+  ],
+  weights: [
+    { label: 'PUE 权重', value: formatPercent(coolingWeights.value.PUE, 0) },
+    { label: 'WUE 权重', value: formatPercent(coolingWeights.value.WUE, 0) },
+    { label: 'TCO 权重', value: formatPercent(coolingWeights.value.TCO, 0) },
+    { label: 'CUE 权重', value: formatPercent(coolingWeights.value.CUE, 0) },
+    { label: 'WHR 权重', value: formatPercent(coolingWeights.value.WHR, 0) }
+  ],
+  ranking: coolingRanking.value.slice(0, 4).map(item => ({
+    rank: item.ranking ?? '-',
+    name: item.strategy || '--',
+    score: formatNumber(item.total_score, 2),
+    isWinner: (item.strategy || '') === (coolingOptimization.value.selected_strategy || coolingResult.value.cooling_technology),
+    tags: [
+      `PUE ${formatNumber(item.pue, 2)}`,
+      `WUE ${formatNumber(item.wue, 2)}`,
+      `TCO ${formatNumber(item.tco, 2)}`,
+      `WHR ${formatNumber(item.whr, 2)}`
+    ]
+  })),
+  evidences: [
+    '制冷方案不是简单规则匹配，后端会对可行候选做多目标加权评分后再排序。',
+    '功率密度、目标 PUE/WUE 和环境条件会共同影响候选方案的可行性边界。',
+    '最终结果同时输出技术路线、PUE、WUE、制冷功耗和经济指标，因此结论具备可追溯性。'
+  ]
+}))
+
+const greenTrace = computed(() => ({
+  inputs: [
+    `项目位置：${requirement.value.location || '-'}`,
+    `负荷规模：${formatNumber(totalLoadMw.value, 2)} MW`,
+    `绿电目标：${formatPercent(greenInputs.value.green_power_ratio ?? requirement.value.green_power_ratio, 0)}`,
+    `仿真时长：${greenInputs.value.sim_hours || requirement.value.sim_hours || 168} h`,
+    `气象年份：${greenInputs.value.year || requirement.value.year || 2025}`,
+    '容量边界：风/光 1-500MW，储能 20-500MWh'
+  ],
+  facts: [
+    { label: '仿真模式', value: greenProfiles.value.pv.mode || greenProfiles.value.wind.mode || '--' },
+    { label: '资源曲线', value: '先生成 PV / Wind 单位出力曲线' },
+    { label: 'DE 参数', value: `maxiter ${greenInputs.value.maxiter || 60} · popsize ${greenInputs.value.popsize || 10} · seed ${greenInputs.value.seed || 42}` },
+    { label: '后端产物', value: greenFiles.value.balance_plot ? '平衡图 + 曲线 CSV' : '容量优化结果' }
+  ],
+  steps: [
+    { title: '根据地点生成风光资源曲线', description: '后端会先分别调用光伏与风电子工具，按地点、年份和设备参数生成单位出力曲线。' },
+    { title: '载入负荷曲线与容量边界', description: '将总负荷、仿真时长、负荷 CSV、风光储容量范围和目标绿电比例一起整理为优化输入。' },
+    { title: '执行差分进化容量优化', description: '在风电、光伏、储能三维搜索空间内迭代寻优，目标是在满足约束下最小化总投资。' },
+    { title: '输出装机结果与平衡图', description: '得到最优组合后，返回装机容量、目标绿电占比、成本拆分以及功率平衡图文件。' }
+  ],
+  evidences: [
+    '绿电方案不是直接估算容量，而是先生成当地风光出力曲线，再进入容量优化。',
+    `当前负荷为 ${formatNumber(totalLoadMw.value, 2)} MW，绿电目标为 ${formatPercent(greenInputs.value.green_power_ratio ?? requirement.value.green_power_ratio, 0)}。`,
+    '差分进化参数、搜索边界和仿真时长都会影响容量优化的收敛路径和最终结果。'
+  ]
+}))
+
+const powerTrace = computed(() => {
+  const voltageCriteria = totalLoadMva.value >= 100
+    ? '命中 220kV 阈值（>=100MVA）'
+    : totalLoadMva.value >= 40
+      ? '命中 110kV 阈值（>=40MVA）'
+      : totalLoadMva.value >= 30
+        ? '命中 66kV 阈值（>=30MVA）'
+        : '命中 35kV 阈值（<30MVA）'
+
+  return {
+    inputs: [
+      `机房等级：${powerRaw.value.machine_room_grade || '-'}`,
+      `总负荷：${formatNumber(totalLoadMw.value, 2)} MW`,
+      `PUE 目标：${formatNumber(requirement.value.pue_target, 2)}`,
+      `功率因数：${formatNumber(powerFactor.value, 2)}`,
+      '依据标准：GB 50174—2017 / YD/T 5235—2019'
+    ],
+    facts: [
+      { label: '等级模板', value: `${powerRaw.value.machine_room_grade || '-'} 级标准化模板` },
+      { label: '负荷折算', value: `${formatNumber(totalLoadMw.value, 2)} MW ÷ ${formatNumber(powerFactor.value, 2)} = ${formatNumber(totalLoadMva.value, 2)} MVA` },
+      { label: '电压阈值', value: voltageCriteria },
+      { label: '详细理由', value: powerPlan.value.reasons ? '已生成结构化 reasons' : '使用默认解释' }
+    ],
+    steps: [
+      { title: '按机房等级选供电模板', description: '后端先从 A+/A/B/C 标准方案库中选出对应等级模板，锁定外部电源、冗余和母线基线。' },
+      { title: '将总负荷从 MW 折算为 MVA', description: '工具按功率因数将总负荷换算为视在功率，这一步直接影响外部电压档位选择。' },
+      { title: '按阈值匹配外部电压等级', description: '系统依次检查 220kV、110kV、66kV、35kV 的容量阈值，命中的首个档位即成为外部接入方案。' },
+      { title: '拼接次级配电与详细理由', description: '在确定模板和电压档位后，生成次级配电、配变组织方式、柴油机策略和完整 reasons 文本。' }
+    ],
+    evidences: [
+      '供电方案不是自由生成文案，而是标准模板、阈值规则和负荷换算共同决定的结果。',
+      `当前负荷折算后约为 ${formatNumber(totalLoadMva.value, 2)} MVA，因此当前命中规则为“${voltageCriteria}”。`,
+      '最终输出包含 reasons 与 raw_json，说明每个配置项都能追溯到明确的标准依据。'
+    ]
+  }
+})
 
 const economicOpinion = computed(() => intermediate.value.economic_analysis?.full_output || {})
 const reliabilityOpinion = computed(() => intermediate.value.power_reliability_analysis?.full_output || {})
@@ -1494,6 +1790,275 @@ onUnmounted(() => {
   line-height: 1.7;
 }
 
+.system-trace-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border-light);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 95%, var(--primary-color) 5%) 100%);
+}
+
+.system-trace-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in oklab, var(--border-light) 88%, var(--primary-color) 12%);
+}
+
+.system-trace-header h4 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.system-trace-header p {
+  max-width: 58ch;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.system-trace-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary-color) 10%, var(--bg-card));
+  color: var(--primary-dark);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.system-trace-topology {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trace-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in oklab, var(--border-light) 90%, var(--primary-color) 10%);
+  background: color-mix(in oklab, var(--bg-card) 99%, var(--primary-color) 1%);
+}
+
+.trace-block-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.trace-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: flex-start;
+}
+
+.trace-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.trace-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.trace-fact-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+}
+
+.trace-fact-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.trace-fact-value {
+  font-size: 12px;
+  line-height: 1.55;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.trace-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trace-step-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.trace-step-index {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--primary-color) 12%, var(--bg-card));
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.trace-step-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 1px;
+}
+
+.trace-step-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.trace-step-desc {
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.trace-weight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+}
+
+.trace-weight-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 62px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+}
+
+.trace-weight-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.trace-weight-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.trace-ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trace-ranking-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.trace-ranking-item.is-winner {
+  border-color: color-mix(in oklab, var(--primary-color) 24%, var(--border-default));
+  background: color-mix(in oklab, var(--primary-color) 8%, var(--bg-card));
+}
+
+.trace-ranking-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: baseline;
+}
+
+.trace-ranking-order {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.trace-ranking-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.trace-ranking-score {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.trace-ranking-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.trace-ranking-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.trace-evidence-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trace-evidence-list li {
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
 .green-section :deep(.el-card),
 .power-section :deep(.el-card),
 .economic-section :deep(.el-card),
@@ -2272,6 +2837,10 @@ onUnmounted(() => {
     flex-direction: column;
   }
 
+  .system-trace-topology {
+    grid-template-columns: 1fr;
+  }
+
   .economic-cost-panel {
     grid-template-columns: 1fr;
   }
@@ -2299,6 +2868,24 @@ onUnmounted(() => {
   }
   
   .executive-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .system-trace-shell {
+    padding: 16px;
+  }
+
+  .system-trace-header,
+  .economic-cost-header,
+  .economic-summary-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .trace-fact-grid,
+  .trace-weight-grid,
+  .economic-kpi-grid,
+  .economic-detail-kpis {
     grid-template-columns: 1fr;
   }
 
