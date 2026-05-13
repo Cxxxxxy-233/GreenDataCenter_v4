@@ -5,16 +5,59 @@ from pathlib import Path
 from typing import Any, Dict, Literal, Optional, Tuple
 
 import pandas as pd
-import pvlib
 import requests
 from geopy.geocoders import Nominatim
-from pvlib.location import Location
-from pvlib.pvsystem import PVSystem
-from pvlib.temperature import TEMPERATURE_MODEL_PARAMETERS
+
+try:
+    import pvlib
+    from pvlib.location import Location
+    from pvlib.pvsystem import PVSystem
+    from pvlib.temperature import TEMPERATURE_MODEL_PARAMETERS
+    PVLIB_AVAILABLE = True
+except Exception:
+    pvlib = None
+    Location = None
+    PVSystem = None
+    TEMPERATURE_MODEL_PARAMETERS = None
+    PVLIB_AVAILABLE = False
 
 TOOLS_DIR = Path(__file__).resolve().parent
 CSV_DIR = TOOLS_DIR / "csv"
 OUTPUT_DIR = TOOLS_DIR.parent / "output"
+
+
+def _build_fallback_weather_data(
+    lat: float,
+    start_date: str,
+    end_date: str,
+    timezone: str,
+) -> pd.DataFrame:
+    """Build a deterministic offline weather profile when online weather is unavailable."""
+    start_ts = pd.Timestamp(start_date)
+    end_ts = pd.Timestamp(end_date) + pd.Timedelta(hours=23)
+    time_index = pd.date_range(start=start_ts, end=end_ts, freq="h", tz=timezone)
+
+    ghi_values = []
+    temp_values = []
+    lat_factor = max(0.55, min(1.05, 1.0 - abs(lat - 30.0) / 120.0))
+
+    for ts in time_index:
+        day_of_year = ts.timetuple().tm_yday
+        hour = ts.hour
+        seasonal = 0.72 + 0.28 * math.sin((2 * math.pi * (day_of_year - 80)) / 365.0)
+        daylight = max(0.0, math.sin(math.pi * (hour - 6) / 12.0)) if 6 <= hour <= 18 else 0.0
+        ghi = max(0.0, 850.0 * seasonal * daylight * lat_factor)
+        temp = 12.0 + 14.0 * math.sin((2 * math.pi * (day_of_year - 110)) / 365.0) + 5.0 * math.sin((2 * math.pi * (hour - 8)) / 24.0)
+        ghi_values.append(round(ghi, 3))
+        temp_values.append(round(temp, 3))
+
+    return pd.DataFrame(
+        {
+            "ghi": ghi_values,
+            "temp_air": temp_values,
+        },
+        index=time_index,
+    )
 
 
 # 预定义的城市地理位置缓存（避免网络调用）
@@ -106,6 +149,30 @@ def _fetch_weather_data(lat: float, lon: float, start_date: str, end_date: str) 
     return weather_df
 
 
+def _load_weather_data_with_fallback(
+    lat: float,
+    lon: float,
+    start_date: str,
+    end_date: str,
+    timezone: str,
+) -> Tuple[pd.DataFrame, str]:
+    try:
+        return _fetch_weather_data(lat, lon, start_date, end_date), "open-meteo"
+    except Exception as exc:
+        sys.stdout.write(f"[pv_sim] Weather fetch failed, using offline fallback: {exc}\n")
+        sys.stdout.flush()
+        return _build_fallback_weather_data(lat, start_date, end_date, timezone), "offline-fallback"
+
+
+def _build_fallback_pv_output(weather_df: pd.DataFrame, capacity_kw: float) -> pd.Series:
+    """Fallback PV output based on irradiance and temperature without PVLib."""
+    ghi = pd.to_numeric(weather_df.get("ghi"), errors="coerce").fillna(0.0)
+    temp_air = pd.to_numeric(weather_df.get("temp_air"), errors="coerce").fillna(20.0)
+    normalized_irradiance = (ghi / 1000.0).clip(lower=0.0, upper=1.0)
+    temp_derate = (1.0 - 0.004 * (temp_air - 25.0)).clip(lower=0.75, upper=1.05)
+    return (capacity_kw * 0.92 * normalized_irradiance * temp_derate).clip(lower=0.0).fillna(0.0)
+
+
 def _resolve_time_range(
     date: Optional[str],
     mode: Literal["24h", "8760h"],
@@ -141,13 +208,15 @@ def generate_pv_profile(
     sys.stdout.write(f"[pv_sim] Resolving location for {city}\n")
     sys.stdout.flush()
     loc_info = _get_location_info(city)
-    location = Location(
-        latitude=loc_info["lat"],
-        longitude=loc_info["lon"],
-        tz=loc_info["timezone"],
-        altitude=loc_info["altitude"],
-        name=city,
-    )
+    location = None
+    if PVLIB_AVAILABLE and Location is not None:
+        location = Location(
+            latitude=loc_info["lat"],
+            longitude=loc_info["lon"],
+            tz=loc_info["timezone"],
+            altitude=loc_info["altitude"],
+            name=city,
+        )
 
     if tilt is None:
         tilt = loc_info["lat"]
@@ -155,68 +224,72 @@ def generate_pv_profile(
     sim_start, sim_end = _resolve_time_range(date=date, mode=mode, year=year)
     sys.stdout.write(f"[pv_sim] Fetching weather data {sim_start} -> {sim_end}\n")
     sys.stdout.flush()
-    weather_df = _fetch_weather_data(loc_info["lat"], loc_info["lon"], sim_start, sim_end)
+    weather_df, weather_source = _load_weather_data_with_fallback(
+        loc_info["lat"],
+        loc_info["lon"],
+        sim_start,
+        sim_end,
+        loc_info["timezone"],
+    )
 
     if weather_df.index.tz is None:
-        weather_df = weather_df.tz_localize(location.tz)
+        weather_df = weather_df.tz_localize(loc_info["timezone"])
     else:
-        weather_df = weather_df.tz_convert(location.tz)
+        weather_df = weather_df.tz_convert(loc_info["timezone"])
 
     if mode == "8760h" and len(weather_df) > 8760:
         weather_df = weather_df.iloc[:8760]
     if mode == "8760h" and len(weather_df) < 8760:
         raise ValueError(f"8760h mode requires at least 8760 points, got {len(weather_df)}")
 
-    sys.stdout.write("[pv_sim] Running PVLib simulation...\n")
-    sys.stdout.flush()
-    system = PVSystem(
-        surface_tilt=tilt,
-        surface_azimuth=azimuth,
-        module_parameters={"pdc0": capacity_kw * 1000.0, "gamma_pdc": -0.004},
-        inverter_parameters={"pdc0": capacity_kw * 1000.0, "eta_inv_nom": 0.96},
-        temperature_model_parameters=TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_polymer"],
-        modules_per_string=1,
-        strings_per_inverter=1,
-    )
+    ac_power = None
+    if PVLIB_AVAILABLE and location is not None and PVSystem is not None and TEMPERATURE_MODEL_PARAMETERS is not None:
+        sys.stdout.write("[pv_sim] Running PVLib simulation...\n")
+        sys.stdout.flush()
+        system = PVSystem(
+            surface_tilt=tilt,
+            surface_azimuth=azimuth,
+            module_parameters={"pdc0": capacity_kw * 1000.0, "gamma_pdc": -0.004},
+            inverter_parameters={"pdc0": capacity_kw * 1000.0, "eta_inv_nom": 0.96},
+            temperature_model_parameters=TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_polymer"],
+            modules_per_string=1,
+            strings_per_inverter=1,
+        )
 
-    try:
-        solar_position = location.get_solarposition(weather_df.index)
-        irradiance_components = pvlib.irradiance.erbs(
-            ghi=weather_df["ghi"],
-            zenith=solar_position["zenith"],
-            datetime_or_doy=weather_df.index,
-        )
-        poa = system.get_irradiance(
-            solar_zenith=solar_position["apparent_zenith"],
-            solar_azimuth=solar_position["azimuth"],
-            dni=irradiance_components["dni"],
-            ghi=weather_df["ghi"],
-            dhi=irradiance_components["dhi"],
-        )
-        cell_temp = system.get_cell_temperature(
-            poa["poa_global"],
-            weather_df["temp_air"],
-            1.0,
-            model="sapm",
-        )
-        dc_power = system.pvwatts_dc(poa["poa_global"], cell_temp)
-        ac_power = pvlib.inverter.pvwatts(
-            pdc=dc_power,
-            pdc0=capacity_kw * 1000.0,
-            eta_inv_nom=0.96,
-        )
-        ac_power = (ac_power / 1000.0).clip(lower=0).fillna(0)
-    except Exception as exc:
-        print(f"[Critical] PVLib calculation failed: {exc}. Using fallback sine wave.")
-        ac_power = pd.Series(
-            [
-                max(0.0, capacity_kw * 0.9 * math.sin(math.pi * (ts.hour - 6) / 12))
-                if 6 <= ts.hour <= 18
-                else 0.0
-                for ts in weather_df.index
-            ],
-            index=weather_df.index,
-        )
+        try:
+            solar_position = location.get_solarposition(weather_df.index)
+            irradiance_components = pvlib.irradiance.erbs(
+                ghi=weather_df["ghi"],
+                zenith=solar_position["zenith"],
+                datetime_or_doy=weather_df.index,
+            )
+            poa = system.get_irradiance(
+                solar_zenith=solar_position["apparent_zenith"],
+                solar_azimuth=solar_position["azimuth"],
+                dni=irradiance_components["dni"],
+                ghi=weather_df["ghi"],
+                dhi=irradiance_components["dhi"],
+            )
+            cell_temp = system.get_cell_temperature(
+                poa["poa_global"],
+                weather_df["temp_air"],
+                1.0,
+                model="sapm",
+            )
+            dc_power = system.pvwatts_dc(poa["poa_global"], cell_temp)
+            ac_power = (
+                pvlib.inverter.pvwatts(
+                    pdc=dc_power,
+                    pdc0=capacity_kw * 1000.0,
+                    eta_inv_nom=0.96,
+                ) / 1000.0
+            ).clip(lower=0).fillna(0)
+        except Exception as exc:
+            sys.stdout.write(f"[pv_sim] PVLib simulation failed, using offline fallback: {exc}\n")
+            sys.stdout.flush()
+
+    if ac_power is None:
+        ac_power = _build_fallback_pv_output(weather_df, capacity_kw)
 
     result_data = []
     total_energy = 0.0
@@ -273,6 +346,8 @@ def generate_pv_profile(
             "peak_time": f"{peak_item['hour']}:00",
             "peak_timestamp": peak_item["timestamp"],
             "equivalent_sun_hours": round(total_energy / capacity_kw, 2),
+            "weather_source": weather_source,
+            "pv_model": "pvlib" if PVLIB_AVAILABLE and location is not None else "offline-fallback",
         },
         "hourly_curve": result_data,
     }

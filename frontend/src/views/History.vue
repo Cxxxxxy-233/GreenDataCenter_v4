@@ -114,7 +114,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Document } from '@element-plus/icons-vue'
 import { solutionApi } from '@/api'
@@ -132,20 +132,64 @@ const selectedProjects = ref([])
 
 const projects = ref([])
 
-const totalProjects = computed(() => projects.value.length)
+const parseDate = (dateStr) => {
+  if (!dateStr) return null
+  const date = new Date(dateStr)
+  return Number.isNaN(date.getTime()) ? null : date
+}
 
-const filteredProjects = computed(() => {
+const toNumber = (value, fallback = null) => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : fallback
+}
+
+const filteredAndSortedProjects = computed(() => {
   let result = [...projects.value]
 
   if (searchKeyword.value) {
-    result = result.filter(p => p.name.includes(searchKeyword.value))
+    const keyword = searchKeyword.value.trim().toLowerCase()
+    result = result.filter(p => String(p.name || '').toLowerCase().includes(keyword))
   }
 
   if (statusFilter.value) {
     result = result.filter(p => p.status === statusFilter.value)
   }
 
-  return result.slice((currentPage.value - 1) * pageSize.value, currentPage.value * pageSize.value)
+  if (Array.isArray(dateRange.value) && dateRange.value.length === 2) {
+    const [start, end] = dateRange.value
+    const startTime = parseDate(start)?.getTime()
+    const endDate = parseDate(end)
+    const endTime = endDate ? new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).getTime() : null
+    result = result.filter((project) => {
+      const createdAt = parseDate(project.created_at)?.getTime()
+      if (createdAt === null || createdAt === undefined) return false
+      if (startTime && createdAt < startTime) return false
+      if (endTime && createdAt > endTime) return false
+      return true
+    })
+  }
+
+  const sorters = {
+    createTimeDesc: (a, b) => (parseDate(b.created_at)?.getTime() || 0) - (parseDate(a.created_at)?.getTime() || 0),
+    createTimeAsc: (a, b) => (parseDate(a.created_at)?.getTime() || 0) - (parseDate(b.created_at)?.getTime() || 0),
+    pueAsc: (a, b) => (toNumber(a.pue, Infinity) - toNumber(b.pue, Infinity)),
+    pueDesc: (a, b) => (toNumber(b.pue, -Infinity) - toNumber(a.pue, -Infinity)),
+    lcoeAsc: (a, b) => (toNumber(a.investment, Infinity) - toNumber(b.investment, Infinity)),
+    lcoeDesc: (a, b) => (toNumber(b.investment, -Infinity) - toNumber(a.investment, -Infinity))
+  }
+
+  const sorter = sorters[sortBy.value] || sorters.createTimeDesc
+  result.sort(sorter)
+
+  return result
+})
+
+const totalProjects = computed(() => filteredAndSortedProjects.value.length)
+
+const filteredProjects = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = currentPage.value * pageSize.value
+  return filteredAndSortedProjects.value.slice(start, end)
 })
 
 const getStatusType = (status) => {
@@ -184,6 +228,7 @@ const handleSelectionChange = (val) => {
 
 const handleSizeChange = (val) => {
   pageSize.value = val
+  currentPage.value = 1
 }
 
 const handleCurrentChange = (val) => {
@@ -195,23 +240,21 @@ const viewDetail = (project) => {
 }
 
 const editParams = (project) => {
+  ElMessage.info(`方案"${project.name}"当前不支持自动回填参数，将跳转到配置页手动调整`)
   router.push('/config')
 }
 
 const copyProject = (project) => {
-  console.log('Copy project:', project.id)
+  ElMessage.warning(`后端暂未提供复制接口，无法复制项目"${project.name}"`)
 }
 
 const deleteProject = (project) => {
-  projects.value = projects.value.filter(p => p.id !== project.id)
-  ElMessage.success(`项目"${project.name}"已删除`)
+  ElMessage.warning(`后端暂未提供删除接口，无法删除项目"${project.name}"`)
 }
 
 const batchDelete = () => {
   const count = selectedProjects.value.length
-  projects.value = projects.value.filter(p => !selectedProjects.value.find(sp => sp.id === p.id))
-  selectedProjects.value = []
-  ElMessage.success(`已批量删除 ${count} 个项目`)
+  ElMessage.warning(`后端暂未提供批量删除接口，当前无法删除选中的 ${count} 个项目`)
 }
 
 const loadProjects = async () => {
@@ -219,20 +262,22 @@ const loadProjects = async () => {
     const response = await solutionApi.getAll()
     const solutions = response.data || []
     
-    if (solutions.length > 0) {
-      projects.value = solutions.map(solution => ({
-        id: solution.id,
-        name: solution.name || '未命名方案',
-        createTime: solution.created_at ? formatDate(solution.created_at) : '--',
-        status: solution.success ? '已完成' : '失败',
-        cabinetPower: solution.key_metrics?.computing_power_density || '--',
-        pue: solution.key_metrics?.pue || '--',
-        greenRate: solution.key_metrics?.green_power_ratio ? (solution.key_metrics.green_power_ratio * 100).toFixed(1) : '--',
-        investment: solution.key_metrics?.total_cost || '--'
-      }))
-    }
+    projects.value = solutions.map(solution => ({
+      id: solution.id,
+      name: solution.name || '未命名方案',
+      created_at: solution.created_at || '',
+      createTime: solution.created_at ? formatDate(solution.created_at) : '--',
+      status: solution.success ? '已完成' : '失败',
+      cabinetPower: '--',
+      pue: solution.key_metrics?.pue ?? '--',
+      greenRate: solution.key_metrics?.green_power_ratio != null ? (solution.key_metrics.green_power_ratio * 100).toFixed(1) : '--',
+      investment: solution.key_metrics?.total_cost ?? '--',
+      generationTime: solution.generation_time ?? null,
+      raw: solution
+    }))
   } catch (error) {
     console.error('加载项目列表失败:', error)
+    ElMessage.error(`加载项目列表失败: ${error.message}`)
   }
 }
 
@@ -243,6 +288,10 @@ const formatDate = (dateStr) => {
 
 onMounted(() => {
   loadProjects()
+})
+
+watch([searchKeyword, statusFilter, dateRange, sortBy], () => {
+  currentPage.value = 1
 })
 </script>
 

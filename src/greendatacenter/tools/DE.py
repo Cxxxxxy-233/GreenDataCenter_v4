@@ -292,7 +292,14 @@ def simulate_system(
     renewable_to_storage_input = wind_to_storage_input + pv_to_storage_input
     renewable_consumed = renewable_to_load + renewable_to_storage_input
     total_load = float(np.sum(load_series))
-    total_green_supply = float(np.sum(renewable_to_load + storage_discharge))
+    # 绿电供给只统计当期风光直接供负荷的电量，以及由当期风光充入储能后再释放的那部分电量。
+    # 若直接把全部 storage_discharge 计入绿电，初始 SOC 中“预置”电量也会被误算成绿电，
+    # 在短时仿真场景下会把绿电占比异常抬高到接近或达到 100%。
+    renewable_discharge_equivalent = np.minimum(
+        storage_discharge,
+        renewable_to_storage_input * discharge_eff,
+    )
+    total_green_supply = float(np.sum(renewable_to_load + renewable_discharge_equivalent))
 
     return {
         "wind_generation": wind_generation,
@@ -315,6 +322,7 @@ def simulate_system(
             "total_pv_consumed": float(np.sum(pv_used + pv_to_storage_input)),
             "total_renewable_consumed": float(np.sum(renewable_consumed)),
             "total_storage_discharge": float(np.sum(storage_discharge)),
+            "total_renewable_storage_discharge": float(np.sum(renewable_discharge_equivalent)),
             "total_storage_charge": float(np.sum(storage_charge)),
             "total_grid_purchase": float(np.sum(grid_purchase)),
             "total_curtailment": float(np.sum(curtailment)),
@@ -405,6 +413,7 @@ def constraint_func(
     wind_pu_series: np.ndarray,
     pv_pu_series: np.ndarray,
     target_green_ratio: float,
+    curtailment_limit: float = 0.1,
 ) -> list[float]:
     """Nonlinear constraints: limit curtailment and ensure green utilization target."""
     wind_capacity_mw, pv_capacity_mw, storage_capacity_mwh = x
@@ -462,6 +471,50 @@ def build_balance_timeseries(
         "storage_charge": simulation["storage_charge"],
         "load": simulation["load"],
     }
+
+
+def evaluate_constraint_metrics(
+    x: np.ndarray,
+    load_series: np.ndarray,
+    wind_pu_series: np.ndarray,
+    pv_pu_series: np.ndarray,
+) -> Dict[str, float]:
+    """Evaluate green-supply and curtailment ratios for a candidate plan."""
+    simulation = simulate_system(
+        wind_capacity_mw=float(x[0]),
+        pv_capacity_mw=float(x[1]),
+        storage_capacity_mwh=float(x[2]),
+        load_series=load_series,
+        wind_pu_series=wind_pu_series,
+        pv_pu_series=pv_pu_series,
+    )
+    summary = simulation["summary"]
+    renewable_generation = float(summary["total_renewable_generation"])
+    total_load = float(summary["total_load"])
+    return {
+        "green_supply_ratio": (float(summary["green_supply"]) / total_load) if total_load > 1e-9 else 0.0,
+        "curtailment_ratio": (float(summary["total_curtailment"]) / renewable_generation) if renewable_generation > 1e-9 else 1.0,
+    }
+
+
+def penalized_objective(
+    x: np.ndarray,
+    load_series: np.ndarray,
+    wind_pu_series: np.ndarray,
+    pv_pu_series: np.ndarray,
+    target_green_ratio: float,
+    curtailment_limit: float,
+    penalty_scale: float = 1e10,
+) -> float:
+    """Fallback objective that trades cost against soft constraint violations."""
+    base_cost = objective(x, load_series, wind_pu_series, pv_pu_series)
+    if not np.isfinite(base_cost):
+        return 1e12
+
+    metrics = evaluate_constraint_metrics(x, load_series, wind_pu_series, pv_pu_series)
+    green_gap = max(0.0, target_green_ratio - metrics["green_supply_ratio"])
+    curtailment_gap = max(0.0, metrics["curtailment_ratio"] - curtailment_limit)
+    return float(base_cost + penalty_scale * (green_gap ** 2 + curtailment_gap ** 2))
 
 
 def plot_weekly_balance(
@@ -594,27 +647,74 @@ def run_capacity_optimization(
     def _objective(x: np.ndarray) -> float:
         return objective(x, load_series, wind_pu_series, pv_pu_series)
 
-    def _constraint(x: np.ndarray) -> list[float]:
-        return constraint_func(x, load_series, wind_pu_series, pv_pu_series, green_target)
+    result = None
+    constraint_violation = 0.0
+    optimization_status = "strict"
+    curtailment_limit_used = 0.1
+    warning_message = None
 
-    sys.stdout.write("[DE] Running differential evolution optimization...\n")
-    sys.stdout.flush()
-    constraint = NonlinearConstraint(_constraint, -np.inf, 0)
-    result = differential_evolution(
-        _objective,
-        bounds,
-        constraints=(constraint,),
-        seed=seed,
-        maxiter=maxiter,
-        popsize=popsize,
-        disp=disp,
-    )
+    for curtailment_limit in (0.10, 0.20, 0.35):
+        def _constraint(x: np.ndarray, limit=curtailment_limit) -> list[float]:
+            metrics = evaluate_constraint_metrics(x, load_series, wind_pu_series, pv_pu_series)
+            return [
+                metrics["curtailment_ratio"] - limit,
+                green_target - metrics["green_supply_ratio"],
+            ]
 
-    constraint_violation = float(getattr(result, "constr_violation", 0.0) or 0.0)
-    if not result.success and constraint_violation > 1e-6:
-        raise RuntimeError(f"Optimization failed: {result.message}")
+        sys.stdout.write(f"[DE] Running constrained optimization with curtailment limit {curtailment_limit:.2f}...\n")
+        sys.stdout.flush()
+        candidate = differential_evolution(
+            _objective,
+            bounds,
+            constraints=(NonlinearConstraint(_constraint, -np.inf, 0),),
+            seed=seed,
+            maxiter=maxiter,
+            popsize=popsize,
+            disp=disp,
+        )
+        candidate_violation = float(getattr(candidate, "constr_violation", 0.0) or 0.0)
+        if candidate.success or candidate_violation <= 1e-6:
+            result = candidate
+            constraint_violation = candidate_violation
+            curtailment_limit_used = curtailment_limit
+            optimization_status = "strict" if curtailment_limit == 0.10 else "relaxed"
+            if curtailment_limit > 0.10:
+                warning_message = f"Strict curtailment limit 0.10 was infeasible; relaxed to {curtailment_limit:.2f}."
+            break
+        result = candidate
+        constraint_violation = candidate_violation
+
+    if result is None or constraint_violation > 1e-6:
+        sys.stdout.write("[DE] Constrained optimization infeasible, switching to penalized fallback...\n")
+        sys.stdout.flush()
+
+        def _fallback_objective(x: np.ndarray) -> float:
+            return penalized_objective(
+                x,
+                load_series,
+                wind_pu_series,
+                pv_pu_series,
+                green_target,
+                0.35,
+            )
+
+        result = differential_evolution(
+            _fallback_objective,
+            bounds,
+            seed=seed,
+            maxiter=maxiter,
+            popsize=popsize,
+            disp=disp,
+        )
+        optimization_status = "fallback"
+        curtailment_limit_used = 0.35
+        warning_message = (
+            f"Strict constrained optimization was infeasible. Returned penalized best-effort solution. "
+            f"Last constraint violation={constraint_violation:.6f}."
+        )
 
     x_opt = result.x
+    actual_total_cost = objective(x_opt, load_series, wind_pu_series, pv_pu_series)
     simulation = simulate_system(
         wind_capacity_mw=float(x_opt[0]),
         pv_capacity_mw=float(x_opt[1]),
@@ -652,7 +752,12 @@ def run_capacity_optimization(
         "wind_capacity_mw": float(x_opt[0]),
         "pv_capacity_mw": float(x_opt[1]),
         "storage_capacity_mwh": float(x_opt[2]),
-        "total_cost": float(result.fun),
+        "total_cost": float(actual_total_cost),
+        "objective_value": float(result.fun),
+        "optimization_status": optimization_status,
+        "warning_message": warning_message,
+        "constraint_violation": float(constraint_violation),
+        "curtailment_limit_used": float(curtailment_limit_used),
         "green_supply_ratio": float(green_supply_ratio),
         "curtailment_ratio": float(curtailment_ratio),
         "target_green_ratio": green_target,

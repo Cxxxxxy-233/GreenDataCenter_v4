@@ -2,6 +2,10 @@
 
 本目录包含GreenDataCenter系统的API接口说明。
 
+## 推荐先读
+
+- `frontend_backend_handoff.md`：前后端对接文档，按页面说明应调用的接口、返回字段映射以及当前未生效字段
+
 ## 概述
 
 GreenDataCenter系统目前主要通过Python库（`AISystemCoordinator`）提供API，CLI接口通过此库实现。

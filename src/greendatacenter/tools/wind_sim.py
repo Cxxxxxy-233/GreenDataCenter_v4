@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 from pathlib import Path
@@ -9,6 +10,30 @@ from geopy.geocoders import Nominatim
 
 TOOLS_DIR = Path(__file__).resolve().parent
 CSV_DIR = TOOLS_DIR / "csv"
+
+
+def _build_fallback_weather_data(
+    lat: float,
+    start_date: str,
+    end_date: str,
+    timezone: str,
+) -> pd.DataFrame:
+    """Build a deterministic offline wind-speed profile when online weather is unavailable."""
+    start_ts = pd.Timestamp(start_date)
+    end_ts = pd.Timestamp(end_date) + pd.Timedelta(hours=23)
+    time_index = pd.date_range(start=start_ts, end=end_ts, freq="h", tz=timezone)
+
+    wind_values = []
+    base_speed = 5.8 + min(2.2, abs(lat - 30.0) / 25.0)
+    for ts in time_index:
+        day_of_year = ts.timetuple().tm_yday
+        hour = ts.hour
+        seasonal = 0.9 + 0.18 * math.sin((2 * math.pi * (day_of_year + 20)) / 365.0)
+        diurnal = 0.85 + 0.25 * math.sin((2 * math.pi * (hour - 1)) / 24.0)
+        gust = 0.35 * math.sin((2 * math.pi * (day_of_year * 24 + hour)) / 72.0)
+        wind_values.append(round(max(0.5, base_speed * seasonal * diurnal + gust), 3))
+
+    return pd.DataFrame({"wind_speed_100m": wind_values}, index=time_index)
 
 
 # 预定义的城市地理位置缓存（避免网络调用）
@@ -109,6 +134,21 @@ def _fetch_weather_data(lat: float, lon: float, start_date: str, end_date: str) 
     return weather_df
 
 
+def _load_weather_data_with_fallback(
+    lat: float,
+    lon: float,
+    start_date: str,
+    end_date: str,
+    timezone: str,
+) -> Tuple[pd.DataFrame, str]:
+    try:
+        return _fetch_weather_data(lat, lon, start_date, end_date), "open-meteo"
+    except Exception as exc:
+        sys.stdout.write(f"[wind_sim] Weather fetch failed, using offline fallback: {exc}\n")
+        sys.stdout.flush()
+        return _build_fallback_weather_data(lat, start_date, end_date, timezone), "offline-fallback"
+
+
 def _wind_speed_to_coefficient(
     wind_speed_series: pd.Series,
     cut_in_ms: float,
@@ -152,7 +192,13 @@ def generate_wind_profile(
     sys.stdout.write(f"[wind_sim] Fetching weather data {sim_start} -> {sim_end}\n")
     sys.stdout.flush()
 
-    weather_df = _fetch_weather_data(loc_info["lat"], loc_info["lon"], sim_start, sim_end)
+    weather_df, weather_source = _load_weather_data_with_fallback(
+        loc_info["lat"],
+        loc_info["lon"],
+        sim_start,
+        sim_end,
+        loc_info["timezone"],
+    )
     if weather_df.index.tz is None:
         weather_df = weather_df.tz_localize(loc_info["timezone"])
     else:
@@ -214,6 +260,7 @@ def generate_wind_profile(
         "summary": {
             "avg_coefficient": round(float(coefficient_series.mean()), 6),
             "max_coefficient": round(float(coefficient_series.max()), 6),
+            "weather_source": weather_source,
         },
         "hourly_curve": result_data,
     }

@@ -229,32 +229,67 @@ class CoolingCalculator:
         trace_log += f"【动态权重】α(PUE)={w['alpha']}, β(WUE)={w['beta']}, γ(TCO)={w['gamma']}, δ(CUE)={w['delta']}, ε(WHR)={w['epsilon']}\n"
         trace_log += "【方案打分】计算公式: F = α·f(PUE) + β·f(WUE) + γ·f(TCO) + δ·f(CUE) - ε·f(WHR)\n"
         
-        # 存储所有可行方案的得分（用于LCOE排序）
+        # 存储所有可行方案的得分（用于前端排序与展示）
         strategy_scores = []
+        rejected_strategies = []
         for s in strategies:
             if cabinet_power > s["max_kw"]:
                 trace_log += f" - 方案 [{s['name']}] 被一票否决：无法满足 {cabinet_power}kW 物理散热极限。\n"
+                rejected_strategies.append(s["name"])
                 continue
             score = (w["alpha"] * s["f_pue"] + w["beta"] * s["f_wue"] + w["gamma"] * s["f_tco"] + w["delta"] * s["f_cue"] - w["epsilon"] * s["f_whr"])
             trace_log += f" - 方案 [{s['name']}] 得分: {score:.3f} (PUE代价:{s['f_pue']}, WUE代价:{s['f_wue']}, TCO代价:{s['f_tco']})\n"
             strategy_scores.append({
+                "strategy": s["name"],
                 "name": s["name"],
-                "score": score,
+                "total_score": round(score, 4),
+                "score": round(score, 4),
                 "max_kw": s["max_kw"],
+                "pue": s["f_pue"],
+                "wue": s["f_wue"],
+                "tco": s["f_tco"],
+                "cue": s["f_cue"],
+                "whr": s["f_whr"],
                 "f_pue": s["f_pue"],
                 "f_wue": s["f_wue"],
                 "f_tco": s["f_tco"],
-                "f_whr": s["f_whr"]
+                "f_cue": s["f_cue"],
+                "f_whr": s["f_whr"],
             })
             if score < min_score:
                 min_score = score
                 best_strategy = s
-        
+
+        if not best_strategy:
+            raise ValueError("未找到满足当前算力密度约束的可行制冷策略")
+
+        strategy_scores = sorted(strategy_scores, key=lambda item: item["total_score"])
+        for index, item in enumerate(strategy_scores, start=1):
+            item["ranking"] = index
+
         trace_log += f"★ 【最终决策】代价最小路线为：[{best_strategy['name']}]，最终得分：{min_score:.3f}\n"
-        
+
+        objective_weights = {
+            "PUE": w["alpha"],
+            "WUE": w["beta"],
+            "TCO": w["gamma"],
+            "CUE": w["delta"],
+            "WHR": w["epsilon"],
+        }
+
         return {
             "best_strategy_name": best_strategy["name"], 
             "optimization_trace": trace_log,
+            "objective_weights": objective_weights,
+            "optimization_summary": {
+                "selected_strategy": best_strategy["name"],
+                "selected_score": round(min_score, 4),
+                "objective_weights": objective_weights,
+                "priority_mode": priority,
+                "water_scarcity_index": cwsi,
+                "feasible_strategy_count": len(strategy_scores),
+                "rejected_strategy_count": len(rejected_strategies),
+            },
             "all_strategy_scores": strategy_scores  # 所有可行方案得分（用于LCOE排序）
         }
 
@@ -425,6 +460,10 @@ class CoolingCalculator:
             "cooling_power_consumption": kpis.get("cooling_power_kw", 0),
             "waste_heat_recovery_kw": kpis.get("waste_heat_recovery_kw", 0),
             "strategy_optimization_trace": opt_result["optimization_trace"],
+            "optimization_summary": opt_result.get("optimization_summary", {}),
+            "objective_weights": opt_result.get("objective_weights", {}),
+            "selected_strategy_name": opt_result.get("best_strategy_name"),
+            "all_strategy_scores": opt_result.get("all_strategy_scores", []),
             "cooling_project_info": {
                 "location": project_info.get("location", "未知"),
                 "it_load_kW": project_info.get("planned_load", 0),

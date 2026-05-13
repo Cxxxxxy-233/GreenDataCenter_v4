@@ -4,14 +4,17 @@ FastAPI HTTP Server - 封装 AISystemCoordinator，提供 REST API 和 SSE 实�
 """
 
 import asyncio
+import csv
 import json
+import mimetypes
 import traceback
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import Field
 
@@ -29,6 +32,12 @@ app.add_middleware(
 )
 
 coordinator: Optional[AISystemCoordinator] = None
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ALLOWED_ARTIFACT_ROOTS = [
+    (PROJECT_ROOT / "src" / "greendatacenter" / "output").resolve(),
+    (PROJECT_ROOT / "src" / "greendatacenter" / "tools" / "csv").resolve(),
+]
 
 requirements_store: dict[str, dict] = {}
 solutions_store: dict[str, dict] = {}
@@ -89,6 +98,33 @@ def _make_serializable(obj: Any) -> Any:
         return obj
     except (TypeError, ValueError, OverflowError):
         return _serialize_value(obj)
+
+
+def _is_path_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _resolve_artifact_path(path_str: str) -> Path:
+    if not path_str:
+        raise HTTPException(status_code=400, detail="Artifact path is required")
+
+    candidate = Path(path_str)
+    if not candidate.is_absolute():
+        candidate = (PROJECT_ROOT / candidate).resolve()
+    else:
+        candidate = candidate.resolve()
+
+    if not any(_is_path_within(candidate, root) for root in ALLOWED_ARTIFACT_ROOTS):
+        raise HTTPException(status_code=403, detail="Artifact path is not allowed")
+
+    if not candidate.exists() or not candidate.is_file():
+        raise HTTPException(status_code=404, detail="Artifact file not found")
+
+    return candidate
 
 
 async def _run_workflow(workflow_id: str, input_data: dict):
@@ -370,8 +406,13 @@ async def get_solution(solution_id: str):
         data = item.get("data", {})
         if node in ("economic_analysis", "power_reliability_analysis", "environmental_analysis"):
             expert_opinions[node] = data
-        elif node == "debate":
-            debate_messages.append(data)
+        elif node == "debate_round":
+            if isinstance(data, dict) and isinstance(data.get("messages"), list):
+                for message in data["messages"]:
+                    if isinstance(message, dict):
+                        debate_messages.append(message)
+            elif isinstance(data, dict):
+                debate_messages.append(data)
 
     result = {
         "id": solution_id,
@@ -392,8 +433,77 @@ async def export_markdown(solution_id: str):
         raise HTTPException(status_code=404, detail="Solution not found")
 
     sol = solutions_store[solution_id]
-    final_report = sol.get("solution", {}).get("final_report", "")
+    solution = sol.get("solution", {}) or {}
+    final_report = solution.get("final_report", "")
+    report_path = solution.get("final_report_path")
+
+    if (not final_report) and report_path:
+        try:
+            report_file = Path(report_path)
+            if report_file.exists() and report_file.is_file():
+                final_report = report_file.read_text(encoding="utf-8")
+        except OSError:
+            final_report = ""
+
     return {"content": final_report, "filename": f"report_{solution_id}.md"}
+
+
+@app.get("/api/artifacts/file")
+async def get_artifact_file(path: str, download: bool = False):
+    artifact_path = _resolve_artifact_path(path)
+    media_type = mimetypes.guess_type(str(artifact_path))[0] or "application/octet-stream"
+    filename = artifact_path.name if download else None
+    return FileResponse(
+        path=str(artifact_path),
+        media_type=media_type,
+        filename=filename,
+    )
+
+
+@app.get("/api/artifacts/preview")
+async def preview_artifact(path: str, limit: int = 50):
+    artifact_path = _resolve_artifact_path(path)
+    suffix = artifact_path.suffix.lower()
+    normalized_limit = max(1, min(limit, 200))
+
+    if suffix == ".csv":
+        rows: list[list[str]] = []
+        truncated = False
+        with artifact_path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.reader(handle)
+            for index, row in enumerate(reader):
+                if index >= normalized_limit:
+                    truncated = True
+                    break
+                rows.append([str(cell) for cell in row])
+
+        return {
+            "path": str(artifact_path),
+            "name": artifact_path.name,
+            "type": "csv",
+            "rows": rows,
+            "row_count": len(rows),
+            "truncated": truncated,
+        }
+
+    text_suffixes = {".txt", ".md", ".log", ".json"}
+    if suffix in text_suffixes:
+        content = artifact_path.read_text(encoding="utf-8")
+        preview_text = content[: min(len(content), normalized_limit * 400)]
+        return {
+            "path": str(artifact_path),
+            "name": artifact_path.name,
+            "type": "text",
+            "content": preview_text,
+            "truncated": len(preview_text) < len(content),
+        }
+
+    return {
+        "path": str(artifact_path),
+        "name": artifact_path.name,
+        "type": "binary",
+        "preview_url": f"/api/artifacts/file?path={path}",
+    }
 
 
 @app.get("/api/system/status")

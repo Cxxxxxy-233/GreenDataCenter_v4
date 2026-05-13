@@ -38,6 +38,214 @@ COST_FACTORS = {
 #     sys.stderr = io.TextIOWrapper(sys.stderr, encoding="utf-8")
 
 
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_score_value(value: Any, default: float = 0.5) -> float:
+    numeric = _safe_float(value, default)
+    if numeric > 1:
+        if numeric <= 100:
+            numeric = numeric / 100.0
+        else:
+            numeric = 1.0
+    return max(0.0, min(1.0, numeric))
+
+
+def _estimate_rack_count(requirement: dict[str, Any]) -> int:
+    planned_load_kw = _safe_float(requirement.get("planned_load_kw"), 0.0)
+    density = _safe_float(requirement.get("computing_power_density"), 8.0)
+    if planned_load_kw <= 0 or density <= 0:
+        return 0
+    return max(1, round(planned_load_kw / density))
+
+
+def _machine_grade_to_tier(machine_room_grade: str) -> int:
+    mapping = {"A+": 4, "A": 3, "B": 2, "C": 1}
+    return mapping.get((machine_room_grade or "").strip(), 3)
+
+
+def _calculate_annual_carbon_emission_tons(
+    requirement: dict[str, Any],
+    green_optimization: dict[str, Any],
+    cooling_result: dict[str, Any],
+) -> float:
+    """Estimate annual carbon emission in tons using annual load and green ratio."""
+    planned_load_kw = _safe_float(requirement.get("planned_load_kw"), 0.0)
+    pue = _safe_float(cooling_result.get("estimated_pue"), _safe_float(requirement.get("pue_target"), 1.0))
+    green_ratio = _safe_float(
+        green_optimization.get("green_supply_ratio"),
+        _safe_float(requirement.get("green_power_ratio"), 0.0),
+    )
+    green_ratio = max(0.0, min(1.0, green_ratio))
+    carbon_factor = _safe_float(requirement.get("carbon_emission_factor"), 0.0)
+
+    annual_total_energy_mwh = planned_load_kw * pue * 8760.0 / 1000.0
+    ratio_based_emission = annual_total_energy_mwh * (1.0 - green_ratio) * carbon_factor
+
+    simulated_grid_purchase_mwh = _safe_float(green_optimization.get("grid_purchase_mwh"), 0.0)
+    sim_hours = _safe_float(green_optimization.get("sim_hours"), _safe_float(requirement.get("sim_hours"), 0.0))
+    annualized_grid_purchase_mwh = 0.0
+    if simulated_grid_purchase_mwh > 0 and sim_hours > 0:
+        annualized_grid_purchase_mwh = simulated_grid_purchase_mwh * 8760.0 / sim_hours
+
+    grid_based_emission = annualized_grid_purchase_mwh * carbon_factor
+    return round(max(ratio_based_emission, grid_based_emission), 2)
+
+
+def _build_expert_analysis_context(state: GraphState) -> dict[str, Any]:
+    requirement = dict(state.get("requirement") or {})
+    green_power_result = dict(state.get("green_power_result") or {})
+    cooling_result = dict(state.get("cooling_result") or {})
+    power_supply_plan = dict(state.get("power_supply_plan") or {})
+    cost_result = dict(state.get("economic_analysis_result") or {})
+
+    green_optimization = dict(green_power_result.get("optimization") or {})
+    cooling_economic = dict(cooling_result.get("economic_indicators") or {})
+    cooling_kpis = dict(cooling_result.get("cooling_kpis") or {})
+    power_raw = dict(power_supply_plan.get("raw_json") or {})
+    capex_breakdown = dict(cost_result.get("capex_breakdown") or {})
+
+    rack_count = _estimate_rack_count(requirement)
+    annual_carbon_emission = _calculate_annual_carbon_emission_tons(
+        requirement=requirement,
+        green_optimization=green_optimization,
+        cooling_result=cooling_result,
+    )
+
+    return {
+        "requirement": requirement,
+        "draft_plan_summary": state.get("draft_plan_summary", ""),
+        "cost_analysis": cost_result,
+        "derived_metrics": {
+            "rack_count": rack_count,
+            "total_cost_lakh": _safe_float(cost_result.get("total_capex_lakh"), 0.0),
+            "cost_per_rack_lakh": round(_safe_float(cost_result.get("total_capex_lakh"), 0.0) / rack_count, 2) if rack_count else 0.0,
+            "budget_constraint_lakh": _safe_float(cost_result.get("budget_constraint_lakh"), _safe_float(requirement.get("budget_constraint"), 0.0)),
+            "annual_carbon_emission_tons": round(annual_carbon_emission, 2),
+        },
+        "power_supply_plan": {
+            **power_supply_plan,
+            "raw_json": power_raw,
+            "derived_metrics": {
+                "tier_level": _machine_grade_to_tier(power_raw.get("machine_room_grade") or requirement.get("machine_room_grade")),
+                "cost_per_mw": _safe_float(power_raw.get("cost_per_mw"), 0.0),
+                "total_load_mw": _safe_float(power_raw.get("total_load_mw"), _safe_float(requirement.get("planned_load_kw"), 0.0) / 1000.0),
+            },
+        },
+        "cooling_result": {
+            **cooling_result,
+            "economic_indicators": cooling_economic,
+            "cooling_kpis": cooling_kpis,
+            "derived_metrics": {
+                "initial_investment_lakh": _safe_float(cooling_economic.get("initial_investment"), 0.0),
+                "annual_op_cost_lakh": _safe_float(cooling_economic.get("annual_op_cost"), 0.0),
+                "annual_electricity_cost_lakh": _safe_float(cooling_economic.get("annual_electricity_cost"), 0.0),
+                "estimated_pue": _safe_float(cooling_result.get("estimated_pue"), _safe_float(requirement.get("pue_target"), 0.0)),
+            },
+        },
+        "green_power_result": {
+            **green_power_result,
+            "optimization": green_optimization,
+            "derived_metrics": {
+                "wind_capacity_mw": _safe_float(green_optimization.get("wind_capacity_mw"), 0.0),
+                "pv_capacity_mw": _safe_float(green_optimization.get("pv_capacity_mw"), 0.0),
+                "storage_capacity_mwh": _safe_float(green_optimization.get("storage_capacity_mwh"), 0.0),
+                "green_power_ratio": _safe_float(
+                    green_optimization.get("green_supply_ratio"),
+                    _safe_float(requirement.get("green_power_ratio"), 0.0)
+                ),
+                "annual_carbon_emission_tons": round(annual_carbon_emission, 2),
+            },
+        },
+        "capex_breakdown": capex_breakdown,
+    }
+
+
+def _align_economic_opinion_data(opinion_data: dict[str, Any], state: GraphState) -> dict[str, Any]:
+    context = _build_expert_analysis_context(state)
+    metrics = dict(opinion_data.get("metrics") or {})
+    derived = context["derived_metrics"]
+    cost_analysis = context["cost_analysis"]
+    total_cost = round(_safe_float(cost_analysis.get("total_capex_lakh"), derived["total_cost_lakh"]), 2)
+
+    metrics["total_cost"] = total_cost
+    metrics["cost_per_rack"] = derived["cost_per_rack_lakh"]
+    metrics["budget_delta"] = round(_safe_float(cost_analysis.get("budget_delta_lakh"), 0.0), 2)
+    metrics.setdefault("roi", metrics.get("roi", 0.0))
+    metrics.setdefault("payback_period", metrics.get("payback_period", 0.0))
+
+    aligned = dict(opinion_data)
+    aligned["metrics"] = metrics
+    aligned["summary"] = (
+        f"基于当前初稿与成本测算，项目总成本约为 {total_cost:.2f} 万元，"
+        f"单机架成本约 {derived['cost_per_rack_lakh']:.2f} 万元，"
+        f"{'当前超出预算约 ' + format(_safe_float(cost_analysis.get('budget_delta_lakh'), 0.0), '.2f') + ' 万元' if cost_analysis.get('is_over_budget') else '当前未超预算'}。"
+    )
+    return aligned
+
+
+def _align_power_reliability_opinion_data(opinion_data: dict[str, Any], state: GraphState) -> dict[str, Any]:
+    context = _build_expert_analysis_context(state)
+    requirement = context["requirement"]
+    power_plan = context["power_supply_plan"]
+    power_derived = power_plan.get("derived_metrics", {})
+    metrics = dict(opinion_data.get("metrics") or {})
+
+    metrics["tier_level"] = int(power_derived.get("tier_level", 3))
+    metrics["ups_configuration"] = power_plan.get("redundancy_logic") or power_plan.get("scheme_name") or metrics.get("ups_configuration", "")
+    metrics["ups_capacity"] = round(_safe_float(requirement.get("planned_load_kw"), 0.0), 2)
+    metrics["distribution_reliability"] = round(min(0.9999, 0.97 + 0.005 * metrics["tier_level"]), 4)
+    if "expected_availability" not in metrics:
+        metrics["expected_availability"] = {4: 99.995, 3: 99.982, 2: 99.75, 1: 99.0}.get(metrics["tier_level"], 99.982)
+    if "annual_downtime" not in metrics:
+        metrics["annual_downtime"] = round((1 - metrics["expected_availability"] / 100) * 8760, 2)
+
+    aligned = dict(opinion_data)
+    aligned["metrics"] = metrics
+    aligned["summary"] = (
+        f"基于当前供电方案，建议按 Tier {metrics['tier_level']} 级可靠性目标实施，"
+        f"采用 {metrics['ups_configuration']}，外部电压等级为 {power_plan.get('external_voltage', '未明确')}，"
+        f"预期可用性约 {metrics['expected_availability']:.3f}% 。"
+    )
+    return aligned
+
+
+def _align_environmental_opinion_data(opinion_data: dict[str, Any], state: GraphState) -> dict[str, Any]:
+    context = _build_expert_analysis_context(state)
+    requirement = context["requirement"]
+    cooling = context["cooling_result"]
+    green = context["green_power_result"]
+    derived = context["derived_metrics"]
+    metrics = dict(opinion_data.get("metrics") or {})
+    rack_count = derived.get("rack_count", 0)
+
+    metrics["pue_target"] = round(
+        _safe_float(cooling.get("estimated_pue"), _safe_float(requirement.get("pue_target"), 0.0)),
+        3,
+    )
+    metrics["green_power_ratio"] = round(
+        _safe_float(green.get("optimization", {}).get("green_supply_ratio"), _safe_float(requirement.get("green_power_ratio"), 0.0)),
+        4,
+    )
+    metrics["annual_carbon_emission"] = round(_safe_float(derived.get("annual_carbon_emission_tons"), 0.0), 2)
+    metrics["carbon_per_rack"] = round(metrics["annual_carbon_emission"] / rack_count, 4) if rack_count else 0.0
+
+    aligned = dict(opinion_data)
+    aligned["metrics"] = metrics
+    aligned["summary"] = (
+        f"基于当前方案，PUE 预计为 {metrics['pue_target']:.3f}，"
+        f"绿电比例约为 {metrics['green_power_ratio']:.2%}，"
+        f"年碳排放约 {metrics['annual_carbon_emission']:.2f} 吨。"
+    )
+    return aligned
+
+
 class RequirementParserNode:
     """需求解析节点"""
 
@@ -113,6 +321,7 @@ class CostCalculationNode:
             user_req_data = dict(user_req or {})
 
         green_power_result = state.get("green_power_result", {})
+        cooling_result = state.get("cooling_result", {})
         power_supply_plan = state.get("power_supply_plan", {})
         budget_constraint = float(user_req_data.get("budget_constraint", 0.0) or 0.0)
 
@@ -131,7 +340,10 @@ class CostCalculationNode:
         storage_capex = storage_mwh * COST_FACTORS["storage_per_mwh"]
         green_power_capex = wind_capex + pv_capex + storage_capex
 
-        total_capex = power_supply_capex + green_power_capex
+        cooling_economic_indicators = cooling_result.get("economic_indicators", {})
+        cooling_capex = float(cooling_economic_indicators.get("initial_investment", 0.0) or 0.0)
+
+        total_capex = power_supply_capex + green_power_capex + cooling_capex
         is_over_budget = total_capex > budget_constraint
         budget_delta = total_capex - budget_constraint
 
@@ -144,6 +356,9 @@ class CostCalculationNode:
 
         summary = (
             f"项目总投资估算为 {total_capex:.2f} 万元。"
+            f"其中供电系统 {power_supply_capex:.2f} 万元，"
+            f"绿电系统 {green_power_capex:.2f} 万元，"
+            f"制冷系统 {cooling_capex:.2f} 万元。"
             f"用户预算为 {budget_constraint:.2f} 万元。"
         )
         if is_over_budget:
@@ -163,10 +378,12 @@ class CostCalculationNode:
             "capex_breakdown": {
                 "power_supply_system_lakh": round(power_supply_capex, 2),
                 "green_power_system_lakh": round(green_power_capex, 2),
+                "cooling_system_lakh": round(cooling_capex, 2),
                 "details": {
                     "wind_capex_lakh": round(wind_capex, 2),
                     "pv_capex_lakh": round(pv_capex, 2),
                     "storage_capex_lakh": round(storage_capex, 2),
+                    "cooling_initial_investment_lakh": round(cooling_capex, 2),
                 },
             },
             "summary": summary,
@@ -247,8 +464,12 @@ class DraftPlanAgentNode:
                 "green_power_ratio": req_data.get("green_power_ratio", 0.7),
                 "load_mw": float(req_data.get("planned_load_kw", 0)) / 1000,
                 "sim_hours": req_data.get("sim_hours", 160),  # 使用用户配置或默认160小时
-                "year": 2025,
+                "year": req_data.get("year", 2025),
             }
+            for field in ("date", "pv_tilt", "pv_azimuth", "wind_cut_in_ms", "wind_rated_ms", "wind_cut_out_ms", "maxiter", "popsize", "seed"):
+                value = req_data.get(field)
+                if value not in (None, ""):
+                    gp_input[field] = value
             print(f"[DraftPlanAgent] green_power_allocation input: {gp_input}", flush=True)
             temp_result = green_power_allocation_tool.invoke(gp_input)
             print(f"[DraftPlanAgent] green_power_allocation immediate result type: {type(temp_result)}", flush=True)
@@ -265,6 +486,16 @@ class DraftPlanAgentNode:
             print(f"[DraftPlanAgent] Error calling green_power_allocation: {e}", flush=True)
             import traceback
             print(f"[DraftPlanAgent] Traceback: {traceback.format_exc()}", flush=True)
+            green_power_result = {
+                "status": "error",
+                "error_message": str(e),
+                "error_type": type(e).__name__,
+                "inputs": gp_input,
+                "optimization": {},
+                "generated_files": {},
+                "pv_profile": {},
+                "wind_profile": {},
+            }
         
         # 2. 调用制冷方案工具
         try:
@@ -336,11 +567,58 @@ class DraftPlanAgentNode:
             print(f"[DraftPlanAgent] power_supply_plan has external_voltage: {'external_voltage' in power_supply_plan}", flush=True)
             print(f"[DraftPlanAgent] power_supply_plan keys: {list(power_supply_plan.keys())}", flush=True)
 
+        green_optimization = green_power_result.get("optimization", {}) if isinstance(green_power_result, dict) else {}
+        cooling_economic = cooling_result.get("economic_indicators", {}) if isinstance(cooling_result, dict) else {}
+        power_raw = power_supply_plan.get("raw_json", {}) if isinstance(power_supply_plan, dict) else {}
+
+        summary_parts = []
+        if green_optimization:
+            summary_parts.append(
+                "绿电方案："
+                f"风电 {green_optimization.get('wind_capacity_mw', 0):.2f} MW，"
+                f"光伏 {green_optimization.get('pv_capacity_mw', 0):.2f} MW，"
+                f"储能 {green_optimization.get('storage_capacity_mwh', 0):.2f} MWh"
+            )
+        if cooling_result:
+            summary_parts.append(
+                "制冷方案："
+                f"{cooling_result.get('cooling_technology', '未知技术')}，"
+                f"PUE {cooling_result.get('estimated_pue', 0):.3f}，"
+                f"初始投资 {cooling_economic.get('initial_investment', 0):.2f} 万元"
+            )
+        if power_supply_plan:
+            summary_parts.append(
+                "供电方案："
+                f"{power_supply_plan.get('scheme_name', '未生成')}，"
+                f"{power_supply_plan.get('external_voltage', '未知电压')}，"
+                f"冗余 {power_supply_plan.get('redundancy_logic', '未知')}"
+            )
+
+        plan_summary = "；".join(summary_parts) if summary_parts else "Draft plan generated"
+        plan_data = {
+            "summary": plan_summary,
+            "green_power_result": green_power_result,
+            "cooling_result": cooling_result,
+            "power_supply_plan": power_supply_plan,
+            "key_metrics": {
+                "wind_capacity_mw": green_optimization.get("wind_capacity_mw"),
+                "pv_capacity_mw": green_optimization.get("pv_capacity_mw"),
+                "storage_capacity_mwh": green_optimization.get("storage_capacity_mwh"),
+                "green_supply_ratio": green_optimization.get("green_supply_ratio"),
+                "cooling_technology": cooling_result.get("cooling_technology") if isinstance(cooling_result, dict) else None,
+                "estimated_pue": cooling_result.get("estimated_pue") if isinstance(cooling_result, dict) else None,
+                "cooling_initial_investment_lakh": cooling_economic.get("initial_investment"),
+                "power_scheme_name": power_supply_plan.get("scheme_name") if isinstance(power_supply_plan, dict) else None,
+                "external_voltage": power_supply_plan.get("external_voltage") if isinstance(power_supply_plan, dict) else None,
+                "power_cost_per_mw": power_raw.get("cost_per_mw") if isinstance(power_raw, dict) else None,
+            },
+        }
+
         streaming_output = state.get("streaming_output", [])
         streaming_output.append({
             "node": "draft_plan_agent",
             "expert": "Draft Plan Agent",
-            "content": plan_data.get("summary", "Draft plan generated"),
+            "content": plan_summary,
             "full_output": {
                 "raw_output": output_text,
                 "parsed": plan_data,
@@ -375,7 +653,7 @@ class DraftPlanAgentNode:
             "green_power_result": green_power_result,
             "cooling_result": cooling_result,
             "power_supply_plan": power_supply_plan,
-            "draft_plan_summary": plan_data.get("summary", ""),
+            "draft_plan_summary": plan_summary,
             "streaming_output": streaming_output,
         }
     
@@ -524,10 +802,13 @@ Output in JSON format with EXACTLY these field names (do NOT translate to Chines
 }}
 ```
 
-IMPORTANT: Use EXACTLY the field names as shown above. Do not translate field names to Chinese. You can use Chinese for the values, but keep field names in English.
-
-Please conduct professional analysis based on the requirements."""),
-            HumanMessage(content="Data center construction requirements: {requirement}\nPlease conduct economic analysis. Use Chinese for all field names and values.")
+IMPORTANT:
+- The numeric values in the JSON example above are placeholders only, NEVER copy them directly.
+- Use EXACTLY the field names as shown above. Do not translate field names to Chinese.
+- You can use Chinese for the field values, but field names MUST remain in English.
+- You MUST base your analysis on the CURRENT workflow context JSON provided by the user, including the latest draft plan and cost calculation results.
+"""),
+            HumanMessage(content="Current workflow context JSON:\n{analysis_context}\nPlease conduct economic analysis in Chinese. Keep JSON field names in English.")
         ])
 
     def __call__(self, state: GraphState) -> dict[str, Any]:
@@ -539,19 +820,19 @@ Please conduct professional analysis based on the requirements."""),
 
         # 添加记忆上下文
         memory_context = self.memory.get_memory_context()
-        requirement_text = json.dumps(state["requirement"], ensure_ascii=False, indent=2)
+        analysis_context = json.dumps(_build_expert_analysis_context(state), ensure_ascii=False, indent=2)
 
         # 创建LLM
         llm = create_economic_llm(on_chunk=self._on_stream_chunk)
 
         # 构建prompt
-        base_prompt = self.prompt_template.format_messages(requirement=requirement_text)
+        base_prompt = self.prompt_template.format_messages(analysis_context=analysis_context)
 
         # 如果有记忆，添加到系统消息
         if memory_context:
             base_prompt.insert(
                 -1,
-                SystemMessage(content=f"[Previous discussion records]\n{memory_context}\n\nPlease refer to these discussion contents for your analysis. Use Chinese for all field names and values.")
+                SystemMessage(content=f"[Previous discussion records]\n{memory_context}\n\nPlease refer to these discussion contents for your analysis. Keep JSON field names in English and use Chinese for textual values.")
             )
 
         # 调用LLM
@@ -559,6 +840,7 @@ Please conduct professional analysis based on the requirements."""),
 
         # 解析输出
         opinion_data = self._parse_json_response(response.content)
+        opinion_data = _align_economic_opinion_data(opinion_data, state)
         opinion = ExpertOpinion(**opinion_data)
 
         # 添加到记忆
@@ -705,10 +987,13 @@ Output in JSON format with EXACTLY these field names (do NOT translate to Chines
 }}
 ```
 
-IMPORTANT: Use EXACTLY the field names as shown above. Do not translate field names to Chinese. You can use Chinese for the values, but keep field names in English.
-
-Please conduct professional analysis based on the requirements."""),
-            HumanMessage(content="Data center construction requirements: {requirement}\nPlease conduct power reliability analysis.")
+IMPORTANT:
+- The numeric values in the JSON example above are placeholders only, NEVER copy them directly.
+- Use EXACTLY the field names as shown above. Do not translate field names to Chinese.
+- You can use Chinese for the field values, but keep field names in English.
+- You MUST base your analysis on the CURRENT workflow context JSON provided by the user, including the latest draft plan and cost calculation results.
+"""),
+            HumanMessage(content="Current workflow context JSON:\n{analysis_context}\nPlease conduct power reliability analysis in Chinese. Keep JSON field names in English.")
         ])
 
     def __call__(self, state: GraphState) -> dict[str, Any]:
@@ -720,18 +1005,18 @@ Please conduct professional analysis based on the requirements."""),
 
         # 添加记忆上下文
         memory_context = self.memory.get_memory_context()
-        requirement_text = json.dumps(state["requirement"], ensure_ascii=False, indent=2)
+        analysis_context = json.dumps(_build_expert_analysis_context(state), ensure_ascii=False, indent=2)
 
         # 创建LLM
         llm = create_power_reliability_llm(on_chunk=self._on_stream_chunk)
 
         # 构建prompt
-        base_prompt = self.prompt_template.format_messages(requirement=requirement_text)
+        base_prompt = self.prompt_template.format_messages(analysis_context=analysis_context)
 
         if memory_context:
             base_prompt.insert(
                 -1,
-                SystemMessage(content=f"[Previous discussion records]\n{memory_context}\n\nPlease refer to these discussion contents for your analysis. Use Chinese for all field names and values.")
+                SystemMessage(content=f"[Previous discussion records]\n{memory_context}\n\nPlease refer to these discussion contents for your analysis. Keep JSON field names in English and use Chinese for textual values.")
             )
 
         # 调用LLM
@@ -739,6 +1024,7 @@ Please conduct professional analysis based on the requirements."""),
 
         # 解析输出
         opinion_data = self._parse_json_response(response.content)
+        opinion_data = _align_power_reliability_opinion_data(opinion_data, state)
         opinion = ExpertOpinion(**opinion_data)
 
         # 添加到记忆
@@ -880,10 +1166,13 @@ Output in JSON format with EXACTLY these field names (do NOT translate to Chines
 }}
 ```
 
-IMPORTANT: Use EXACTLY the field names as shown above. Do not translate field names to Chinese. You can use Chinese for the values, but keep field names in English.
-
-Please conduct professional analysis based on the requirements."""),
-            HumanMessage(content="Data center construction requirements: {requirement}\nPlease conduct environmental analysis.")
+IMPORTANT:
+- The numeric values in the JSON example above are placeholders only, NEVER copy them directly.
+- Use EXACTLY the field names as shown above. Do not translate field names to Chinese.
+- You can use Chinese for the field values, but keep field names in English.
+- You MUST base your analysis on the CURRENT workflow context JSON provided by the user, including the latest draft plan and cost calculation results.
+"""),
+            HumanMessage(content="Current workflow context JSON:\n{analysis_context}\nPlease conduct environmental analysis in Chinese. Keep JSON field names in English.")
         ])
 
     def __call__(self, state: GraphState) -> dict[str, Any]:
@@ -895,18 +1184,18 @@ Please conduct professional analysis based on the requirements."""),
 
         # 添加记忆上下文
         memory_context = self.memory.get_memory_context()
-        requirement_text = json.dumps(state["requirement"], ensure_ascii=False, indent=2)
+        analysis_context = json.dumps(_build_expert_analysis_context(state), ensure_ascii=False, indent=2)
 
         # 创建LLM
         llm = create_environmental_llm(on_chunk=self._on_stream_chunk)
 
         # 构建prompt
-        base_prompt = self.prompt_template.format_messages(requirement=requirement_text)
+        base_prompt = self.prompt_template.format_messages(analysis_context=analysis_context)
 
         if memory_context:
             base_prompt.insert(
                 -1,
-                SystemMessage(content=f"[Previous discussion records]\n{memory_context}\n\nPlease refer to these discussion contents for your analysis. Use Chinese for all field names and values.")
+                SystemMessage(content=f"[Previous discussion records]\n{memory_context}\n\nPlease refer to these discussion contents for your analysis. Keep JSON field names in English and use Chinese for textual values.")
             )
 
         # 调用LLM
@@ -914,6 +1203,7 @@ Please conduct professional analysis based on the requirements."""),
 
         # 解析输出
         opinion_data = self._parse_json_response(response.content)
+        opinion_data = _align_environmental_opinion_data(opinion_data, state)
         opinion = ExpertOpinion(**opinion_data)
 
         # 添加到记忆
@@ -1176,12 +1466,16 @@ class DebateRoundNode:
 
         # 组织轮流发言
         streaming_output = state.get("streaming_output", [])
+        debate_history = list(state.get("debate_history", []))
+        round_messages = []
 
         # 第1位发言：经济性专家
         self._expert_speak(
             speaker=economic_opinion.expert_name,
             state=state,
             streaming_output=streaming_output,
+            debate_history=debate_history,
+            round_messages=round_messages,
             current_opinion=economic_opinion,
             other_opinions=[power_opinion, environmental_opinion]
         )
@@ -1191,6 +1485,8 @@ class DebateRoundNode:
             speaker=power_opinion.expert_name,
             state=state,
             streaming_output=streaming_output,
+            debate_history=debate_history,
+            round_messages=round_messages,
             current_opinion=power_opinion,
             other_opinions=[economic_opinion, environmental_opinion]
         )
@@ -1200,6 +1496,8 @@ class DebateRoundNode:
             speaker=environmental_opinion.expert_name,
             state=state,
             streaming_output=streaming_output,
+            debate_history=debate_history,
+            round_messages=round_messages,
             current_opinion=environmental_opinion,
             other_opinions=[economic_opinion, power_opinion]
         )
@@ -1212,6 +1510,23 @@ class DebateRoundNode:
         sys.stdout.flush()
 
         draft_plan_feedback = self.memory.get_memory_context()
+        debate_summary = {
+            "round": state["debate_round"],
+            "messages": round_messages,
+            "consensus_score": consensus_score,
+            "suggestions": [
+                f"经济专家观点：{economic_opinion.summary}",
+                f"可靠性专家观点：{power_opinion.summary}",
+                f"环保专家观点：{environmental_opinion.summary}",
+            ],
+            "message_count": len(round_messages),
+        }
+        streaming_output.append({
+            "node": "debate_round",
+            "expert": "Debate Coordinator",
+            "content": f"第 {state['debate_round']} 轮辩论完成，共 {len(round_messages)} 条发言，共识度 {consensus_score:.2f}",
+            "full_output": debate_summary,
+        })
 
         return {
             "debate_round": state["debate_round"] + 1,
@@ -1219,6 +1534,7 @@ class DebateRoundNode:
             "should_continue_debate": consensus_score < 0.8,
             "consensus_reached": consensus_score >= 0.8,
             "draft_plan_feedback": draft_plan_feedback,
+            "debate_history": debate_history,
             "streaming_output": streaming_output
         }
 
@@ -1227,6 +1543,8 @@ class DebateRoundNode:
         speaker: str,
         state: GraphState,
         streaming_output: list,
+        debate_history: list,
+        round_messages: list,
         current_opinion: ExpertOpinion,
         other_opinions: list[ExpertOpinion]
     ):
@@ -1291,11 +1609,16 @@ Please respond concisely in Chinese, within 200 characters."""
         )
 
         # 记录流式输出
-        streaming_output.append({
-            "node": "debate_round",
+        message_payload = {
             "speaker": speaker,
             "content": opinion,
             "round": state["debate_round"]
+        }
+        debate_history.append(message_payload)
+        round_messages.append(message_payload)
+        streaming_output.append({
+            "node": "debate_round",
+            **message_payload
         })
 
     def _evaluate_consensus(self, state: GraphState) -> float:
@@ -1330,10 +1653,26 @@ Please respond concisely in Chinese, within 200 characters."""
         if not scores:
             return 0.5
 
-        # 获取第一个数值评分
+        preferred_keys = [
+            "reliability",
+            "availability",
+            "environmental_score",
+            "cost_efficiency",
+            "green_power_score",
+            "pue_score",
+            "carbon_efficiency",
+            "roi",
+        ]
+        for key in preferred_keys:
+            if key in scores:
+                return _normalize_score_value(scores.get(key))
+
+        # 回退：取第一个可解析的数值评分，并统一归一化到 0-1
         for value in scores.values():
-            if isinstance(value, (int, float)):
-                return value
+            try:
+                return _normalize_score_value(value)
+            except (TypeError, ValueError):
+                continue
 
         return 0.5
 
@@ -1474,6 +1813,7 @@ Please conduct arbitration decision and generate final solution."""
 
         # 解析输出
         solution_data = self._parse_json_response(response.content)
+        solution_data = self._align_total_cost(solution_data, total_capex_lakh, state)
 
         sys.stdout.write("\n[OK] Arbitration decision completed\n")
         sys.stdout.write(f"  - Overall score: {solution_data.get('overall_scores', {}).get('overall', 0):.2f}\n")
@@ -1493,6 +1833,74 @@ Please conduct arbitration decision and generate final solution."""
             "solution": solution_data,
             "streaming_output": streaming_output
         }
+
+    def _align_total_cost(self, solution_data: dict, total_capex_lakh: float, state: GraphState) -> dict:
+        """将仲裁输出中的总投资与关键经济指标对齐到真实工作流结果。"""
+        normalized = dict(solution_data or {})
+        total_cost = round(float(total_capex_lakh or 0.0), 2)
+        economic_opinion = state.get("economic_opinion")
+        economic_metrics = dict(getattr(economic_opinion, "metrics", {}) or {})
+        power_opinion = state.get("power_reliability_opinion")
+        power_metrics = dict(getattr(power_opinion, "metrics", {}) or {})
+        environmental_opinion = state.get("environmental_opinion")
+        environmental_metrics = dict(getattr(environmental_opinion, "metrics", {}) or {})
+        roi = _safe_float(economic_metrics.get("roi"), 0.0)
+        payback_period = _safe_float(economic_metrics.get("payback_period"), 0.0)
+
+        key_metrics = dict(normalized.get("key_metrics") or {})
+        key_metrics["total_cost"] = total_cost
+        key_metrics["pue"] = round(
+            _safe_float(
+                environmental_metrics.get("pue"),
+                _safe_float(environmental_metrics.get("pue_target"), key_metrics.get("pue", 0.0)),
+            ),
+            3,
+        )
+        key_metrics["green_power_ratio"] = round(
+            _safe_float(environmental_metrics.get("green_power_ratio"), key_metrics.get("green_power_ratio", 0.0)),
+            4,
+        )
+        key_metrics["tier_level"] = int(_safe_float(power_metrics.get("tier_level"), key_metrics.get("tier_level", 3)))
+        key_metrics["expected_availability"] = round(
+            _safe_float(power_metrics.get("expected_availability"), key_metrics.get("expected_availability", 0.0)),
+            3,
+        )
+        key_metrics["annual_carbon_emission"] = round(
+            _safe_float(environmental_metrics.get("annual_carbon_emission"), key_metrics.get("annual_carbon_emission", 0.0)),
+            2,
+        )
+        if roi > 0:
+            key_metrics["roi"] = roi
+        if payback_period > 0:
+            key_metrics["payback_period"] = payback_period
+        normalized["key_metrics"] = key_metrics
+
+        economic_section = dict(normalized.get("economic_section") or {})
+        economic_content = dict(economic_section.get("content") or {})
+        economic_content["total_cost"] = total_cost
+        if roi > 0:
+            economic_content["roi"] = roi
+        if payback_period > 0:
+            economic_content["payback_period"] = payback_period
+        economic_section["content"] = economic_content
+        normalized["economic_section"] = economic_section
+
+        environmental_section = dict(normalized.get("environmental_section") or {})
+        environmental_content = dict(environmental_section.get("content") or {})
+        environmental_content["pue"] = key_metrics["pue"]
+        environmental_content["green_power_ratio"] = key_metrics["green_power_ratio"]
+        environmental_content["annual_carbon_emission"] = key_metrics["annual_carbon_emission"]
+        environmental_section["content"] = environmental_content
+        normalized["environmental_section"] = environmental_section
+
+        power_section = dict(normalized.get("power_reliability_section") or {})
+        power_content = dict(power_section.get("content") or {})
+        power_content["tier_level"] = key_metrics["tier_level"]
+        power_content["expected_availability"] = key_metrics["expected_availability"]
+        power_section["content"] = power_content
+        normalized["power_reliability_section"] = power_section
+
+        return normalized
 
     def _parse_json_response(self, content: str) -> dict:
         """解析JSON响应 - 改进版"""

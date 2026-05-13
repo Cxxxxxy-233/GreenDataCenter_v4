@@ -180,10 +180,6 @@
             </el-table>
           </el-card>
 
-          <el-card class="chart-card">
-            <h4>寻优轨迹图</h4>
-            <div ref="optimizationChartRef" class="chart-container"></div>
-          </el-card>
         </div>
       </el-tab-pane>
 
@@ -249,13 +245,39 @@
             <h4>容量占比图</h4>
             <div ref="powerBalanceChartRef" class="chart-container"></div>
           </el-card>
-          <el-card>
-            <h4>后端产物文件</h4>
-            <div class="param-grid">
-              <div class="param-item">光伏曲线文件：{{ greenFiles.pv_csv || '-' }}</div>
-              <div class="param-item">风电曲线文件：{{ greenFiles.wind_csv || '-' }}</div>
-              <div class="param-item">平衡图文件：{{ greenFiles.balance_plot || '-' }}</div>
+          <el-card class="artifact-card-panel">
+            <div class="artifact-panel-header">
+              <div>
+                <h4>后端产物文件</h4>
+                <p>直接展示后端绿电工具生成的平衡图和资源曲线文件，不再只显示本地路径。</p>
+              </div>
             </div>
+
+            <div v-if="greenArtifactFiles.length" class="artifact-list">
+              <section v-for="artifact in greenArtifactFiles" :key="artifact.key" class="artifact-item">
+                <div class="artifact-item-header">
+                  <div class="artifact-item-copy">
+                    <div class="artifact-item-title">{{ artifact.label }}</div>
+                    <div class="artifact-item-desc">{{ artifact.description }}</div>
+                  </div>
+                  <div class="artifact-item-actions">
+                    <a :href="artifact.url" target="_blank" rel="noopener noreferrer">打开原文件</a>
+                    <a :href="artifact.downloadUrl" target="_blank" rel="noopener noreferrer">下载</a>
+                  </div>
+                </div>
+
+                <div class="artifact-item-meta">{{ artifact.fileName }}</div>
+                <div class="artifact-item-path">{{ artifact.path }}</div>
+
+                <div v-if="artifact.kind === 'image'" class="artifact-image-shell">
+                  <img :src="artifact.url" :alt="artifact.label" class="artifact-image" />
+                </div>
+
+                <div v-else class="artifact-placeholder">该文件仅保留“打开原文件”和“下载”入口，不再展示具体数据内容。</div>
+              </section>
+            </div>
+
+            <div v-else class="artifact-placeholder">后端当前未返回绿电系统产物文件。</div>
           </el-card>
         </div>
       </el-tab-pane>
@@ -440,7 +462,7 @@
           <el-card>
             <h4>系统可用性指标</h4>
             <div class="reliability-stats">
-              <div class="stat-card">可用性：{{ reliabilityOpinion.metrics?.expected_availability || keyMetrics.expected_availability || '-' }}</div>
+              <div class="stat-card">可用性：{{ formatPercentAuto(reliabilityOpinion.metrics?.expected_availability ?? keyMetrics.expected_availability) }}</div>
               <div class="stat-card">Tier等级：{{ keyMetrics.tier_level || powerRaw.machine_room_grade || '-' }}</div>
               <div class="stat-card">可靠性评分：{{ formatPercent(overallScores.reliability) }}</div>
             </div>
@@ -709,27 +731,36 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
-import { mockSolutionData } from '@/mock/data.js'
-import { solutionApi } from '@/api'
+import { solutionApi, artifactApi } from '@/api'
 
 const route = useRoute()
 const activeTab = ref('overview')
 const searchKeyword = ref('')
-const solutionId = ref(route.params.id || 'mock-solution-001')
-const solutionData = ref(mockSolutionData)
-const reportMarkdown = ref(mockSolutionData.final_report)
-
-const optimizationChartRef = ref(null)
+const solutionId = ref(route.params.id || '')
+const solutionData = ref({})
+const reportMarkdown = ref('')
 const powerBalanceChartRef = ref(null)
 const costChartRef = ref(null)
 const costDetailDialogVisible = ref(false)
 const activeCostDetailKey = ref('green_power')
-let charts = { optimization: null, powerBalance: null, cost: null }
+let charts = { powerBalance: null, cost: null }
+
+const loadSavedProjectConfig = () => {
+  try {
+    const saved = localStorage.getItem('projectConfig')
+    return saved ? JSON.parse(saved) : {}
+  } catch (error) {
+    console.error('读取本地项目配置失败:', error)
+    return {}
+  }
+}
+
+const savedProjectConfig = ref(loadSavedProjectConfig())
 
 const toNumber = (v, fallback = 0) => {
   const n = Number(v)
@@ -750,6 +781,13 @@ const formatPercent = (v) => {
   return `${(n * 100).toFixed(1)}%`
 }
 
+const formatPercentAuto = (v, digits = 1) => {
+  if (v === null || v === undefined || v === '') return '-'
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '-'
+  return `${(n > 1 ? n : n * 100).toFixed(digits)}%`
+}
+
 const formatRisk = (risk) => {
   if (!risk) return '-'
   if (typeof risk === 'string') return risk
@@ -765,6 +803,68 @@ const formatObjectRows = (obj = {}) => {
   }))
 }
 
+const detectArtifactKind = (path = '') => {
+  const ext = String(path).split('.').pop()?.toLowerCase() || ''
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return 'image'
+  if (ext === 'csv') return 'csv'
+  if (['txt', 'md', 'log', 'json'].includes(ext)) return 'text'
+  return 'binary'
+}
+
+const getArtifactFileName = (path = '') => {
+  const normalized = String(path || '').split(/[\\/]/)
+  return normalized[normalized.length - 1] || '-'
+}
+
+const isNonEmptyObject = (value) => {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0
+}
+
+const pickFirstFiniteNumber = (...values) => {
+  for (const value of values) {
+    const n = Number(value)
+    if (Number.isFinite(n)) return n
+  }
+  return null
+}
+
+const normalizeGreenPowerResult = (rawValue, metrics = {}) => {
+  const source = isNonEmptyObject(rawValue?.green_power_result) ? rawValue.green_power_result : (rawValue || {})
+  const isErrorResult = source.status === 'error'
+  const baseOptimization = isNonEmptyObject(source.optimization) ? { ...source.optimization } : {}
+  const derivedOptimization = !isErrorResult && isNonEmptyObject(source.derived_metrics) ? source.derived_metrics : {}
+  const optimization = { ...derivedOptimization, ...baseOptimization }
+
+  const fallbackFields = {
+    wind_capacity_mw: isErrorResult ? null : pickFirstFiniteNumber(optimization.wind_capacity_mw, source.wind_capacity_mw, metrics.wind_capacity_mw),
+    pv_capacity_mw: isErrorResult ? null : pickFirstFiniteNumber(optimization.pv_capacity_mw, source.pv_capacity_mw, metrics.pv_capacity_mw),
+    storage_capacity_mwh: isErrorResult ? null : pickFirstFiniteNumber(optimization.storage_capacity_mwh, source.storage_capacity_mwh, metrics.storage_capacity_mwh),
+    green_supply_ratio: pickFirstFiniteNumber(
+      optimization.green_supply_ratio,
+      optimization.achieved_green_ratio,
+      source.green_supply_ratio,
+      source.achieved_green_ratio,
+      metrics.green_supply_ratio,
+      metrics.achieved_green_ratio,
+      metrics.green_power_ratio
+    ),
+    target_green_ratio: pickFirstFiniteNumber(
+      optimization.target_green_ratio,
+      source.target_green_ratio,
+      metrics.target_green_ratio,
+      metrics.green_power_ratio
+    )
+  }
+  Object.entries(fallbackFields).forEach(([key, value]) => {
+    if (value !== null) optimization[key] = value
+  })
+
+  return {
+    ...source,
+    optimization
+  }
+}
+
 const intermediate = computed(() => solutionData.value.intermediate_results || {})
 const draftOutput = computed(() => intermediate.value.draft_plan_agent?.full_output || {})
 const arbitrator = computed(() => intermediate.value.arbitrator?.full_output || solutionData.value || {})
@@ -778,7 +878,16 @@ const environmentalSection = computed(() => solutionData.value.environmental_sec
 const economicContent = computed(() => economicSection.value.content || {})
 const powerContent = computed(() => powerSection.value.content || {})
 const environmentalContent = computed(() => environmentalSection.value.content || {})
-const requirement = computed(() => intermediate.value.requirement_parser?.requirement || {})
+const requirement = computed(() => {
+  const rawRequirement = intermediate.value.requirement_parser?.full_output || {}
+  const normalized = rawRequirement.requirement && typeof rawRequirement.requirement === 'object'
+    ? rawRequirement.requirement
+    : rawRequirement
+  return {
+    ...savedProjectConfig.value,
+    ...normalized
+  }
+})
 
 const coolingResult = computed(() => {
   const draftCooling = draftOutput.value.cooling_result || {}
@@ -795,17 +904,57 @@ const coolingResult = computed(() => {
 const coolingKpis = computed(() => coolingResult.value.cooling_kpis || {})
 const coolingEconomics = computed(() => {
   const draftEco = coolingResult.value.economic_indicators || {}
+  const costBreakdown = intermediate.value.cost_calculation?.full_output?.economic_analysis_result?.capex_breakdown
+    || intermediate.value.cost_calculation?.full_output?.capex_breakdown
+    || {}
   return {
-    initial_investment: draftEco.initial_investment ?? economicContent.value.total_cost ?? keyMetrics.value.total_cost ?? null,
+    initial_investment: draftEco.initial_investment ?? costBreakdown.cooling_system_lakh ?? null,
     annual_op_cost: draftEco.annual_op_cost ?? null,
     annual_electricity_cost: draftEco.annual_electricity_cost ?? null,
     lcoe: draftEco.lcoe ?? null
   }
 })
 
-const greenPowerResult = computed(() => draftOutput.value.green_power_result || {})
+const greenPowerResult = computed(() => normalizeGreenPowerResult(draftOutput.value.green_power_result || {}, keyMetrics.value))
 const greenOptimization = computed(() => greenPowerResult.value.optimization || {})
 const greenFiles = computed(() => greenPowerResult.value.generated_files || {})
+const greenArtifactFiles = computed(() => {
+  const files = greenFiles.value || {}
+  return [
+    {
+      key: 'balance_plot',
+      label: '功率平衡图',
+      description: '差分进化容量优化完成后生成的风光储与负荷平衡图。',
+      path: files.balance_plot || ''
+    },
+    {
+      key: 'pv_csv',
+      label: '光伏资源曲线 CSV',
+      description: '光伏单位出力系数曲线文件，可直接查看后端生成结果。',
+      path: files.pv_csv || ''
+    },
+    {
+      key: 'wind_csv',
+      label: '风电资源曲线 CSV',
+      description: '风电单位出力系数曲线文件，可直接查看后端生成结果。',
+      path: files.wind_csv || ''
+    },
+    {
+      key: 'load_csv',
+      label: '负荷曲线 CSV',
+      description: '容量优化使用的负荷曲线文件。',
+      path: files.load_csv || ''
+    }
+  ]
+    .filter(item => item.path)
+    .map(item => ({
+      ...item,
+      fileName: getArtifactFileName(item.path),
+      kind: detectArtifactKind(item.path),
+      url: artifactApi.getFileUrl(item.path),
+      downloadUrl: artifactApi.getFileUrl(item.path, true)
+    }))
+})
 
 const powerPlan = computed(() => {
   const draftPower = draftOutput.value.power_supply_plan || {}
@@ -831,7 +980,10 @@ const costResult = computed(() => {
   const rawCost = intermediate.value.cost_calculation?.full_output || {}
   const economic = rawCost.economic_analysis_result || rawCost || {}
   const breakdown = economic.capex_breakdown || {}
-  const coolingCapex = toNumber(coolingResult.value.economic_indicators?.initial_investment, 0)
+  const coolingCapex = toNumber(
+    breakdown.cooling_system_lakh,
+    toNumber(coolingResult.value.economic_indicators?.initial_investment, 0)
+  )
   const powerSupplyCapex = toNumber(breakdown.power_supply_system_lakh, 0)
   const greenPowerCapex = toNumber(breakdown.green_power_system_lakh, 0)
   const recalculatedTotal = powerSupplyCapex + greenPowerCapex + coolingCapex
@@ -868,7 +1020,7 @@ const keyMetricsRows = computed(() => {
     { label: 'PUE', value: formatNumber(metrics.pue, 3) },
     { label: '绿电比例', value: formatPercent(metrics.green_power_ratio) },
     { label: 'Tier 等级', value: metrics.tier_level ?? '-' },
-    { label: '预期可用性', value: metrics.expected_availability ?? '-' },
+    { label: '预期可用性', value: formatPercentAuto(metrics.expected_availability) },
     { label: '年碳排放(吨)', value: metrics.annual_carbon_emission ?? '-' }
   ]
 })
@@ -1032,25 +1184,45 @@ const expertOpinions = computed(() => {
 })
 
 const debateHistory = computed(() => {
-  const raw = solutionData.value.debate_history || []
-  if (Array.isArray(raw) && raw.length) {
-    const grouped = {}
-    raw.forEach(item => {
-      const round = item.round || 1
-      if (!grouped[round]) grouped[round] = { round, messages: [] }
-      grouped[round].messages.push({ speaker: item.speaker || item.expert || '专家', content: item.content || '' })
+  const grouped = {}
+  const appendMessage = (item = {}) => {
+    if (!item || !item.content) return
+    const round = item.round || 1
+    if (!grouped[round]) grouped[round] = { round, messages: [] }
+    grouped[round].messages.push({
+      speaker: item.speaker || item.expert || '专家',
+      content: item.content || ''
     })
-    return Object.values(grouped).sort((a, b) => a.round - b.round)
   }
-  return []
+
+  const rawHistory = solutionData.value.debate_history || []
+  if (Array.isArray(rawHistory)) {
+    rawHistory.forEach(appendMessage)
+  }
+
+  if (!Object.keys(grouped).length && Array.isArray(solutionData.value.streaming_output)) {
+    solutionData.value.streaming_output.forEach((item) => {
+      if (item?.node === 'debate_round') {
+        appendMessage(item.data || {})
+      }
+    })
+  }
+
+  return Object.values(grouped).sort((a, b) => a.round - b.round)
 })
 
 const greenConfig = computed(() => {
-  const wind = toNumber(greenOptimization.value.wind_capacity_mw, 0)
-  const pv = toNumber(greenOptimization.value.pv_capacity_mw, 0)
-  const storage = toNumber(greenOptimization.value.storage_capacity_mwh, 0)
+  const errorMessage = greenPowerResult.value.error_message || greenPowerResult.value.message || ''
+  if (greenPowerResult.value.status === 'error') {
+    return [
+      { type: '绿电系统', capacity: '计算失败', ratio: errorMessage || '-' }
+    ]
+  }
+  const wind = toNumber(greenOptimization.value.wind_capacity_mw, null)
+  const pv = toNumber(greenOptimization.value.pv_capacity_mw, null)
+  const storage = toNumber(greenOptimization.value.storage_capacity_mwh, null)
   const total = wind + pv + storage
-  if (total <= 0) {
+  if (!Number.isFinite(total) || total <= 0) {
     const ratio = toNumber(keyMetrics.value.green_power_ratio, null)
     return [
       { type: '绿电占比(最终方案)', capacity: '-', ratio: ratio !== null ? (ratio * 100).toFixed(1) : '-' },
@@ -1351,23 +1523,6 @@ const exportMarkdown = async () => {
   URL.revokeObjectURL(url)
 }
 
-const initOptimizationChart = () => {
-  if (!optimizationChartRef.value) return
-  if (charts.optimization) charts.optimization.dispose()
-  const chart = echarts.init(optimizationChartRef.value)
-  const trace = coolingResult.value.strategy_optimization_trace || []
-  const points = Array.isArray(trace) && trace.length
-    ? trace.map((item, idx) => ({ x: idx + 1, y: toNumber(item.score ?? item.value ?? item.objective, 0) }))
-    : [{ x: 1, y: toNumber(coolingResult.value.estimated_pue, 0) }]
-  chart.setOption({
-    tooltip: { trigger: 'axis' },
-    xAxis: { type: 'category', data: points.map(p => p.x) },
-    yAxis: { type: 'value' },
-    series: [{ type: 'line', data: points.map(p => p.y), smooth: true, areaStyle: {}, color: '#10B981' }]
-  })
-  charts.optimization = chart
-}
-
 const initPowerBalanceChart = () => {
   if (!powerBalanceChartRef.value) return
   if (charts.powerBalance) charts.powerBalance.dispose()
@@ -1496,7 +1651,6 @@ const initCostChart = () => {
 
 const handleTabChange = async (tabName) => {
   await nextTick()
-  if (tabName === 'cooling') initOptimizationChart()
   if (tabName === 'green') initPowerBalanceChart()
   if (tabName === 'economic') initCostChart()
   if (tabName === 'report' && !reportMarkdown.value) await loadMarkdownReport()
@@ -1507,8 +1661,11 @@ const handleResize = () => {
 }
 
 onMounted(async () => {
+  savedProjectConfig.value = loadSavedProjectConfig()
+  await loadSolutionData()
   await nextTick()
-  if (activeTab.value === 'overview') initCostChart()
+  if (activeTab.value === 'green') initPowerBalanceChart()
+  if (activeTab.value === 'economic') initCostChart()
   window.addEventListener('resize', handleResize)
 })
 
@@ -1516,6 +1673,20 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   Object.values(charts).forEach(chart => chart && chart.dispose())
 })
+
+watch(
+  () => route.params.id,
+  async (newId) => {
+    if (!newId || newId === solutionId.value) return
+    solutionId.value = newId
+    solutionData.value = {}
+    reportMarkdown.value = ''
+    savedProjectConfig.value = loadSavedProjectConfig()
+    await loadSolutionData()
+    await nextTick()
+    await handleTabChange(activeTab.value)
+  }
+)
 </script>
 
 <style scoped>
@@ -1788,6 +1959,161 @@ onUnmounted(() => {
   font-size: 14px;
   color: var(--text-secondary);
   line-height: 1.7;
+}
+
+.artifact-card-panel {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  border-radius: 18px;
+  border: 1px solid var(--border-light);
+}
+
+.artifact-panel-header h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.artifact-panel-header p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.artifact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.artifact-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 99%, var(--primary-color) 1%);
+}
+
+.artifact-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.artifact-item-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.artifact-item-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.artifact-item-desc,
+.artifact-item-meta,
+.artifact-item-path,
+.artifact-preview-note {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.artifact-item-meta {
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+
+.artifact-item-path {
+  word-break: break-all;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border: 1px solid var(--border-light);
+}
+
+.artifact-item-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.artifact-item-actions a {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary-dark);
+  text-decoration: none;
+}
+
+.artifact-item-actions a:hover {
+  color: var(--primary-color);
+}
+
+.artifact-image-shell,
+.artifact-csv-shell {
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%);
+  overflow: hidden;
+}
+
+.artifact-image {
+  display: block;
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.artifact-placeholder {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.artifact-placeholder.is-error {
+  color: var(--danger-color);
+}
+
+.artifact-preview-note {
+  padding: 12px 14px 0;
+}
+
+.artifact-table-wrap {
+  overflow-x: auto;
+  padding: 12px 14px 14px;
+}
+
+.artifact-table {
+  width: 100%;
+  min-width: 280px;
+  border-collapse: collapse;
+  border-radius: 12px;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+}
+
+.artifact-table td {
+  padding: 8px 10px;
+  border: 1px solid var(--border-light);
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.artifact-table-index {
+  width: 56px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%);
 }
 
 .system-trace-shell {
@@ -2876,6 +3202,7 @@ onUnmounted(() => {
   }
 
   .system-trace-header,
+  .artifact-item-header,
   .economic-cost-header,
   .economic-summary-heading {
     flex-direction: column;

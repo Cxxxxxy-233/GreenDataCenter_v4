@@ -131,18 +131,30 @@
                 </div>
               </section>
 
-              <section class="draft-card-section">
-                <div class="draft-section-title">输入条件</div>
-                <div class="draft-chip-list">
-                  <span
-                    v-for="input in card.inputs"
-                    :key="input"
-                    class="draft-chip"
-                  >
-                    {{ input }}
-                  </span>
-                </div>
-              </section>
+              <button
+                type="button"
+                class="draft-detail-toggle"
+                @click="toggleDraftCardDetail(card.id)"
+              >
+                <span>{{ isDraftCardExpanded(card.id) ? '收起完整详情' : '展开完整详情' }}</span>
+                <el-icon class="draft-detail-toggle-icon">
+                  <component :is="isDraftCardExpanded(card.id) ? ArrowUp : ArrowDown" />
+                </el-icon>
+              </button>
+
+              <div v-show="isDraftCardExpanded(card.id)" class="draft-detail-panel">
+                <section class="draft-card-section">
+                  <div class="draft-section-title">输入条件</div>
+                  <div class="draft-chip-list">
+                    <span
+                      v-for="input in card.inputs"
+                      :key="input"
+                      class="draft-chip"
+                    >
+                      {{ input }}
+                    </span>
+                  </div>
+                </section>
 
               <section
                 v-if="card.traceFacts"
@@ -195,14 +207,39 @@
                 class="draft-card-section draft-card-section-optimization"
               >
                 <div class="draft-section-title">多目标寻优</div>
+                <div class="draft-optimization-summary">
+                  <div
+                    v-for="item in card.optimization.summaryCards"
+                    :key="item.label"
+                    class="draft-summary-item"
+                    :class="{ 'is-strong': item.strong }"
+                  >
+                    <span class="draft-summary-label">{{ item.label }}</span>
+                    <span class="draft-summary-value">{{ item.value }}</span>
+                  </div>
+                </div>
                 <div class="draft-weight-grid">
                   <div
                     v-for="weight in card.optimization.weights"
                     :key="weight.label"
                     class="draft-weight-item"
                   >
-                    <span class="draft-weight-label">{{ weight.label }}</span>
-                    <span class="draft-weight-value">{{ weight.value }}</span>
+                    <div class="draft-weight-head">
+                      <span class="draft-weight-label">{{ weight.label }}</span>
+                      <span class="draft-weight-value">{{ weight.value }}</span>
+                    </div>
+                    <div class="draft-weight-bar">
+                      <span class="draft-weight-fill" :style="{ width: `${weight.percent}%` }"></span>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="card.optimization.traceHighlights?.length" class="draft-trace-preview">
+                  <div
+                    v-for="(line, index) in card.optimization.traceHighlights"
+                    :key="`${card.id}-trace-preview-${index}`"
+                    class="draft-trace-highlight"
+                  >
+                    {{ line }}
                   </div>
                 </div>
                 <div class="draft-ranking-list">
@@ -228,7 +265,31 @@
                     </div>
                   </div>
                 </div>
+                <button
+                  v-if="card.optimization.traceLines?.length"
+                  type="button"
+                  class="draft-trace-toggle"
+                  @click="showCoolingOptimizationTrace = !showCoolingOptimizationTrace"
+                >
+                  {{ showCoolingOptimizationTrace ? '收起完整寻优过程' : `查看完整寻优过程（${card.optimization.traceLines.length} 条）` }}
+                </button>
+                <div
+                  v-if="card.optimization.traceLines?.length && showCoolingOptimizationTrace"
+                  class="draft-trace-panel"
+                >
+                  <div class="draft-trace-title">完整寻优轨迹</div>
+                  <div class="draft-trace-list">
+                    <div
+                      v-for="(line, index) in card.optimization.traceLines"
+                      :key="`${card.id}-trace-${index}`"
+                      class="draft-trace-line"
+                    >
+                      {{ line }}
+                    </div>
+                  </div>
+                </div>
               </section>
+              </div>
             </article>
           </div>
         </div>
@@ -438,39 +499,52 @@
 
           <div class="debate-board">
             <section class="debate-main-column">
+              <div v-if="debateResults.rounds.length" class="debate-round-nav" role="tablist" aria-label="辩论轮次导航">
+                <button
+                  v-for="round in debateResults.rounds"
+                  :key="round.number"
+                  type="button"
+                  class="debate-round-tab"
+                  :class="{ active: selectedDebateRoundNumber === round.number }"
+                  :aria-selected="selectedDebateRoundNumber === round.number"
+                  @click="selectDebateRound(round.number)"
+                >
+                  <span class="debate-round-tab-label">第 {{ round.number }} 轮</span>
+                  <span class="debate-round-tab-meta">{{ round.statements.length }} 条发言</span>
+                </button>
+              </div>
+
               <div ref="debateChatRef" class="debate-chat-messages">
-                <template v-for="(round, roundIndex) in debateResults.rounds" :key="roundIndex">
-                  <article class="debate-round-block">
-                    <div class="round-divider">
-                      <div class="round-badge">Round {{ String(round.number).padStart(2, '0') }}</div>
-                      <div class="round-copy">
-                        <span class="round-label">第 {{ round.number }} 轮辩论</span>
-                        <span class="round-meta">{{ round.statements.length }} 条发言</span>
-                      </div>
+                <article v-if="activeDebateRound" class="debate-round-block">
+                  <div class="round-divider">
+                    <div class="round-badge">Round {{ String(activeDebateRound.number).padStart(2, '0') }}</div>
+                    <div class="round-copy">
+                      <span class="round-label">第 {{ activeDebateRound.number }} 轮辩论</span>
+                      <span class="round-meta">{{ activeDebateRound.statements.length }} 条发言</span>
                     </div>
-                    <div class="round-statements">
-                      <div
-                        v-for="(statement, stmtIndex) in round.statements"
-                        :key="stmtIndex"
-                        class="chat-message"
-                        :class="getExpertClass(statement.speaker)"
-                      >
-                        <div class="avatar-wrapper">
-                          <div class="avatar" :style="{ background: getExpertColor(statement.speaker) }">
-                            <span class="avatar-text">{{ getExpertInitial(statement.speaker) }}</span>
-                          </div>
-                          <div class="speaker-meta">
-                            <span class="speaker-name">{{ statement.speaker }}</span>
-                            <span class="speaker-role">{{ getExpertRole(statement.speaker) }}</span>
-                          </div>
+                  </div>
+                  <div class="round-statements">
+                    <div
+                      v-for="(statement, stmtIndex) in activeDebateRound.statements"
+                      :key="`${activeDebateRound.number}-${stmtIndex}`"
+                      class="chat-message"
+                      :class="getExpertClass(statement.speaker)"
+                    >
+                      <div class="avatar-wrapper">
+                        <div class="avatar" :style="{ background: getExpertColor(statement.speaker) }">
+                          <span class="avatar-text">{{ getExpertInitial(statement.speaker) }}</span>
                         </div>
-                        <div class="message-bubble">
-                          <span class="message-content">{{ statement.content }}</span>
+                        <div class="speaker-meta">
+                          <span class="speaker-name">{{ statement.speaker }}</span>
+                          <span class="speaker-role">{{ getExpertRole(statement.speaker) }}</span>
                         </div>
                       </div>
+                      <div class="message-bubble">
+                        <span class="message-content">{{ statement.content }}</span>
+                      </div>
                     </div>
-                  </article>
-                </template>
+                  </div>
+                </article>
                 <div v-if="debateResults.rounds.length === 0" class="empty-chat">
                   <p>辩论尚未开始...</p>
                 </div>
@@ -483,14 +557,17 @@
             >
               <div class="debate-summary-header">
                 <div class="debate-summary-title">
-                  <h4><el-icon><Lightbulb /></el-icon> 辩论纪要</h4>
+                  <h4><el-icon><Warning /></el-icon> 辩论纪要</h4>
                   <p>汇总仲裁前保留下来的关键建议，用于快速查看辩论输出。</p>
                 </div>
                 <div class="debate-summary-badge">共 {{ debateResults.summary.suggestions.length }} 条</div>
               </div>
+              <div v-if="activeDebateRound" class="debate-summary-context">
+                当前查看：第 {{ activeDebateRound.number }} 轮，共 {{ activeDebateRound.statements.length }} 条发言
+              </div>
               <div class="suggestions-list">
                 <div v-for="(suggestion, i) in debateResults.summary.suggestions" :key="i" class="suggestion-item">
-                  <el-icon class="suggestion-icon"><CheckCircle /></el-icon>
+                  <el-icon class="suggestion-icon"><Check /></el-icon>
                   <span>{{ suggestion }}</span>
                 </div>
               </div>
@@ -636,7 +713,7 @@
             </div>
             <div class="preview-item">
               <span class="preview-label">可用性</span>
-              <span class="preview-value">{{ Number.isFinite(Number(finalSolution.expectedAvailability)) ? `${Number(finalSolution.expectedAvailability).toFixed(4)}%` : '--' }}</span>
+              <span class="preview-value">{{ formatPercentAuto(finalSolution.expectedAvailability, 3) }}</span>
             </div>
             <div class="preview-item">
               <span class="preview-label">年碳排放</span>
@@ -737,12 +814,11 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
-import { 
-  Check, Document, Edit, User, Files, Download, Refresh, Warning, Tools 
+import {
+  ArrowDown, ArrowUp, Check, Document, Edit, User, Files, Download, Refresh, Warning, Tools
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { workflowApi, solutionApi } from '@/api'
-import { mockSolutionData } from '@/mock/data.js'
 
 const router = useRouter()
 
@@ -759,17 +835,66 @@ const workflowNodes = [
   { name: '输出', icon: '10', description: '输出方案' }
 ]
 
+const nodeIndexMap = {
+  requirement_parser: 0,
+  draft_plan_agent: 1,
+  cost_calculation: 2,
+  economic_analysis: 3,
+  power_reliability_analysis: 4,
+  environmental_analysis: 5,
+  debate_round: 6,
+  arbitrator: 7,
+  final_report: 8,
+  output: 9
+}
+
 const currentNodeIndex = ref(-1)
 const progressPercent = ref(0)
 const isCompleted = ref(false)
 const isFailed = ref(false)
+const workflowStatus = ref('pending')
 const logsContainer = ref(null)
+const debateChatRef = ref(null)
 const costChartRef = ref(null)
-const workflowId = ref('mock-workflow-001')
+const workflowId = ref(localStorage.getItem('currentWorkflowId') || '')
 const completedNodes = ref(new Set())
-let mockTimer = null
-let currentStepIndex = 0
+const logs = ref([])
+const showCoolingOptimizationTrace = ref(false)
+const expandedDraftCards = ref({})
+
+const isDraftCardExpanded = (cardId) => Boolean(expandedDraftCards.value[cardId])
+
+const toggleDraftCardDetail = (cardId) => {
+  expandedDraftCards.value = {
+    ...expandedDraftCards.value,
+    [cardId]: !expandedDraftCards.value[cardId]
+  }
+}
+
 let costChart = null
+let streamSource = null
+let statusPollTimer = null
+
+const loadSavedProjectConfig = () => {
+  try {
+    const saved = localStorage.getItem('projectConfig')
+    return saved ? JSON.parse(saved) : {}
+  } catch (error) {
+    console.error('读取本地项目配置失败:', error)
+    return {}
+  }
+}
+
+const normalizeRequirementFields = (raw = {}) => {
+  const normalized = { ...raw }
+  const ratio = Number(normalized.green_power_ratio)
+  if (Number.isFinite(ratio) && ratio > 1) {
+    normalized.green_power_ratio = ratio / 100
+  }
+  return normalized
+}
+
+const savedProjectConfig = ref(normalizeRequirementFields(loadSavedProjectConfig()))
 
 const nodeResults = reactive({
   requirementParser: null,
@@ -783,7 +908,16 @@ const expertResults = reactive([
   { name: '环保性专家', expertType: 'environmental', status: '等待中', score: 0, summary: '', recommendations: [], concerns: [], metrics: {} }
 ])
 
-const debateResults = ref(null)
+const createEmptyDebateState = () => ({
+  currentRound: 0,
+  consensusScore: 0,
+  rounds: [],
+  summary: { suggestions: [] }
+})
+
+const debateResults = ref(createEmptyDebateState())
+const selectedDebateRoundNumber = ref(null)
+const hasManualDebateRoundSelection = ref(false)
 
 const arbitratorResult = reactive({
   consensusScore: 0,
@@ -810,10 +944,280 @@ const finalSolution = reactive({
   paybackPeriod: 0
 })
 
-const coolingCostSnapshot = computed(() => {
-  const coolingEco = mockSolutionData.intermediate_results.draft_plan_agent.full_output.cooling_result.economic_indicators || {}
+const logsLimit = 500
+
+const toNumber = (v, fallback = null) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : fallback
+}
+
+const DEFAULT_GREEN_COST_FACTORS = {
+  wind_per_mw: 700,
+  pv_per_mw: 350,
+  storage_per_mwh: 250
+}
+
+const isNonEmptyObject = (value) => {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0
+}
+
+const mergeStructuredResult = (rawValue, parsedValue, nestedKeys = []) => {
+  const base = isNonEmptyObject(rawValue) ? rawValue : {}
+  const override = isNonEmptyObject(parsedValue) ? parsedValue : {}
+  const merged = { ...base, ...override }
+  nestedKeys.forEach((key) => {
+    const baseNested = isNonEmptyObject(base[key]) ? base[key] : {}
+    const overrideNested = isNonEmptyObject(override[key]) ? override[key] : {}
+    if (Object.keys(baseNested).length || Object.keys(overrideNested).length) {
+      merged[key] = { ...baseNested, ...overrideNested }
+    }
+  })
+  return merged
+}
+
+const unwrapGreenPowerResult = (value) => {
+  if (!isNonEmptyObject(value)) return {}
+  if (isNonEmptyObject(value.green_power_result)) return value.green_power_result
+  return value
+}
+
+const pickFirstFiniteNumber = (...values) => {
+  for (const value of values) {
+    const n = Number(value)
+    if (Number.isFinite(n)) return n
+  }
+  return null
+}
+
+const normalizeGreenPowerResult = (rawValue, parsedValue, keyMetrics = {}) => {
+  const raw = unwrapGreenPowerResult(rawValue)
+  const parsed = unwrapGreenPowerResult(parsedValue)
+  const merged = mergeStructuredResult(raw, parsed, ['optimization', 'inputs', 'generated_files', 'pv_profile', 'wind_profile'])
+  const isErrorResult = merged.status === 'error' || raw.status === 'error' || parsed.status === 'error'
+  const optimizationSources = [
+    merged.optimization,
+    raw.optimization,
+    parsed.optimization,
+    ...(isErrorResult ? [] : [merged.derived_metrics, raw.derived_metrics, parsed.derived_metrics])
+  ].filter(isNonEmptyObject)
+  const optimization = optimizationSources.reduce((acc, item) => ({ ...acc, ...item }), {})
+
+  const fallbackOptimization = {
+    wind_capacity_mw: isErrorResult ? null : pickFirstFiniteNumber(optimization.wind_capacity_mw, merged.wind_capacity_mw, raw.wind_capacity_mw, parsed.wind_capacity_mw, keyMetrics.wind_capacity_mw),
+    pv_capacity_mw: isErrorResult ? null : pickFirstFiniteNumber(optimization.pv_capacity_mw, merged.pv_capacity_mw, raw.pv_capacity_mw, parsed.pv_capacity_mw, keyMetrics.pv_capacity_mw),
+    storage_capacity_mwh: isErrorResult ? null : pickFirstFiniteNumber(optimization.storage_capacity_mwh, merged.storage_capacity_mwh, raw.storage_capacity_mwh, parsed.storage_capacity_mwh, keyMetrics.storage_capacity_mwh),
+    green_supply_ratio: pickFirstFiniteNumber(
+      optimization.green_supply_ratio,
+      optimization.achieved_green_ratio,
+      merged.green_supply_ratio,
+      merged.achieved_green_ratio,
+      raw.green_supply_ratio,
+      raw.achieved_green_ratio,
+      parsed.green_supply_ratio,
+      parsed.achieved_green_ratio,
+      keyMetrics.green_supply_ratio,
+      keyMetrics.achieved_green_ratio,
+      keyMetrics.green_power_ratio
+    ),
+    target_green_ratio: pickFirstFiniteNumber(
+      optimization.target_green_ratio,
+      merged.target_green_ratio,
+      raw.target_green_ratio,
+      parsed.target_green_ratio,
+      keyMetrics.target_green_ratio,
+      keyMetrics.green_power_ratio
+    )
+  }
+  Object.entries(fallbackOptimization).forEach(([key, value]) => {
+    if (value !== null) optimization[key] = value
+  })
+
+  if (Object.keys(optimization).length) {
+    merged.optimization = optimization
+  }
+
+  return merged
+}
+
+const calculateGreenPowerCapex = (optimization = {}, costFactors = {}) => {
+  const factors = { ...DEFAULT_GREEN_COST_FACTORS, ...(costFactors || {}) }
+  const windCapex = toNumber(optimization.wind_capacity_mw, 0) * toNumber(factors.wind_per_mw, DEFAULT_GREEN_COST_FACTORS.wind_per_mw)
+  const pvCapex = toNumber(optimization.pv_capacity_mw, 0) * toNumber(factors.pv_per_mw, DEFAULT_GREEN_COST_FACTORS.pv_per_mw)
+  const storageCapex = toNumber(optimization.storage_capacity_mwh, 0) * toNumber(factors.storage_per_mwh, DEFAULT_GREEN_COST_FACTORS.storage_per_mwh)
   return {
-    initialInvestment: toNumber(coolingEco.initial_investment, 0),
+    windCapex,
+    pvCapex,
+    storageCapex,
+    total: windCapex + pvCapex + storageCapex
+  }
+}
+
+const formatNumber = (v, digits = 2) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? n.toFixed(digits) : '--'
+}
+
+const formatPercent = (v, digits = 0) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? `${(n * 100).toFixed(digits)}%` : '--'
+}
+
+const formatPercentAuto = (v, digits = 1) => {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '--'
+  return `${(n > 1 ? n : n * 100).toFixed(digits)}%`
+}
+
+const formatWithUnit = (v, unit, digits = 2) => {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '--'
+  return `${n.toFixed(digits)} ${unit}`
+}
+
+const addLog = (content, type = 'info') => {
+  const now = new Date()
+  const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
+  logs.value.push({ time, type, content })
+  if (logs.value.length > logsLimit) {
+    logs.value = logs.value.slice(-logsLimit)
+  }
+  nextTick(() => {
+    if (logsContainer.value) {
+      logsContainer.value.scrollTop = logsContainer.value.scrollHeight
+    }
+  })
+}
+
+const resetRuntimeState = () => {
+  progressPercent.value = 0
+  currentNodeIndex.value = -1
+  isCompleted.value = false
+  isFailed.value = false
+  workflowStatus.value = 'pending'
+  logs.value = []
+  completedNodes.value = new Set()
+  showCoolingOptimizationTrace.value = false
+  expandedDraftCards.value = {}
+  nodeResults.requirementParser = null
+  nodeResults.draftPlan = null
+  nodeResults.costCalculation = null
+  expertResults.forEach(expert => {
+    expert.status = '等待中'
+    expert.score = 0
+    expert.summary = ''
+    expert.recommendations = []
+    expert.concerns = []
+    expert.metrics = {}
+  })
+  debateResults.value = createEmptyDebateState()
+  selectedDebateRoundNumber.value = null
+  hasManualDebateRoundSelection.value = false
+  arbitratorResult.consensusScore = 0
+  arbitratorResult.summary = ''
+  arbitratorResult.confidence = 0
+  arbitratorResult.scores = { economic: 0, reliability: 0, environmental: 0 }
+  arbitratorResult.tradeOffs = []
+  finalReport.value = null
+  activeCostDetailKey.value = 'green_power'
+  costDetailDialogVisible.value = false
+  Object.assign(finalSolution, {
+    name: '',
+    overallScore: 0,
+    pue: 0,
+    greenPowerRatio: 0,
+    totalCost: 0,
+    tierLevel: 0,
+    expectedAvailability: 0,
+    annualCarbonEmission: 0,
+    roi: 0,
+    paybackPeriod: 0
+  })
+  if (costChart) {
+    costChart.dispose()
+    costChart = null
+  }
+}
+
+const setCompletedNode = (index) => {
+  if (!Number.isInteger(index) || index < 0) return
+  const next = new Set(completedNodes.value)
+  next.add(index)
+  completedNodes.value = next
+  progressPercent.value = Math.round((next.size / workflowNodes.length) * 100)
+}
+
+const markAllNodesCompleted = () => {
+  completedNodes.value = new Set(workflowNodes.map((_, index) => index))
+  currentNodeIndex.value = workflowNodes.length - 1
+  progressPercent.value = 100
+}
+
+const syncDebateScroll = (position = 'top') => {
+  nextTick(() => {
+    if (debateChatRef.value) {
+      debateChatRef.value.scrollTop = position === 'bottom' ? debateChatRef.value.scrollHeight : 0
+    }
+  })
+}
+
+const getLatestDebateRoundNumber = () => {
+  const rounds = debateResults.value.rounds || []
+  if (!rounds.length) return null
+  return debateResults.value.currentRound || rounds[rounds.length - 1]?.number || null
+}
+
+const ensureSelectedDebateRound = () => {
+  const rounds = debateResults.value.rounds || []
+  if (!rounds.length) {
+    selectedDebateRoundNumber.value = null
+    hasManualDebateRoundSelection.value = false
+    return
+  }
+
+  const availableNumbers = rounds.map(round => round.number)
+  const latestRound = getLatestDebateRoundNumber()
+
+  if (!availableNumbers.includes(selectedDebateRoundNumber.value)) {
+    selectedDebateRoundNumber.value = latestRound
+    return
+  }
+
+  if (!hasManualDebateRoundSelection.value) {
+    selectedDebateRoundNumber.value = latestRound
+  }
+}
+
+const selectDebateRound = (roundNumber) => {
+  if (!Number.isFinite(roundNumber)) return
+  selectedDebateRoundNumber.value = roundNumber
+  hasManualDebateRoundSelection.value = true
+  syncDebateScroll('top')
+}
+
+const activeDebateRound = computed(() => {
+  const rounds = debateResults.value.rounds || []
+  if (!rounds.length) return null
+
+  return rounds.find(round => round.number === selectedDebateRoundNumber.value)
+    || rounds.find(round => round.number === getLatestDebateRoundNumber())
+    || rounds[rounds.length - 1]
+})
+
+const requirementSource = computed(() => {
+  const base = nodeResults.requirementParser?.raw || savedProjectConfig.value || {}
+  return normalizeRequirementFields(base)
+})
+
+const draftSource = computed(() => nodeResults.draftPlan || {})
+
+const coolingCostSnapshot = computed(() => {
+  const coolingEco = draftSource.value.cooling_result?.economic_indicators || {}
+  const breakdown = nodeResults.costCalculation?.raw?.capex_breakdown || {}
+  return {
+    initialInvestment: toNumber(
+      breakdown.cooling_system_lakh,
+      toNumber(coolingEco.initial_investment, 0)
+    ),
     annualOpCost: toNumber(coolingEco.annual_op_cost, 0),
     annualElectricityCost: toNumber(coolingEco.annual_electricity_cost, 0),
     lcoe: toNumber(coolingEco.lcoe, null)
@@ -821,7 +1225,7 @@ const coolingCostSnapshot = computed(() => {
 })
 
 const draftPlanTraceOverview = computed(() => {
-  const req = mockSolutionData.intermediate_results.requirement_parser.requirement || {}
+  const req = requirementSource.value
   return {
     inputBaseline: `${req.location || '--'} · ${formatNumber(toNumber(req.planned_load_kw, 0) / 1000, 2)} MW · 绿电目标 ${formatPercent(req.green_power_ratio, 0)}`,
     guidingRule: '先满足目标约束，再生成可执行初稿'
@@ -829,17 +1233,42 @@ const draftPlanTraceOverview = computed(() => {
 })
 
 const draftPlanTraceCards = computed(() => {
-  const req = mockSolutionData.intermediate_results.requirement_parser.requirement || {}
-  const draft = mockSolutionData.intermediate_results.draft_plan_agent.full_output || {}
+  const req = requirementSource.value
+  const draft = draftSource.value
   const greenFull = draft.green_power_result || {}
   const green = greenFull.optimization || {}
+  const greenFailed = greenFull.status === 'error'
+  const greenErrorMessage = greenFull.error_message || greenFull.message || ''
   const greenInputs = greenFull.inputs || {}
   const greenFiles = greenFull.generated_files || {}
+  const actualGreenRatio = toNumber(
+    green.achieved_green_ratio,
+    toNumber(green.green_supply_ratio, NaN)
+  )
+  const targetGreenRatio = toNumber(
+    green.target_green_ratio,
+    toNumber(req.green_power_ratio, 0)
+  )
   const cooling = draft.cooling_result || {}
   const power = draft.power_supply_plan || {}
   const coolingOptimization = cooling.optimization_summary || {}
-  const coolingWeights = coolingOptimization.objective_weights || {}
+  const coolingWeights = coolingOptimization.objective_weights || cooling.objective_weights || {}
   const coolingRanking = Array.isArray(cooling.all_strategy_scores) ? cooling.all_strategy_scores : []
+  const coolingTraceLines = typeof cooling.strategy_optimization_trace === 'string'
+    ? cooling.strategy_optimization_trace
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+    : []
+  const coolingSelectedStrategy = coolingOptimization.selected_strategy || cooling.selected_strategy_name || cooling.cooling_technology || '--'
+  const coolingWaterIndex = coolingOptimization.water_scarcity_index
+  const coolingFeasibleCount = coolingOptimization.feasible_strategy_count ?? coolingRanking.length
+  const coolingRejectedCount = coolingOptimization.rejected_strategy_count
+  const coolingTraceHighlights = [
+    coolingTraceLines.find(line => line.includes('寻优环境')),
+    coolingTraceLines.find(line => line.includes('动态权重')),
+    coolingTraceLines.find(line => line.includes('最终决策'))
+  ].filter(Boolean)
   const greenLoadMw = toNumber(req.planned_load_kw, 0) / 1000
   const annualTemperature = 15
   const powerRaw = power.raw_json || {}
@@ -867,7 +1296,12 @@ const draftPlanTraceCards = computed(() => {
         { label: '光伏容量', value: `${formatNumber(green.pv_capacity_mw, 2)} MW` },
         { label: '风电容量', value: `${formatNumber(green.wind_capacity_mw, 2)} MW` },
         { label: '储能容量', value: `${formatNumber(green.storage_capacity_mwh, 2)} MWh` },
-        { label: '绿电占比', value: formatPercent(green.achieved_green_ratio) }
+        {
+          label: '绿电占比',
+          value: greenFailed ? '计算失败' : Number.isFinite(actualGreenRatio)
+            ? `${formatPercent(actualGreenRatio, 0)}（目标 ${formatPercent(targetGreenRatio, 0)}）`
+            : formatPercent(targetGreenRatio, 0)
+        }
       ],
       inputs: [
         `项目位置：${req.location || '--'}`,
@@ -879,6 +1313,7 @@ const draftPlanTraceCards = computed(() => {
       ],
       traceFactsTitle: '优化设定',
       traceFacts: [
+        { label: '计算状态', value: greenFailed ? (greenErrorMessage || '绿电系统计算失败') : '已完成' },
         { label: '仿真模式', value: greenFull.pv_profile?.mode || '--' },
         { label: '资源曲线', value: '先生成 PV/Wind 单位出力曲线' },
         { label: '负荷文件', value: greenFiles.load_csv ? '已载入负荷系数 CSV' : '使用默认负荷曲线' },
@@ -936,7 +1371,7 @@ const draftPlanTraceCards = computed(() => {
         `IT 负荷：${formatNumber(toNumber(req.planned_load_kw, 0), 0)} kW`,
         `功率密度：${formatNumber(req.computing_power_density, 2)} kW/机柜`,
         `PUE 目标：${formatNumber(req.pue_target, 2)}`,
-        `优先级：${req.priority || 'economic'}`,
+        '优先级：economic',
         '优化目标：PUE / WUE / TCO / CUE / WHR'
       ],
       steps: [
@@ -966,22 +1401,30 @@ const draftPlanTraceCards = computed(() => {
       ],
       optimization: {
         weights: [
-          { label: 'PUE 权重', value: formatPercent(coolingWeights.PUE, 0) },
-          { label: 'WUE 权重', value: formatPercent(coolingWeights.WUE, 0) },
-          { label: 'TCO 权重', value: formatPercent(coolingWeights.TCO, 0) },
-          { label: 'CUE 权重', value: formatPercent(coolingWeights.CUE, 0) },
-          { label: 'WHR 权重', value: formatPercent(coolingWeights.WHR, 0) }
+          { label: 'PUE 权重', value: formatPercent(coolingWeights.PUE, 0), percent: Math.max(0, Math.min(100, toNumber(coolingWeights.PUE, 0) * 100)) },
+          { label: 'WUE 权重', value: formatPercent(coolingWeights.WUE, 0), percent: Math.max(0, Math.min(100, toNumber(coolingWeights.WUE, 0) * 100)) },
+          { label: 'TCO 权重', value: formatPercent(coolingWeights.TCO, 0), percent: Math.max(0, Math.min(100, toNumber(coolingWeights.TCO, 0) * 100)) },
+          { label: 'CUE 权重', value: formatPercent(coolingWeights.CUE, 0), percent: Math.max(0, Math.min(100, toNumber(coolingWeights.CUE, 0) * 100)) },
+          { label: 'WHR 权重', value: formatPercent(coolingWeights.WHR, 0), percent: Math.max(0, Math.min(100, toNumber(coolingWeights.WHR, 0) * 100)) }
         ],
+        summaryCards: [
+          { label: '最优方案', value: coolingSelectedStrategy, strong: true },
+          { label: '可行方案数', value: `${coolingFeasibleCount ?? 0} 个` },
+          { label: '淘汰方案数', value: coolingRejectedCount != null ? `${coolingRejectedCount} 个` : '--' },
+          { label: '水资源指数', value: coolingWaterIndex != null ? formatNumber(coolingWaterIndex, 2) : '--' }
+        ],
+        traceHighlights: coolingTraceHighlights.length ? coolingTraceHighlights : coolingTraceLines.slice(0, 3),
+        traceLines: coolingTraceLines,
         ranking: coolingRanking.slice(0, 4).map(item => ({
           rank: item.ranking ?? '-',
-          name: item.strategy || '--',
-          score: formatNumber(item.total_score, 2),
-          isWinner: (item.strategy || '') === (coolingOptimization.selected_strategy || cooling.cooling_technology),
+          name: item.strategy || item.name || '--',
+          score: formatNumber(item.total_score ?? item.score, 2),
+          isWinner: (item.strategy || item.name || '') === (coolingOptimization.selected_strategy || cooling.selected_strategy_name || cooling.cooling_technology),
           tags: [
-            `PUE ${formatNumber(item.pue, 2)}`,
-            `WUE ${formatNumber(item.wue, 2)}`,
-            `TCO ${formatNumber(item.tco, 2)}`,
-            `WHR ${formatNumber(item.whr, 2)}`
+            `PUE ${formatNumber(item.pue ?? item.f_pue, 2)}`,
+            `WUE ${formatNumber(item.wue ?? item.f_wue, 2)}`,
+            `TCO ${formatNumber(item.tco ?? item.f_tco, 2)}`,
+            `WHR ${formatNumber(item.whr ?? item.f_whr, 2)}`
           ]
         }))
       }
@@ -1052,16 +1495,21 @@ const draftPlanTraceCards = computed(() => {
 const costStructureSegments = computed(() => {
   if (!nodeResults.costCalculation) return []
 
-  const draft = mockSolutionData.intermediate_results.draft_plan_agent.full_output
-  const cost = mockSolutionData.intermediate_results.cost_calculation.full_output.economic_analysis_result
-  const greenDetails = cost.capex_breakdown?.details || {}
+  const draft = draftSource.value
+  const cost = nodeResults.costCalculation.raw || {}
+  const breakdown = nodeResults.costCalculation.capex_breakdown || cost.capex_breakdown || {}
+  const greenDetails = breakdown.details || {}
   const coolingEco = draft.cooling_result?.economic_indicators || {}
+  const coolingCapex = toNumber(
+    breakdown.cooling_system_lakh,
+    toNumber(coolingEco.initial_investment, 0)
+  )
 
   return [
     {
       key: 'power_supply',
       name: '供电系统成本',
-      amount: toNumber(cost.capex_breakdown?.power_supply_system_lakh, 0),
+      amount: toNumber(breakdown.power_supply_system_lakh, 0),
       color: '#16b8c4',
       includedInTotal: true,
       shortDescription: '35kV 双路接入与高可靠供配电架构',
@@ -1077,7 +1525,7 @@ const costStructureSegments = computed(() => {
     {
       key: 'green_power',
       name: '绿电系统成本',
-      amount: toNumber(cost.capex_breakdown?.green_power_system_lakh, 0),
+      amount: toNumber(breakdown.green_power_system_lakh, 0),
       color: '#18b26b',
       includedInTotal: true,
       shortDescription: '风光储协同配置的绿电建设成本',
@@ -1094,14 +1542,14 @@ const costStructureSegments = computed(() => {
     {
       key: 'cooling',
       name: '制冷系统成本',
-      amount: toNumber(coolingEco.initial_investment, 0),
+      amount: coolingCapex,
       color: '#d99a27',
       includedInTotal: true,
       shortDescription: '制冷方案经济指标中的建设投入',
       summary: '制冷系统投资现已并入总投资口径，用于与供电、绿电系统共同构成完整 CAPEX 视图。',
       details: [
         { label: '推荐技术', value: draft.cooling_result?.cooling_technology || '--' },
-        { label: '初始投资', value: `${formatNumber(coolingEco.initial_investment, 0)} 万元` },
+        { label: '初始投资', value: `${formatNumber(coolingCapex, 0)} 万元` },
         { label: '年运维成本', value: `${formatNumber(coolingEco.annual_op_cost, 0)} 万元` },
         { label: '年电费', value: `${formatNumber(coolingEco.annual_electricity_cost, 0)} 万元` },
         { label: 'LCOE', value: coolingEco.lcoe != null ? `${formatNumber(coolingEco.lcoe, 2)} 元/kWh` : '--' }
@@ -1203,7 +1651,8 @@ const formatMetricKey = (key) => {
 
 const formatMetricValue = (key, value) => {
   if (typeof value !== 'number') return value
-  if (key.includes('ratio') || key.includes('score') || key.includes('efficiency') || key === 'roi' || key.includes('availability') || key.includes('reliability')) return `${(value * 100).toFixed(1)}%`
+  if (key.includes('availability') || key.includes('reliability')) return formatPercentAuto(value, 1)
+  if (key.includes('ratio') || key.includes('score') || key.includes('efficiency') || key === 'roi') return `${(value * 100).toFixed(1)}%`
   if (key.includes('cost') || key.includes('carbon_per_rack')) return `${value.toFixed(2)}万元`
   if (key.includes('period')) return `${value.toFixed(1)}年`
   if (key.includes('emission')) return `${value.toFixed(1)}吨`
@@ -1211,38 +1660,260 @@ const formatMetricValue = (key, value) => {
   return value.toFixed(2)
 }
 
-const addLog = (content, type = 'info') => {
-  const now = new Date()
-  const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
-  logs.value.push({ time, type, content })
-  nextTick(() => {
-    if (logsContainer.value) {
-      logsContainer.value.scrollTop = logsContainer.value.scrollHeight
+const normalizeRequirementData = (raw = {}) => {
+  const requirement = normalizeRequirementFields(raw.requirement && typeof raw.requirement === 'object' ? raw.requirement : raw)
+  return {
+    raw: requirement,
+    summary: `${requirement.location || '--'}需求参数已结构化解析`,
+    location: requirement.location || '--',
+    load: toNumber(requirement.planned_load_kw, 0),
+    greenRatio: toNumber(requirement.green_power_ratio, 0) * 100
+  }
+}
+
+const applyRequirementData = (data, { silent = false } = {}) => {
+  nodeResults.requirementParser = normalizeRequirementData(data)
+  if (!silent) {
+    addLog(`需求解析完成: ${nodeResults.requirementParser.location}, 负荷${nodeResults.requirementParser.load}kW`, 'success')
+  }
+}
+
+const applyDraftPlanData = (data, { silent = false } = {}) => {
+  const parsed = data?.parsed && typeof data.parsed === 'object' ? data.parsed : {}
+  const keyMetrics = {
+    ...(data?.key_metrics && typeof data.key_metrics === 'object' ? data.key_metrics : {}),
+    ...(parsed?.key_metrics && typeof parsed.key_metrics === 'object' ? parsed.key_metrics : {})
+  }
+  const normalized = {
+    ...(data && typeof data === 'object' ? data : {}),
+    ...parsed,
+    key_metrics: keyMetrics,
+    green_power_result: normalizeGreenPowerResult(data?.green_power_result, parsed?.green_power_result, keyMetrics),
+    cooling_result: mergeStructuredResult(data?.cooling_result, parsed?.cooling_result, ['economic_indicators', 'cooling_kpis', 'optimization_summary']),
+    power_supply_plan: mergeStructuredResult(data?.power_supply_plan, parsed?.power_supply_plan, ['raw_json'])
+  }
+  nodeResults.draftPlan = normalized
+  if (!silent) {
+    const optimization = normalized.green_power_result?.optimization || {}
+    if (normalized.green_power_result?.status === 'error') {
+      addLog(`绿电系统计算失败: ${normalized.green_power_result?.error_message || '未返回可用结果'}`, 'warning')
+      return
     }
+    addLog(
+      `初稿生成完成: 光伏${formatNumber(optimization.pv_capacity_mw, 2)}MW, 风电${formatNumber(optimization.wind_capacity_mw, 2)}MW, 储能${formatNumber(optimization.storage_capacity_mwh, 2)}MWh`,
+      'success'
+    )
+  }
+}
+
+const applyCostData = (data, { silent = false } = {}) => {
+  const economic = data?.economic_analysis_result || data || {}
+  const breakdown = economic.capex_breakdown || {}
+  const costFactors = economic.cost_factors || DEFAULT_GREEN_COST_FACTORS
+  const draftOptimization = nodeResults.draftPlan?.green_power_result?.optimization || {}
+  const derivedGreenCapex = calculateGreenPowerCapex(draftOptimization, costFactors)
+  const coolingInvestment = toNumber(
+    breakdown.cooling_system_lakh,
+    toNumber(nodeResults.draftPlan?.cooling_result?.economic_indicators?.initial_investment, 0)
+  )
+  const powerSupplyCost = toNumber(breakdown.power_supply_system_lakh, 0)
+  const greenPowerCost = toNumber(breakdown.green_power_system_lakh, null)
+  const normalizedGreenPowerCost = greenPowerCost && greenPowerCost > 0 ? greenPowerCost : derivedGreenCapex.total
+  const recalculatedTotal = powerSupplyCost + greenPowerCost + coolingInvestment
+  const totalCost = (powerSupplyCost + normalizedGreenPowerCost + coolingInvestment) > 0
+    ? (powerSupplyCost + normalizedGreenPowerCost + coolingInvestment)
+    : toNumber(economic.total_capex_lakh, 0)
+  const budget = toNumber(economic.budget_constraint_lakh, 0)
+  const budgetDelta = budget - totalCost
+
+  nodeResults.costCalculation = {
+    raw: economic,
+    capex_breakdown: {
+      ...breakdown,
+      green_power_system_lakh: normalizedGreenPowerCost,
+      cooling_system_lakh: coolingInvestment,
+      details: {
+        ...(breakdown.details || {}),
+        wind_capex_lakh: toNumber(breakdown.details?.wind_capex_lakh, derivedGreenCapex.windCapex),
+        pv_capex_lakh: toNumber(breakdown.details?.pv_capex_lakh, derivedGreenCapex.pvCapex),
+        storage_capex_lakh: toNumber(breakdown.details?.storage_capex_lakh, derivedGreenCapex.storageCapex)
+      }
+    },
+    powerSupplyCost,
+    greenPowerCost: normalizedGreenPowerCost,
+    coolingCost: coolingInvestment,
+    totalCost,
+    budget,
+    isOverBudget: budget > 0 ? budgetDelta < 0 : Boolean(economic.is_over_budget),
+    budgetDelta,
+    total_capex_lakh: totalCost,
+    budget_constraint_lakh: budget
+  }
+
+  if (!silent) {
+    addLog(`成本计算完成: 总投资${formatNumber(totalCost, 0)}万元`, nodeResults.costCalculation.isOverBudget ? 'warning' : 'success')
+  }
+
+  nextTick(() => {
+    activeCostDetailKey.value = 'green_power'
+    initCostChart()
   })
 }
 
-const logs = ref([])
+const applyExpertData = (nodeName, data, { silent = false } = {}) => {
+  const expertIndex = {
+    economic_analysis: 0,
+    power_reliability_analysis: 1,
+    environmental_analysis: 2
+  }[nodeName]
 
-const toNumber = (v, fallback = null) => {
-  const n = Number(v)
-  return Number.isFinite(n) ? n : fallback
+  if (expertIndex === undefined) return
+
+  const expert = expertResults[expertIndex]
+  expert.name = data?.expert_name || expert.name
+  expert.expertType = data?.expert_type || expert.expertType
+  expert.status = '已完成'
+  expert.score = toNumber(data?.confidence, 0)
+  expert.summary = data?.summary || ''
+  expert.recommendations = Array.isArray(data?.recommendations) ? data.recommendations : []
+  expert.concerns = Array.isArray(data?.concerns) ? data.concerns : []
+  expert.metrics = data?.metrics || {}
+
+  if (!silent) {
+    addLog(`${expert.name}评审完成: 置信度${formatNumber(expert.score, 2)}`, 'success')
+  }
 }
 
-const formatNumber = (v, digits = 2) => {
-  const n = Number(v)
-  return Number.isFinite(n) ? n.toFixed(digits) : '--'
+const pushDebateStatement = (roundNumber, statement) => {
+  const round = Number.isFinite(roundNumber) && roundNumber > 0 ? roundNumber : 1
+  let roundEntry = debateResults.value.rounds.find(item => item.number === round)
+  if (!roundEntry) {
+    roundEntry = { number: round, statements: [] }
+    debateResults.value.rounds.push(roundEntry)
+    debateResults.value.rounds.sort((a, b) => a.number - b.number)
+  }
+
+  const exists = roundEntry.statements.some(item => item.speaker === statement.speaker && item.content === statement.content)
+  if (!exists) {
+    roundEntry.statements.push(statement)
+  }
+  debateResults.value.currentRound = Math.max(debateResults.value.currentRound, round)
+  ensureSelectedDebateRound()
+  syncDebateScroll(selectedDebateRoundNumber.value === round ? 'bottom' : 'top')
 }
 
-const formatPercent = (v, digits = 0) => {
-  const n = Number(v)
-  return Number.isFinite(n) ? `${(n * 100).toFixed(digits)}%` : '--'
+const applyDebateData = (data, { silent = false } = {}) => {
+  if (!data || typeof data !== 'object') return
+
+  const consensus = toNumber(data.consensus_score ?? data.consensusScore, null)
+  if (consensus !== null) {
+    debateResults.value.consensusScore = consensus
+  }
+
+  const suggestions = Array.isArray(data.recommendations)
+    ? data.recommendations
+    : Array.isArray(data.suggestions)
+      ? data.suggestions
+      : null
+  if (suggestions) {
+    debateResults.value.summary = { suggestions }
+  }
+
+  if (Array.isArray(data.messages)) {
+    const round = toNumber(data.round, 1)
+    data.messages.forEach(message => {
+      if (message?.content) {
+        pushDebateStatement(round, {
+          speaker: message.speaker || message.expert || '专家',
+          content: message.content
+        })
+      }
+    })
+  } else if (data.content) {
+    pushDebateStatement(toNumber(data.round, 1), {
+      speaker: data.speaker || data.expert || '专家',
+      content: data.content
+    })
+  }
+
+  if (!silent) {
+    addLog(`辩论阶段更新: 第${debateResults.value.currentRound || 1}轮`, 'success')
+  }
 }
 
-const formatWithUnit = (v, unit, digits = 2) => {
-  const n = Number(v)
-  if (!Number.isFinite(n)) return '--'
-  return `${n.toFixed(digits)} ${unit}`
+const applyArbitratorData = (data, { silent = false } = {}) => {
+  if (!data || typeof data !== 'object') return
+  const overallScores = data.overall_scores || data.scores || {}
+  const keyMetrics = data.key_metrics || {}
+  const economicContent = data.economic_section?.content || {}
+  const economicMetrics = expertResults[0]?.metrics || {}
+
+  arbitratorResult.summary = data.summary || arbitratorResult.summary
+  arbitratorResult.confidence = toNumber(data.confidence, arbitratorResult.confidence)
+  arbitratorResult.scores = {
+    economic: toNumber(overallScores.economic, arbitratorResult.scores.economic),
+    reliability: toNumber(overallScores.reliability, arbitratorResult.scores.reliability),
+    environmental: toNumber(overallScores.environmental, arbitratorResult.scores.environmental)
+  }
+  arbitratorResult.consensusScore = toNumber(
+    data.consensus_score ?? data.consensusScore ?? overallScores.overall,
+    arbitratorResult.consensusScore
+  )
+  arbitratorResult.tradeOffs = Array.isArray(data.trade_offs) ? data.trade_offs : arbitratorResult.tradeOffs
+
+  finalSolution.name = data.name || finalSolution.name
+  finalSolution.overallScore = toNumber(overallScores.overall, finalSolution.overallScore)
+  finalSolution.pue = toNumber(keyMetrics.pue, finalSolution.pue)
+  finalSolution.greenPowerRatio = toNumber(keyMetrics.green_power_ratio, finalSolution.greenPowerRatio)
+  finalSolution.totalCost = toNumber(nodeResults.costCalculation?.totalCost, toNumber(keyMetrics.total_cost, finalSolution.totalCost))
+  finalSolution.tierLevel = keyMetrics.tier_level ?? finalSolution.tierLevel
+  finalSolution.expectedAvailability = keyMetrics.expected_availability ?? finalSolution.expectedAvailability
+  finalSolution.annualCarbonEmission = keyMetrics.annual_carbon_emission ?? finalSolution.annualCarbonEmission
+  finalSolution.roi = toNumber(
+    keyMetrics.roi ?? economicContent.roi ?? economicMetrics.roi,
+    finalSolution.roi
+  )
+  finalSolution.paybackPeriod = toNumber(
+    keyMetrics.payback_period ?? economicContent.payback_period ?? economicMetrics.payback_period,
+    finalSolution.paybackPeriod
+  )
+
+  if (Array.isArray(data.recommendations) && data.recommendations.length) {
+    debateResults.value.summary = { suggestions: data.recommendations }
+  }
+
+  if (!silent) {
+    addLog(`仲裁决策完成: 综合评分${formatPercent(finalSolution.overallScore, 0)}`, 'success')
+  }
+}
+
+const applyFinalReportData = (data, { silent = false } = {}) => {
+  const path = data?.path || finalReport.value?.path || '-'
+  finalReport.value = {
+    summary: arbitratorResult.summary || finalReport.value?.summary || '报告已生成，详情请进入方案详情页查看。',
+    path,
+    wordCount: typeof data?.word_count === 'number'
+      ? data.word_count
+      : (typeof data?.content === 'string' ? data.content.length : (finalReport.value?.wordCount || 0)),
+    content: typeof data?.content === 'string' ? data.content : (finalReport.value?.content || '')
+  }
+
+  if (!silent) {
+    addLog(`最终报告生成完成: ${path}`, 'success')
+  }
+}
+
+const applyOutputData = (data, { silent = false } = {}) => {
+  const solution = data?.final_solution || data || {}
+  if (solution && typeof solution === 'object' && Object.keys(solution).length) {
+    applyArbitratorData(solution, { silent: true })
+    if (solution.id) {
+      localStorage.setItem('currentSolutionId', solution.id)
+    }
+  }
+  if (!silent) {
+    addLog('输出节点完成，方案生成成功！', 'success')
+  }
 }
 
 const openCostDetail = (segmentKey) => {
@@ -1366,223 +2037,241 @@ const initCostChart = () => {
   })
 }
 
-// ============================================
-// 模拟工作流进度
-// ============================================
-const mockSteps = [
-  {
-    name: 'requirement_parser',
-    index: 0,
-    duration: 1500,
-    execute: () => {
-      const req = mockSolutionData.intermediate_results.requirement_parser.requirement
-      nodeResults.requirementParser = {
-        summary: `${req.location}需求参数已结构化解析`,
-        location: req.location,
-        load: req.planned_load_kw,
-        greenRatio: req.green_power_ratio * 100
-      }
-      addLog(`需求解析完成: ${req.location}, 负荷${req.planned_load_kw}kW`, 'success')
-    }
-  },
-  {
-    name: 'draft_plan_agent',
-    index: 1,
-    duration: 2500,
-    execute: () => {
-      const draft = mockSolutionData.intermediate_results.draft_plan_agent.full_output
-      const gp = draft.green_power_result.optimization
-      const cooling = draft.cooling_result
-      const power = draft.power_supply_plan
-      
-      nodeResults.draftPlan = {
-        pvCapacity: gp.pv_capacity_mw,
-        windCapacity: gp.wind_capacity_mw,
-        storageCapacity: gp.storage_capacity_mwh,
-        achievedGreenRatio: gp.achieved_green_ratio,
-        coolingTech: cooling.cooling_technology,
-        pue: cooling.estimated_pue,
-        wue: cooling.predicted_wue,
-        coolingPower: cooling.cooling_power_consumption,
-        wasteHeatRecovery: cooling.waste_heat_recovery_kw,
-        tierLevel: power.raw_json.machine_room_grade,
-        externalVoltage: power.external_voltage,
-        redundancyLogic: power.redundancy_logic,
-        upsConfig: power.bus_type,
-        schemeName: power.scheme_name,
-        costPerMw: power.raw_json.cost_per_mw
-      }
-      addLog(`初稿方案: 光伏${gp.pv_capacity_mw}MW, 风电${gp.wind_capacity_mw}MW, 储能${gp.storage_capacity_mwh}MWh`, 'success')
-    }
-  },
-  {
-    name: 'cost_calculation',
-    index: 2,
-    duration: 1500,
-    execute: () => {
-      const cost = mockSolutionData.intermediate_results.cost_calculation.full_output.economic_analysis_result
-      const coolingInvestment = toNumber(mockSolutionData.intermediate_results.draft_plan_agent.full_output.cooling_result?.economic_indicators?.initial_investment, 0)
-      const recalculatedTotal = toNumber(cost.capex_breakdown.power_supply_system_lakh, 0) +
-        toNumber(cost.capex_breakdown.green_power_system_lakh, 0) +
-        coolingInvestment
-      const budgetConstraint = toNumber(cost.budget_constraint_lakh, 0)
-      const budgetDelta = budgetConstraint - recalculatedTotal
-      nodeResults.costCalculation = {
-        powerSupplyCost: cost.capex_breakdown.power_supply_system_lakh,
-        greenPowerCost: cost.capex_breakdown.green_power_system_lakh,
-        coolingCost: coolingInvestment,
-        totalCost: recalculatedTotal,
-        budget: budgetConstraint,
-        isOverBudget: budgetDelta < 0,
-        budgetDelta
-      }
-      addLog(`成本计算: 总投资${recalculatedTotal}万元`, budgetDelta < 0 ? 'warning' : 'success')
-      nextTick(() => {
-        activeCostDetailKey.value = 'green_power'
-        initCostChart()
-      })
-    }
-  },
-  {
-    name: 'economic_analysis',
-    index: 3,
-    duration: 1800,
-    execute: () => {
-      const expert = mockSolutionData.intermediate_results.economic_analysis.full_output
-      expertResults[0] = { ...expertResults[0], status: '已完成', score: expert.confidence, summary: expert.summary, recommendations: expert.recommendations, concerns: expert.concerns, metrics: expert.metrics }
-      addLog(`经济性专家评审完成: 置信度${expert.confidence}`, 'success')
-    }
-  },
-  {
-    name: 'power_reliability_analysis',
-    index: 4,
-    duration: 1800,
-    execute: () => {
-      const expert = mockSolutionData.intermediate_results.power_reliability_analysis.full_output
-      expertResults[1] = { ...expertResults[1], status: '已完成', score: expert.confidence, summary: expert.summary, recommendations: expert.recommendations, concerns: expert.concerns, metrics: expert.metrics }
-      addLog(`可靠性专家评审完成: 置信度${expert.confidence}`, 'success')
-    }
-  },
-  {
-    name: 'environmental_analysis',
-    index: 5,
-    duration: 1800,
-    execute: () => {
-      const expert = mockSolutionData.intermediate_results.environmental_analysis.full_output
-      expertResults[2] = { ...expertResults[2], status: '已完成', score: expert.confidence, summary: expert.summary, recommendations: expert.recommendations, concerns: expert.concerns, metrics: expert.metrics }
-      addLog(`环保性专家评审完成: 置信度${expert.confidence}`, 'success')
-    }
-  },
-  {
-    name: 'debate_round',
-    index: 6,
-    duration: 3500,
-    execute: () => {
-      debateResults.value = {
-        currentRound: 2,
-        consensusScore: 0.85,
-        rounds: [],
-        summary: { suggestions: mockSolutionData.intermediate_results.arbitrator.full_output.recommendations }
-      }
-      
-      const debates = mockSolutionData.debate_history
-      debates.forEach(d => {
-        let roundEntry = debateResults.value.rounds.find(r => r.number === d.round)
-        if (!roundEntry) {
-          roundEntry = { number: d.round, statements: [] }
-          debateResults.value.rounds.push(roundEntry)
-        }
-        roundEntry.statements.push({ speaker: d.speaker, content: d.content })
-      })
-      
-      addLog('辩论阶段完成，专家已达成共识', 'success')
-    }
-  },
-  {
-    name: 'arbitrator',
-    index: 7,
-    duration: 2000,
-    execute: () => {
-      const arb = mockSolutionData.intermediate_results.arbitrator.full_output
-      arbitratorResult.summary = arb.summary
-      arbitratorResult.confidence = mockSolutionData.confidence
-      arbitratorResult.scores = { 
-        economic: arb.scores.economic, 
-        reliability: arb.scores.reliability, 
-        environmental: arb.scores.environmental 
-      }
-      arbitratorResult.consensusScore = arb.scores.overall
-      arbitratorResult.tradeOffs = arb.trade_offs
-      addLog(`仲裁决策完成: 综合评分${(arb.scores.overall * 100).toFixed(0)}%`, 'success')
-    }
-  },
-  {
-    name: 'final_report',
-    index: 8,
-    duration: 1500,
-    execute: () => {
-      finalReport.value = {
-        summary: mockSolutionData.intermediate_results.arbitrator.full_output.summary,
-        path: '/data/reports/mock-solution-001.md',
-        wordCount: 3520
-      }
-      addLog('最终报告生成完成', 'success')
-    }
-  },
-  {
-    name: 'output',
-    index: 9,
-    duration: 1200,
-    execute: () => {
-      finalSolution.name = mockSolutionData.name
-      finalSolution.overallScore = mockSolutionData.overall_scores.overall
-      finalSolution.pue = mockSolutionData.key_metrics.pue
-      finalSolution.greenPowerRatio = mockSolutionData.key_metrics.green_power_ratio
-      finalSolution.totalCost = nodeResults.costCalculation?.totalCost ?? totalInvestmentWithCooling.value
-      finalSolution.tierLevel = mockSolutionData.key_metrics.tier_level
-      finalSolution.expectedAvailability = mockSolutionData.key_metrics.expected_availability
-      finalSolution.annualCarbonEmission = mockSolutionData.key_metrics.annual_carbon_emission
-      finalSolution.roi = mockSolutionData.key_metrics.roi
-      finalSolution.paybackPeriod = mockSolutionData.key_metrics.payback_period
-      addLog('输出节点完成，方案生成成功！', 'success')
-    }
+const processWorkflowNode = (nodeName, data, { silent = false } = {}) => {
+  switch (nodeName) {
+    case 'requirement_parser':
+      applyRequirementData(data, { silent })
+      break
+    case 'draft_plan_agent':
+      applyDraftPlanData(data, { silent })
+      break
+    case 'cost_calculation':
+      applyCostData(data, { silent })
+      break
+    case 'economic_analysis':
+    case 'power_reliability_analysis':
+    case 'environmental_analysis':
+      applyExpertData(nodeName, data, { silent })
+      break
+    case 'debate_round':
+      applyDebateData(data, { silent })
+      break
+    case 'arbitrator':
+      applyArbitratorData(data, { silent })
+      break
+    case 'final_report':
+      applyFinalReportData(data, { silent })
+      break
+    case 'output':
+      applyOutputData(data, { silent })
+      break
+    default:
+      break
   }
-]
+}
 
-const executeNextStep = () => {
-  if (currentStepIndex >= mockSteps.length || isFailed.value || isCompleted.value) {
-    if (currentStepIndex >= mockSteps.length) {
-      isCompleted.value = true
-      progressPercent.value = 100
-      localStorage.setItem('currentSolutionId', workflowId.value)
-      addLog('✅ 工作流执行完成（来源: mock data）', 'success')
+const hydrateFromSolutionData = async (solutionData) => {
+  if (!solutionData || typeof solutionData !== 'object') return
+
+  const intermediate = solutionData.intermediate_results || {}
+
+  if (intermediate.requirement_parser?.full_output) {
+    applyRequirementData(intermediate.requirement_parser.full_output, { silent: true })
+  }
+  if (intermediate.draft_plan_agent?.full_output) {
+    applyDraftPlanData(intermediate.draft_plan_agent.full_output, { silent: true })
+  }
+  if (intermediate.cost_calculation?.full_output) {
+    applyCostData(intermediate.cost_calculation.full_output, { silent: true })
+  }
+  if (intermediate.economic_analysis?.full_output) {
+    applyExpertData('economic_analysis', intermediate.economic_analysis.full_output, { silent: true })
+  }
+  if (intermediate.power_reliability_analysis?.full_output) {
+    applyExpertData('power_reliability_analysis', intermediate.power_reliability_analysis.full_output, { silent: true })
+  }
+  if (intermediate.environmental_analysis?.full_output) {
+    applyExpertData('environmental_analysis', intermediate.environmental_analysis.full_output, { silent: true })
+  }
+  if (intermediate.debate_round?.full_output) {
+    applyDebateData(intermediate.debate_round.full_output, { silent: true })
+  }
+  if (Array.isArray(solutionData.debate_history)) {
+    solutionData.debate_history.forEach(item => applyDebateData(item, { silent: true }))
+  }
+  if (intermediate.arbitrator?.full_output) {
+    applyArbitratorData(intermediate.arbitrator.full_output, { silent: true })
+  } else {
+    applyArbitratorData(solutionData, { silent: true })
+  }
+  if (intermediate.final_report?.full_output) {
+    applyFinalReportData(intermediate.final_report.full_output, { silent: true })
+  }
+  if (intermediate.output?.full_output) {
+    applyOutputData(intermediate.output.full_output, { silent: true })
+  }
+
+  try {
+    const persistedSolutionId = solutionData.id || localStorage.getItem('currentSolutionId') || workflowId.value
+    const { data } = await solutionApi.exportMarkdown(persistedSolutionId)
+    const content = data?.content || ''
+    if (content || finalReport.value) {
+      finalReport.value = {
+        summary: finalReport.value?.summary || arbitratorResult.summary || '报告已生成',
+        path: finalReport.value?.path || '-',
+        wordCount: content.length,
+        content
+      }
     }
+  } catch (error) {
+    console.warn('加载 Markdown 报告失败:', error)
+  }
+}
+
+const handleWorkflowCompleted = async (payload) => {
+  workflowStatus.value = 'completed'
+  isCompleted.value = true
+  isFailed.value = false
+  if (payload?.solution) {
+    applyArbitratorData(payload.solution, { silent: true })
+  }
+  markAllNodesCompleted()
+  addLog('✅ 工作流执行完成', 'success')
+  stopStatusPolling()
+  closeStream()
+  try {
+    const { data } = await solutionApi.getById(workflowId.value)
+    if (data?.id) {
+      localStorage.setItem('currentSolutionId', data.id)
+    }
+    await hydrateFromSolutionData(data)
+  } catch (error) {
+    console.warn('回填最终方案详情失败:', error)
+  }
+}
+
+const handleWorkflowFailed = (errorPayload) => {
+  workflowStatus.value = 'failed'
+  isFailed.value = true
+  isCompleted.value = false
+  stopStatusPolling()
+  closeStream()
+  addLog(`工作流执行失败: ${errorPayload?.error || '未知错误'}`, 'error')
+  ElMessage.error(errorPayload?.error || '方案生成失败')
+}
+
+const handleStreamMessage = async (message) => {
+  if (!message || typeof message !== 'object') return
+
+  const { node, data } = message
+  if (node === 'heartbeat') return
+
+  if (node === 'completed') {
+    await handleWorkflowCompleted(data)
     return
   }
 
-  const step = mockSteps[currentStepIndex]
-  currentNodeIndex.value = step.index
-  addLog(`开始执行 ${workflowNodes[step.index].name}...`, 'info')
-  
-  // 更新进度
-  progressPercent.value = Math.round((currentStepIndex / mockSteps.length) * 100)
-  
-  setTimeout(() => {
-    step.execute()
-    completedNodes.value.add(step.index)
-    progressPercent.value = Math.round(((currentStepIndex + 1) / mockSteps.length) * 100)
-    currentStepIndex++
-    
-    mockTimer = setTimeout(executeNextStep, 500)
-  }, step.duration)
+  if (node === 'error') {
+    handleWorkflowFailed(data || {})
+    return
+  }
+
+  if (!(node in nodeIndexMap)) return
+
+  const index = nodeIndexMap[node]
+  currentNodeIndex.value = index
+  setCompletedNode(index)
+  addLog(`收到 ${workflowNodes[index].name} 节点输出`, 'info')
+  processWorkflowNode(node, data)
 }
 
-const startMockWorkflow = () => {
-  addLog('系统启动，开始生成方案（模拟模式）...', 'info')
-  addLog('使用工作流ID: mock-workflow-001', 'info')
-  addLog('开始模拟工作流进度...', 'info')
-  
-  setTimeout(executeNextStep, 800)
+const closeStream = () => {
+  if (streamSource) {
+    streamSource.close()
+    streamSource = null
+  }
+}
+
+const connectStream = () => {
+  closeStream()
+  streamSource = workflowApi.connectStream(workflowId.value)
+  streamSource.onopen = () => {
+    addLog('已连接后端实时流', 'success')
+  }
+  streamSource.onmessage = async (event) => {
+    try {
+      const message = JSON.parse(event.data)
+      await handleStreamMessage(message)
+    } catch (error) {
+      console.error('解析 SSE 消息失败:', error)
+      addLog('收到无法解析的流式消息', 'warning')
+    }
+  }
+  streamSource.onerror = () => {
+    if (!isCompleted.value && !isFailed.value) {
+      addLog('实时流连接异常，继续通过状态接口兜底跟踪', 'warning')
+    }
+  }
+}
+
+const stopStatusPolling = () => {
+  if (statusPollTimer) {
+    clearInterval(statusPollTimer)
+    statusPollTimer = null
+  }
+}
+
+const startStatusPolling = () => {
+  stopStatusPolling()
+  statusPollTimer = setInterval(async () => {
+    if (!workflowId.value || isCompleted.value || isFailed.value) return
+    try {
+      const { data } = await workflowApi.getStatus(workflowId.value)
+      workflowStatus.value = data?.status || workflowStatus.value
+      if (data?.status === 'completed' && !isCompleted.value) {
+        await handleWorkflowCompleted()
+      } else if (data?.status === 'failed' && !isFailed.value) {
+        handleWorkflowFailed({ error: data?.error || '工作流执行失败' })
+      }
+    } catch (error) {
+      console.warn('轮询工作流状态失败:', error)
+    }
+  }, 5000)
+}
+
+const initializeWorkflow = async () => {
+  savedProjectConfig.value = normalizeRequirementFields(loadSavedProjectConfig())
+  workflowId.value = localStorage.getItem('currentWorkflowId') || ''
+
+  if (!workflowId.value) {
+    ElMessage.warning('未找到进行中的工作流，请先在参数配置页启动方案生成')
+    router.push('/config')
+    return
+  }
+
+  addLog(`已读取工作流ID: ${workflowId.value}`, 'info')
+
+  try {
+    const { data } = await workflowApi.getStatus(workflowId.value)
+    workflowStatus.value = data?.status || 'unknown'
+    addLog(`当前工作流状态: ${workflowStatus.value}`, 'info')
+
+    if (workflowStatus.value === 'completed') {
+      await handleWorkflowCompleted()
+      return
+    }
+
+    if (workflowStatus.value === 'failed') {
+      handleWorkflowFailed({ error: data?.error || '工作流执行失败' })
+      return
+    }
+  } catch (error) {
+    console.warn('初始化获取工作流状态失败:', error)
+    addLog('获取工作流状态失败，直接尝试连接实时流', 'warning')
+  }
+
+  connectStream()
+  startStatusPolling()
 }
 
 const clearLogs = () => { logs.value = [] }
@@ -1592,31 +2281,24 @@ const downloadLogs = () => {
   const blob = new Blob([content], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url; a.download = 'generate_logs.txt'; a.click()
+  a.href = url
+  a.download = 'generate_logs.txt'
+  a.click()
   URL.revokeObjectURL(url)
 }
 
 const cancelGenerate = () => {
-  if (mockTimer) clearTimeout(mockTimer)
+  stopStatusPolling()
+  closeStream()
   router.push('/config')
 }
 
 const regenerate = () => {
-  if (mockTimer) clearTimeout(mockTimer)
-  progressPercent.value = 0; currentNodeIndex.value = -1; isCompleted.value = false; isFailed.value = false
-  logs.value = []; completedNodes.value = new Set(); currentStepIndex = 0
-  nodeResults.requirementParser = null; nodeResults.draftPlan = null; nodeResults.costCalculation = null
-  activeCostDetailKey.value = 'green_power'
-  costDetailDialogVisible.value = false
-  if (costChart) {
-    costChart.dispose()
-    costChart = null
-  }
-  expertResults.forEach(e => { e.status = '等待中'; e.score = 0; e.summary = ''; e.recommendations = []; e.concerns = []; e.metrics = {} })
-  debateResults.value = null
-  arbitratorResult.summary = ''; arbitratorResult.confidence = 0; arbitratorResult.scores = { economic: 0, reliability: 0, environmental: 0 }; arbitratorResult.tradeOffs = []; arbitratorResult.consensusScore = 0
-  finalReport.value = null
-  Object.assign(finalSolution, { name: '', overallScore: 0, pue: 0, greenPowerRatio: 0, totalCost: 0, tierLevel: 0, expectedAvailability: 0, annualCarbonEmission: 0, roi: 0, paybackPeriod: 0 })
+  stopStatusPolling()
+  closeStream()
+  localStorage.removeItem('currentWorkflowId')
+  localStorage.removeItem('currentSolutionId')
+  resetRuntimeState()
   router.push('/config')
 }
 
@@ -1628,35 +2310,35 @@ const expertColors = {
   'Environmental Analysis Expert-Wang': { color: '#f39c12', bg: '#fff7ed', class: 'expert-environmental' },
   '经济性专家': { color: '#00b894', bg: '#ecfdf5', class: 'expert-economic' },
   '供电可靠性专家': { color: '#00cec9', bg: '#cffafe', class: 'expert-reliability' },
-  '环保性专家': { color: '#f39c12', bg: '#fff7ed', class: 'expert-environmental' },
+  '环保性专家': { color: '#f39c12', bg: '#fff7ed', class: 'expert-environmental' }
 }
 
-const getExpertColor = (speaker) => {
+const getExpertColor = (speaker = '') => {
   for (const [name, config] of Object.entries(expertColors)) {
-    if (speaker.includes(name.split('-')[0].split(' ')[0]) || speaker.includes(name.split('-')[1]) || name.includes(speaker)) {
+    if (speaker.includes(name.split('-')[0].split(' ')[0]) || speaker.includes(name.split('-')[1] || '') || name.includes(speaker)) {
       return config.color
     }
   }
   return '#636e72'
 }
 
-const getExpertClass = (speaker) => {
+const getExpertClass = (speaker = '') => {
   for (const [name, config] of Object.entries(expertColors)) {
-    if (speaker.includes(name.split('-')[0].split(' ')[0]) || speaker.includes(name.split('-')[1]) || name.includes(speaker)) {
+    if (speaker.includes(name.split('-')[0].split(' ')[0]) || speaker.includes(name.split('-')[1] || '') || name.includes(speaker)) {
       return config.class
     }
   }
   return 'expert-default'
 }
 
-const getExpertInitial = (speaker) => {
+const getExpertInitial = (speaker = '') => {
   if (speaker.includes('Economic') || speaker.includes('Zhang') || speaker.includes('经济性')) return '经'
   if (speaker.includes('Reliability') || speaker.includes('Li') || speaker.includes('可靠性')) return '电'
   if (speaker.includes('Environmental') || speaker.includes('Wang') || speaker.includes('环保性')) return '环'
-  return speaker.charAt(0)
+  return speaker.charAt(0) || '专'
 }
 
-const getExpertRole = (speaker) => {
+const getExpertRole = (speaker = '') => {
   if (speaker.includes('Economic') || speaker.includes('Zhang') || speaker.includes('经济性')) return '经济性视角'
   if (speaker.includes('Reliability') || speaker.includes('Li') || speaker.includes('可靠性')) return '供电可靠性视角'
   if (speaker.includes('Environmental') || speaker.includes('Wang') || speaker.includes('环保性')) return '环保性视角'
@@ -1678,13 +2360,15 @@ const handleResize = () => {
   }
 }
 
-onMounted(() => {
-  startMockWorkflow()
+onMounted(async () => {
   window.addEventListener('resize', handleResize)
+  resetRuntimeState()
+  await initializeWorkflow()
 })
 
 onUnmounted(() => {
-  if (mockTimer) clearTimeout(mockTimer)
+  stopStatusPolling()
+  closeStream()
   window.removeEventListener('resize', handleResize)
   if (costChart) {
     costChart.dispose()
@@ -2104,6 +2788,39 @@ onUnmounted(() => {
   color: var(--text-primary);
 }
 
+.draft-detail-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%);
+  color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.draft-detail-toggle:hover {
+  background: color-mix(in oklab, var(--bg-panel) 88%, var(--primary-color) 12%);
+  border-color: color-mix(in oklab, var(--primary-color) 28%, var(--border-light));
+}
+
+.draft-detail-toggle-icon {
+  font-size: 14px;
+}
+
+.draft-detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .draft-chip-list {
   display: flex;
   flex-wrap: wrap;
@@ -2216,6 +2933,41 @@ onUnmounted(() => {
   border-top: 1px solid color-mix(in oklab, var(--border-light) 88%, var(--primary-color) 12%);
 }
 
+.draft-optimization-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.draft-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 84px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%);
+}
+
+.draft-summary-item.is-strong {
+  background: color-mix(in oklab, var(--primary-color) 10%, var(--bg-panel));
+  border-color: color-mix(in oklab, var(--primary-color) 20%, var(--border-default));
+}
+
+.draft-summary-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.draft-summary-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
 .draft-weight-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2233,6 +2985,13 @@ onUnmounted(() => {
   background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
 }
 
+.draft-weight-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .draft-weight-label {
   font-size: 11px;
   color: var(--text-secondary);
@@ -2242,6 +3001,88 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.draft-weight-bar {
+  position: relative;
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--bg-card) 86%, var(--primary-color) 14%);
+}
+
+.draft-weight-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--primary-color) 72%, #7fd3ab 28%), var(--primary-color));
+}
+
+.draft-trace-preview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.draft-trace-highlight {
+  min-height: 74px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 95%, var(--primary-color) 5%);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.draft-trace-toggle {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in oklab, var(--primary-color) 20%, var(--border-default));
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--bg-card) 96%, var(--primary-color) 4%);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.draft-trace-toggle:hover {
+  background: color-mix(in oklab, var(--primary-color) 8%, var(--bg-card));
+  border-color: color-mix(in oklab, var(--primary-color) 30%, var(--border-default));
+  transform: translateY(-1px);
+}
+
+.draft-trace-panel {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 95%, var(--primary-color) 5%);
+}
+
+.draft-trace-title {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.draft-trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.draft-trace-line {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .draft-ranking-list {
@@ -2306,6 +3147,27 @@ onUnmounted(() => {
   background: color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%);
   font-size: 11px;
   color: var(--text-secondary);
+}
+
+@media (max-width: 1280px) {
+  .draft-optimization-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .draft-weight-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .draft-trace-preview {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 880px) {
+  .draft-optimization-summary,
+  .draft-weight-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .cost-summary {
@@ -2962,7 +3824,60 @@ onUnmounted(() => {
 }
 
 .debate-main-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   padding: 18px;
+}
+
+.debate-round-nav {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.debate-round-tab {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 112px;
+  padding: 11px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+  color: var(--text-secondary);
+  text-align: left;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+}
+
+.debate-round-tab:hover {
+  border-color: color-mix(in oklab, var(--primary-color) 18%, var(--border-default));
+  background: color-mix(in oklab, var(--primary-color) 6%, var(--bg-card));
+  transform: translateY(-1px);
+}
+
+.debate-round-tab.active {
+  border-color: color-mix(in oklab, var(--primary-color) 24%, var(--border-default));
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 12%, var(--bg-card)) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  color: var(--text-primary);
+}
+
+.debate-round-tab:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--primary-color) 60%, white);
+  outline-offset: 2px;
+}
+
+.debate-round-tab-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: inherit;
+}
+
+.debate-round-tab-meta {
+  font-size: 11px;
+  color: var(--text-placeholder);
 }
 
 .debate-chat-messages {
@@ -3175,6 +4090,16 @@ onUnmounted(() => {
   color: var(--primary-dark);
   font-size: 11px;
   font-weight: 700;
+}
+
+.debate-summary-context {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
 }
 
 .suggestions-list {
@@ -3597,6 +4522,15 @@ onUnmounted(() => {
   .debate-main-column,
   .debate-summary-card {
     padding: 16px;
+  }
+
+  .debate-round-nav {
+    gap: 8px;
+  }
+
+  .debate-round-tab {
+    min-width: 104px;
+    padding: 10px 12px;
   }
 
   .chat-message {
