@@ -43,6 +43,14 @@
           </el-button>
         </div>
       </div>
+
+      <div class="hero-model-stage" aria-label="3D data center model">
+        <canvas ref="heroModelCanvas" class="hero-model-canvas"></canvas>
+        <div class="hero-model-caption">
+          <span class="caption-dot"></span>
+          <span>360° digital twin</span>
+        </div>
+      </div>
     </div>
 
     <section class="dc-overview-section">
@@ -389,8 +397,11 @@ import { solutionApi } from '@/api'
 
 const router = useRouter()
 const particleCanvas = ref(null)
+const heroModelCanvas = ref(null)
 const activeNode = ref(null)
 let animationFrame = null
+let heroModelFrame = null
+let heroModelCleanup = null
 let particles = []
 
 const isLoading = ref(true)
@@ -500,6 +511,450 @@ const handleResize = () => {
     cancelAnimationFrame(animationFrame)
   }
   initParticles()
+  resizeHeroModel()
+}
+
+const createModelRenderer = () => {
+  const canvas = heroModelCanvas.value
+  if (!canvas) return null
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  const state = {
+    width: 0,
+    height: 0,
+    dpr: 1,
+    angle: 0,
+    targetX: 0.56,
+    targetY: 0.48,
+    dragX: 0.56,
+    dragY: 0.48,
+    dragging: false,
+    lastX: 0,
+    lastY: 0
+  }
+
+  const palette = {
+    platform: 'rgba(17, 35, 31, 0.96)',
+    platformSide: 'rgba(8, 20, 18, 0.98)',
+    edge: 'rgba(116, 232, 190, 0.44)',
+    rack: 'rgba(37, 55, 61, 0.98)',
+    rackTop: 'rgba(94, 114, 118, 0.96)',
+    rackFace: 'rgba(20, 32, 37, 0.98)',
+    cyan: 'rgba(87, 221, 232, 0.9)',
+    green: 'rgba(121, 239, 171, 0.92)',
+    red: 'rgba(255, 88, 92, 0.82)',
+    amber: 'rgba(246, 197, 106, 0.86)',
+    violet: 'rgba(156, 134, 255, 0.72)',
+    glass: 'rgba(132, 242, 220, 0.12)',
+    text: 'rgba(223, 249, 239, 0.86)'
+  }
+
+  const resize = () => {
+    const rect = canvas.getBoundingClientRect()
+    state.dpr = Math.min(window.devicePixelRatio || 1, 2)
+    state.width = Math.max(320, rect.width)
+    state.height = Math.max(260, rect.height)
+    canvas.width = Math.floor(state.width * state.dpr)
+    canvas.height = Math.floor(state.height * state.dpr)
+    ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0)
+  }
+
+  const rotate = (point) => {
+    const [x, y, z] = point
+    const cy = Math.cos(state.dragY)
+    const sy = Math.sin(state.dragY)
+    const cx = Math.cos(state.dragX)
+    const sx = Math.sin(state.dragX)
+    const x1 = x * cy - z * sy
+    const z1 = x * sy + z * cy
+    const y1 = y * cx - z1 * sx
+    const z2 = y * sx + z1 * cx
+    return [x1, y1, z2]
+  }
+
+  const project = (point) => {
+    const [x, y, z] = rotate(point)
+    const camera = 760
+    const scale = camera / (camera + z)
+    const fit = Math.min(state.width / 880, state.height / 560)
+    return {
+      x: state.width * 0.55 + x * scale * fit,
+      y: state.height * 0.46 + y * scale * fit,
+      z,
+      scale
+    }
+  }
+
+  const faceDepth = (points) => points.reduce((sum, point) => sum + rotate(point)[2], 0) / points.length
+
+  const drawFace = (points, fill, stroke = 'rgba(168, 255, 220, 0.16)', lineWidth = 1) => {
+    const projected = points.map(project)
+    ctx.beginPath()
+    projected.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y)
+      else ctx.lineTo(point.x, point.y)
+    })
+    ctx.closePath()
+    ctx.fillStyle = fill
+    ctx.fill()
+    ctx.strokeStyle = stroke
+    ctx.lineWidth = lineWidth
+    ctx.stroke()
+  }
+
+  const cubeFaces = (cx, cy, cz, sx, sy, sz, colors) => {
+    const x0 = cx - sx / 2
+    const x1 = cx + sx / 2
+    const y0 = cy - sy / 2
+    const y1 = cy + sy / 2
+    const z0 = cz - sz / 2
+    const z1 = cz + sz / 2
+    const p = {
+      lbf: [x0, y1, z0], rbf: [x1, y1, z0], rtf: [x1, y0, z0], ltf: [x0, y0, z0],
+      lbb: [x0, y1, z1], rbb: [x1, y1, z1], rtb: [x1, y0, z1], ltb: [x0, y0, z1]
+    }
+    return [
+      { points: [p.ltf, p.rtf, p.rtb, p.ltb], fill: colors.top },
+      { points: [p.rbf, p.rbb, p.rtb, p.rtf], fill: colors.right },
+      { points: [p.lbf, p.rbf, p.rtf, p.ltf], fill: colors.front },
+      { points: [p.lbb, p.lbf, p.ltf, p.ltb], fill: colors.left || colors.right },
+      { points: [p.lbb, p.rbb, p.rbf, p.lbf], fill: colors.bottom || colors.front }
+    ].map(face => ({ ...face, depth: faceDepth(face.points), type: 'face' }))
+  }
+
+  const drawLine3d = (points, color, width = 2, dash = null, glow = 5) => {
+    const projected = points.map(project)
+    ctx.save()
+    ctx.beginPath()
+    projected.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y)
+      else ctx.lineTo(point.x, point.y)
+    })
+    ctx.strokeStyle = color
+    ctx.lineWidth = width
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    if (dash) ctx.setLineDash(dash)
+    ctx.shadowColor = color
+    ctx.shadowBlur = width * glow
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  const drawGlowPoint = (point, color, radius = 4) => {
+    const p = project(point)
+    ctx.save()
+    const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 5)
+    gradient.addColorStop(0, color)
+    gradient.addColorStop(0.28, color.replace(/[\d.]+\)$/u, '0.38)'))
+    gradient.addColorStop(1, 'rgba(8, 21, 18, 0)')
+    ctx.fillStyle = gradient
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, radius * 5, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+  }
+
+  const drawEnergyPulse = (points, color, offset = 0) => {
+    const index = (state.angle * 0.42 + offset) % 1
+    const segment = Math.max(0, Math.min(points.length - 2, Math.floor(index * (points.length - 1))))
+    const local = index * (points.length - 1) - segment
+    const start = points[segment]
+    const end = points[segment + 1]
+    const point = [
+      start[0] + (end[0] - start[0]) * local,
+      start[1] + (end[1] - start[1]) * local,
+      start[2] + (end[2] - start[2]) * local
+    ]
+    drawGlowPoint(point, color, 3.5)
+  }
+
+  const drawRoundedRect = (x, y, width, height, radius) => {
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(x, y, width, height, radius)
+      return
+    }
+    const r = Math.min(radius, width / 2, height / 2)
+    ctx.moveTo(x + r, y)
+    ctx.lineTo(x + width - r, y)
+    ctx.quadraticCurveTo(x + width, y, x + width, y + r)
+    ctx.lineTo(x + width, y + height - r)
+    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height)
+    ctx.lineTo(x + r, y + height)
+    ctx.quadraticCurveTo(x, y + height, x, y + height - r)
+    ctx.lineTo(x, y + r)
+    ctx.quadraticCurveTo(x, y, x + r, y)
+  }
+
+  const drawLabel = (text, point, align = 'center') => {
+    const p = project(point)
+    ctx.save()
+    ctx.font = '600 12px Microsoft YaHei, sans-serif'
+    ctx.textAlign = align
+    const metrics = ctx.measureText(text)
+    const paddingX = 8
+    const boxWidth = metrics.width + paddingX * 2
+    const boxHeight = 23
+    const boxX = align === 'left' ? p.x - 2 : align === 'right' ? p.x - boxWidth + 2 : p.x - boxWidth / 2
+    const boxY = p.y - 18
+    ctx.fillStyle = 'rgba(7, 24, 21, 0.72)'
+    ctx.strokeStyle = 'rgba(132, 242, 220, 0.24)'
+    ctx.shadowColor = 'rgba(87, 221, 232, 0.36)'
+    ctx.shadowBlur = 14
+    ctx.beginPath()
+    drawRoundedRect(boxX, boxY, boxWidth, boxHeight, 8)
+    ctx.fill()
+    ctx.stroke()
+    ctx.fillStyle = palette.text
+    ctx.shadowBlur = 8
+    ctx.fillText(text, p.x, p.y)
+    ctx.restore()
+  }
+
+  const drawRackDetails = (cx, cy, cz, sx, sy, sz) => {
+    drawFace([
+      [cx - sx * 0.42, cy - sy * 0.45, cz - sz * 0.56],
+      [cx + sx * 0.42, cy - sy * 0.45, cz - sz * 0.56],
+      [cx + sx * 0.42, cy + sy * 0.38, cz - sz * 0.56],
+      [cx - sx * 0.42, cy + sy * 0.38, cz - sz * 0.56]
+    ], 'rgba(92, 242, 205, 0.055)', 'rgba(132, 242, 220, 0.26)', 0.8)
+    for (let i = 0; i < 7; i += 1) {
+      const y = cy - sy * 0.33 + i * (sy * 0.1)
+      drawLine3d([[cx - sx * 0.34, y, cz - sz * 0.53], [cx + sx * 0.34, y, cz - sz * 0.53]], 'rgba(112, 190, 198, 0.26)', 1)
+    }
+    for (let i = 0; i < 3; i += 1) {
+      drawLine3d([[cx - sx * 0.25 + i * sx * 0.22, cy + sy * 0.1, cz - sz * 0.54], [cx - sx * 0.18 + i * sx * 0.22, cy + sy * 0.1, cz - sz * 0.54]], palette.green, 1.4)
+    }
+    drawGlowPoint([cx + sx * 0.26, cy - sy * 0.18, cz - sz * 0.57], palette.green, 2.2)
+    drawGlowPoint([cx - sx * 0.22, cy + sy * 0.22, cz - sz * 0.57], palette.cyan, 2)
+  }
+
+  const drawSolarPanel = (cx, cy, cz) => {
+    const panel = [
+      [cx - 70, cy, cz - 42],
+      [cx + 70, cy - 24, cz - 42],
+      [cx + 70, cy - 24, cz + 42],
+      [cx - 70, cy, cz + 42]
+    ]
+    drawFace(panel, 'rgba(22, 57, 66, 0.96)', 'rgba(119, 238, 199, 0.6)', 1.3)
+    for (let i = 1; i < 4; i += 1) {
+      const x = cx - 70 + i * 35
+      drawLine3d([[x, cy - i * 6, cz - 40], [x, cy - i * 6, cz + 40]], 'rgba(87, 221, 232, 0.32)', 1)
+    }
+    for (let i = 1; i < 3; i += 1) {
+      const z = cz - 42 + i * 28
+      drawLine3d([[cx - 68, cy, z], [cx + 68, cy - 24, z]], 'rgba(87, 221, 232, 0.32)', 1)
+    }
+  }
+
+  const drawWindTurbine = (cx, cy, cz) => {
+    drawLine3d([[cx, cy + 80, cz], [cx, cy - 72, cz]], 'rgba(190, 255, 220, 0.7)', 2)
+    const hub = project([cx, cy - 72, cz])
+    ctx.save()
+    ctx.translate(hub.x, hub.y)
+    ctx.rotate(-state.angle * 1.6)
+    ctx.strokeStyle = 'rgba(174, 255, 218, 0.86)'
+    ctx.lineWidth = 2
+    ctx.shadowColor = palette.green
+    ctx.shadowBlur = 12
+    for (let i = 0; i < 3; i += 1) {
+      ctx.rotate((Math.PI * 2) / 3)
+      ctx.beginPath()
+      ctx.moveTo(0, 0)
+      ctx.lineTo(0, -34)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  const drawPlatformCircuitry = () => {
+    const border = [
+      [-280, 80, -190],
+      [280, 80, -190],
+      [280, 80, 190],
+      [-280, 80, 190],
+      [-280, 80, -190]
+    ]
+    drawLine3d(border, 'rgba(132, 242, 220, 0.34)', 1.4, null, 9)
+    drawLine3d([[-250, 76, -152], [-158, 76, -152], [-118, 76, -110], [-40, 76, -110]], 'rgba(87, 221, 232, 0.22)', 1, [6, 8], 4)
+    drawLine3d([[245, 76, 154], [122, 76, 154], [82, 76, 104], [-36, 76, 104]], 'rgba(121, 239, 171, 0.24)', 1, [5, 7], 4)
+    drawLine3d([[-210, 77, 42], [-122, 77, 42], [-84, 77, 0], [22, 77, 0], [80, 77, -34]], 'rgba(156, 134, 255, 0.22)', 1, [4, 7], 4)
+    ;[
+      [-250, 75, -152],
+      [-40, 75, -110],
+      [245, 75, 154],
+      [-36, 75, 104],
+      [80, 75, -34]
+    ].forEach((point, index) => drawGlowPoint(point, index % 2 ? palette.cyan : palette.green, 2.1))
+  }
+
+  const drawCoolingManifold = () => {
+    const upper = [[-150, 24, -28], [-58, 18, -20], [44, 18, -18], [150, 24, -24]]
+    const lower = [[-150, 34, 32], [-54, 28, 22], [50, 28, 20], [148, 34, 28]]
+    drawLine3d(upper, 'rgba(255, 88, 92, 0.72)', 5, null, 8)
+    drawLine3d(lower, 'rgba(91, 211, 255, 0.72)', 4, null, 8)
+    for (let i = 0; i < 5; i += 1) {
+      const x = -112 + i * 56
+      drawLine3d([[x, 24, -28], [x, 32, 28]], 'rgba(138, 231, 255, 0.28)', 1.2, null, 4)
+    }
+  }
+
+  const render = () => {
+    state.angle += 0.0045
+    if (!state.dragging) state.targetY += 0.0028
+    state.dragX += (state.targetX - state.dragX) * 0.05
+    state.dragY += (state.targetY - state.dragY) * 0.05
+
+    ctx.clearRect(0, 0, state.width, state.height)
+    const glow = ctx.createRadialGradient(state.width * 0.54, state.height * 0.42, 20, state.width * 0.54, state.height * 0.42, state.width * 0.52)
+    glow.addColorStop(0, 'rgba(39, 224, 169, 0.18)')
+    glow.addColorStop(0.48, 'rgba(24, 184, 196, 0.08)')
+    glow.addColorStop(1, 'rgba(8, 21, 18, 0)')
+    ctx.fillStyle = glow
+    ctx.fillRect(0, 0, state.width, state.height)
+    ctx.save()
+    ctx.globalAlpha = 0.34
+    for (let i = 0; i < 7; i += 1) {
+      const y = state.height * (0.2 + i * 0.1)
+      const gradient = ctx.createLinearGradient(0, y, state.width, y)
+      gradient.addColorStop(0, 'rgba(121, 239, 171, 0)')
+      gradient.addColorStop(0.5, 'rgba(121, 239, 171, 0.16)')
+      gradient.addColorStop(1, 'rgba(121, 239, 171, 0)')
+      ctx.strokeStyle = gradient
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(state.width * 0.08, y)
+      ctx.lineTo(state.width * 0.92, y - 28)
+      ctx.stroke()
+    }
+    ctx.restore()
+
+    const objects = []
+    objects.push(...cubeFaces(0, 92, 0, 560, 22, 380, {
+      top: 'rgba(15, 40, 34, 0.98)',
+      right: palette.platformSide,
+      front: 'rgba(11, 29, 26, 0.98)',
+      left: 'rgba(8, 23, 20, 0.98)'
+    }))
+    objects.push(...cubeFaces(-245, 8, -70, 54, 118, 74, { top: 'rgba(111, 134, 134, 0.98)', right: palette.rack, front: palette.rackFace }))
+    objects.push(...cubeFaces(230, 32, 118, 92, 78, 92, { top: 'rgba(88, 112, 114, 0.98)', right: 'rgba(39, 53, 58, 0.96)', front: 'rgba(18, 29, 34, 0.98)' }))
+    objects.push(...cubeFaces(-230, 48, 125, 112, 46, 84, { top: 'rgba(30, 64, 66, 0.96)', right: 'rgba(18, 45, 48, 0.98)', front: 'rgba(12, 33, 36, 0.98)' }))
+    objects.push(...cubeFaces(0, 16, -112, 70, 118, 58, { top: palette.rackTop, right: palette.rack, front: palette.rackFace }))
+    objects.push(...cubeFaces(0, 16, 112, 70, 118, 58, { top: palette.rackTop, right: palette.rack, front: palette.rackFace }))
+    for (let i = 0; i < 4; i += 1) {
+      const x = -126 + i * 84
+      objects.push(...cubeFaces(x, 10, -112, 58, 130, 62, { top: palette.rackTop, right: palette.rack, front: palette.rackFace }))
+      objects.push(...cubeFaces(x, 10, 112, 58, 130, 62, { top: palette.rackTop, right: palette.rack, front: palette.rackFace }))
+    }
+    for (let i = 0; i < 3; i += 1) {
+      objects.push(...cubeFaces(172 + i * 48, 46, -82, 34, 52, 58, { top: 'rgba(54, 72, 76, 0.96)', right: 'rgba(31, 45, 50, 0.98)', front: 'rgba(12, 25, 30, 0.98)' }))
+    }
+    for (let i = 0; i < 4; i += 1) {
+      objects.push(...cubeFaces(-240 + i * 40, 42, 162, 26, 62, 26, { top: 'rgba(55, 73, 68, 0.95)', right: 'rgba(34, 50, 47, 0.98)', front: 'rgba(16, 30, 28, 0.98)' }))
+    }
+    objects.sort((a, b) => b.depth - a.depth).forEach(face => drawFace(face.points, face.fill))
+    drawPlatformCircuitry()
+
+    for (let i = 0; i < 4; i += 1) {
+      const x = -126 + i * 84
+      drawRackDetails(x, 10, -112, 58, 130, 62)
+      drawRackDetails(x, 10, 112, 58, 130, 62)
+    }
+    drawSolarPanel(-350, -34, 10)
+    drawWindTurbine(-420, 20, -100)
+    drawWindTurbine(-382, 34, -170)
+    drawCoolingManifold()
+
+    const phase = (state.angle * 120) % 16
+    const greenPath = [[-330, 54, 10], [-220, 46, 52], [-90, 36, 28], [40, 28, 0], [210, 40, -72]]
+    const gridPath = [[-260, 40, 160], [-90, 34, 126], [40, 26, 78], [170, 34, 118]]
+    drawLine3d(greenPath, palette.green, 3.2, [10, 6], 9)
+    drawLine3d(gridPath, palette.cyan, 3.1, [10, 7], 9)
+    drawEnergyPulse(greenPath, palette.green, 0)
+    drawEnergyPulse(greenPath, palette.green, 0.46)
+    drawEnergyPulse(gridPath, palette.cyan, 0.2)
+    drawEnergyPulse(gridPath, palette.cyan, 0.68)
+    ctx.setLineDash([8, 8])
+    ctx.lineDashOffset = -phase
+    drawLine3d([[-440, 70, 200], [-280, 62, 160], [-160, 54, 120]], 'rgba(135, 231, 255, 0.5)', 2)
+    ctx.setLineDash([])
+    ;[
+      [0, -58, -92],
+      [-86, -54, 94],
+      [124, -42, 112],
+      [-244, -46, -70],
+      [226, 8, 118]
+    ].forEach((point, index) => drawGlowPoint(point, index % 2 ? palette.cyan : palette.green, 2.8))
+
+    drawLabel('IT racks', [24, -92, -156])
+    drawLabel('Cooling loop', [256, -26, -120], 'left')
+    drawLabel('UPS', [-300, -88, -86], 'right')
+    drawLabel('Green power', [-402, -86, 18])
+    drawLabel('Battery bank', [-190, -46, 198])
+    drawLabel('Grid access', [270, -8, 196], 'left')
+
+    heroModelFrame = requestAnimationFrame(render)
+  }
+
+  const pointerDown = (event) => {
+    state.dragging = true
+    state.lastX = event.clientX
+    state.lastY = event.clientY
+    canvas.setPointerCapture?.(event.pointerId)
+  }
+  const pointerMove = (event) => {
+    if (!state.dragging) return
+    const dx = event.clientX - state.lastX
+    const dy = event.clientY - state.lastY
+    state.lastX = event.clientX
+    state.lastY = event.clientY
+    state.targetY += dx * 0.008
+    state.targetX = Math.max(0.22, Math.min(0.92, state.targetX + dy * 0.006))
+  }
+  const pointerUp = (event) => {
+    state.dragging = false
+    canvas.releasePointerCapture?.(event.pointerId)
+  }
+
+  canvas.addEventListener('pointerdown', pointerDown)
+  canvas.addEventListener('pointermove', pointerMove)
+  canvas.addEventListener('pointerup', pointerUp)
+  canvas.addEventListener('pointerleave', pointerUp)
+
+  resize()
+  render()
+
+  return {
+    resize,
+    cleanup() {
+      canvas.removeEventListener('pointerdown', pointerDown)
+      canvas.removeEventListener('pointermove', pointerMove)
+      canvas.removeEventListener('pointerup', pointerUp)
+      canvas.removeEventListener('pointerleave', pointerUp)
+      if (heroModelFrame) cancelAnimationFrame(heroModelFrame)
+      heroModelFrame = null
+    }
+  }
+}
+
+const initHeroModel = () => {
+  if (heroModelCleanup) heroModelCleanup()
+  const renderer = createModelRenderer()
+  if (renderer) {
+    heroModelCleanup = renderer.cleanup
+    initHeroModel.resize = renderer.resize
+  }
+}
+
+const resizeHeroModel = () => {
+  if (typeof initHeroModel.resize === 'function') {
+    initHeroModel.resize()
+  }
 }
 
 const createProject = () => {
@@ -778,12 +1233,17 @@ const formatDate = (dateStr) => {
 onMounted(() => {
   loadRecentProjects()
   setTimeout(initParticles, 100)
+  setTimeout(initHeroModel, 120)
   window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   if (animationFrame) {
     cancelAnimationFrame(animationFrame)
+  }
+  if (heroModelCleanup) {
+    heroModelCleanup()
+    heroModelCleanup = null
   }
   window.removeEventListener('resize', handleResize)
 })
@@ -870,7 +1330,7 @@ onUnmounted(() => {
 
 .hero-content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   min-height: 360px;
   flex-direction: column;
@@ -878,6 +1338,7 @@ onUnmounted(() => {
   align-items: flex-start;
   padding: 42px 42px 40px;
   text-align: left;
+  width: min(52%, 680px);
 }
 
 .hero-headline {
@@ -944,6 +1405,94 @@ onUnmounted(() => {
 .secondary-action:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(240, 250, 243, 0.28);
+}
+
+.hero-model-stage {
+  position: absolute;
+  z-index: 1;
+  top: 18px;
+  right: 16px;
+  bottom: 14px;
+  width: min(54%, 720px);
+  min-width: 430px;
+  border-radius: 22px;
+  overflow: hidden;
+  pointer-events: auto;
+  background:
+    radial-gradient(circle at 42% 36%, rgba(89, 245, 183, 0.2), transparent 38%),
+    radial-gradient(circle at 76% 26%, rgba(87, 221, 232, 0.18), transparent 34%),
+    linear-gradient(145deg, rgba(11, 31, 27, 0.28), rgba(4, 14, 13, 0.08));
+  box-shadow:
+    inset 0 0 0 1px rgba(121, 239, 171, 0.08),
+    inset 0 -42px 82px rgba(3, 14, 12, 0.44);
+  mask-image: linear-gradient(90deg, transparent 0%, black 12%, black 100%);
+}
+
+.hero-model-stage::before {
+  content: '';
+  position: absolute;
+  inset: 10% 4% 8% 8%;
+  border: 1px solid rgba(121, 239, 171, 0.14);
+  border-radius: 28px;
+  background:
+    linear-gradient(rgba(116, 232, 190, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(116, 232, 190, 0.08) 1px, transparent 1px);
+  background-size: 34px 34px;
+  transform: perspective(700px) rotateX(62deg) rotateZ(-8deg) translateY(68px);
+  transform-origin: center;
+  opacity: 0.72;
+}
+
+.hero-model-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(8, 21, 18, 0.5), transparent 18%, transparent 80%, rgba(8, 21, 18, 0.28)),
+    radial-gradient(circle at 70% 30%, rgba(87, 221, 232, 0.18), transparent 32%),
+    linear-gradient(180deg, rgba(240, 255, 246, 0.08), transparent 18%, rgba(4, 16, 14, 0.32));
+  pointer-events: none;
+}
+
+.hero-model-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.hero-model-canvas:active {
+  cursor: grabbing;
+}
+
+.hero-model-caption {
+  position: absolute;
+  z-index: 2;
+  right: 28px;
+  bottom: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(121, 239, 171, 0.32);
+  border-radius: 999px;
+  color: rgba(229, 251, 239, 0.8);
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 11px;
+  letter-spacing: 0;
+  background: rgba(5, 20, 17, 0.66);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(226, 255, 238, 0.1);
+}
+
+.caption-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #79efab;
+  box-shadow: 0 0 14px rgba(121, 239, 171, 0.9);
 }
 
 .stats-section {
@@ -1922,10 +2471,24 @@ onUnmounted(() => {
   .hero-content {
     min-height: auto;
     padding: 34px 28px;
+    width: 100%;
   }
 
   .main-title {
     font-size: 34px;
+    white-space: normal;
+  }
+
+  .hero-model-stage {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    width: calc(100% - 32px);
+    min-width: 0;
+    height: 360px;
+    margin: -10px 16px 18px;
+    mask-image: none;
   }
 
   .stats-section :deep(.el-col) {
@@ -1960,6 +2523,18 @@ onUnmounted(() => {
 @media (max-width: 768px) {
   .main-title {
     font-size: 28px;
+  }
+
+  .hero-model-stage {
+    height: 300px;
+    width: calc(100% - 20px);
+    margin: -2px 10px 12px;
+    border-radius: 18px;
+  }
+
+  .hero-model-caption {
+    right: 16px;
+    bottom: 14px;
   }
 
   .hero-headline {
