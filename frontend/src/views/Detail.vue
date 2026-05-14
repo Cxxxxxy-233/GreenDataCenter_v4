@@ -3,7 +3,8 @@
     <div class="detail-header">
       <h1>方案详情</h1>
       <div class="header-actions">
-        <el-button @click="exportMarkdown">导出Markdown报告</el-button>
+        <el-button @click="exportMarkdown">&#23548;&#20986;Markdown&#25253;&#21578;</el-button>
+        <el-button type="primary" plain @click="exportPdf">&#23548;&#20986;PDF&#25253;&#21578;</el-button>
       </div>
     </div>
 
@@ -242,7 +243,7 @@
             </el-table>
           </el-card>
           <el-card>
-            <h4>容量占比图</h4>
+            <h4>绿电占比分布图</h4>
             <div ref="powerBalanceChartRef" class="chart-container"></div>
           </el-card>
           <el-card class="artifact-card-panel">
@@ -543,7 +544,7 @@
             <h3>完整方案报告</h3>
             <el-input v-model="searchKeyword" placeholder="搜索报告内容" />
           </div>
-          <div class="report-content">
+          <div ref="reportExportRef" class="report-content">
             <div class="report-title-section">
               <h1 class="report-title">{{ finalReportData.name || '数据中心绿电消纳方案报告' }}</h1>
               <div class="report-meta">
@@ -744,6 +745,7 @@ const searchKeyword = ref('')
 const solutionId = ref(route.params.id || '')
 const solutionData = ref({})
 const reportMarkdown = ref('')
+const reportExportRef = ref(null)
 const powerBalanceChartRef = ref(null)
 const costChartRef = ref(null)
 const costDetailDialogVisible = ref(false)
@@ -760,7 +762,20 @@ const loadSavedProjectConfig = () => {
   }
 }
 
-const savedProjectConfig = ref(loadSavedProjectConfig())
+const normalizeRequirementFields = (raw = {}) => {
+  const normalized = { ...raw }
+  const ratio = Number(normalized.green_power_ratio)
+  if (Number.isFinite(ratio) && ratio > 1) {
+    normalized.green_power_ratio = ratio / 100
+  }
+  const directRatio = Number(normalized.direct_connection_ratio)
+  if (Number.isFinite(directRatio) && directRatio > 1) {
+    normalized.direct_connection_ratio = directRatio / 100
+  }
+  return normalized
+}
+
+const savedProjectConfig = ref(normalizeRequirementFields(loadSavedProjectConfig()))
 
 const toNumber = (v, fallback = 0) => {
   const n = Number(v)
@@ -786,6 +801,15 @@ const formatPercentAuto = (v, digits = 1) => {
   const n = Number(v)
   if (!Number.isFinite(n)) return '-'
   return `${(n > 1 ? n : n * 100).toFixed(digits)}%`
+}
+
+const sanitizeProcurementMethodLabel = (value) => {
+  const label = String(value || '').trim()
+  if (!label) return '-'
+  if (label.includes('缁跨數浜ゆ槗') && label.includes('缁胯瘉琛ヨ冻')) return '绿电交易+绿证补足'
+  if (label.includes('缁跨數浜ゆ槗')) return '绿电交易'
+  if (label.includes('缁胯瘉琛ヨ冻')) return '绿证补足'
+  return label
 }
 
 const formatRisk = (risk) => {
@@ -859,9 +883,21 @@ const normalizeGreenPowerResult = (rawValue, metrics = {}) => {
     if (value !== null) optimization[key] = value
   })
 
+  const procurementPlan = isNonEmptyObject(source.procurement_plan) ? { ...source.procurement_plan } : {}
+  const procurementFallback = {
+    total_green_power_ratio: pickFirstFiniteNumber(procurementPlan.total_green_power_ratio, metrics.green_power_ratio),
+    actual_direct_connection_ratio: pickFirstFiniteNumber(procurementPlan.actual_direct_connection_ratio, metrics.direct_connection_ratio),
+    procured_green_ratio: pickFirstFiniteNumber(procurementPlan.procured_green_ratio, metrics.procured_green_ratio),
+    annual_procurement_cost_lakh: pickFirstFiniteNumber(procurementPlan.annual_procurement_cost_lakh, metrics.annual_green_procurement_cost_lakh)
+  }
+  Object.entries(procurementFallback).forEach(([key, value]) => {
+    if (value !== null) procurementPlan[key] = value
+  })
+
   return {
     ...source,
-    optimization
+    optimization,
+    procurement_plan: procurementPlan
   }
 }
 
@@ -884,7 +920,7 @@ const requirement = computed(() => {
     ? rawRequirement.requirement
     : rawRequirement
   return {
-    ...savedProjectConfig.value,
+    ...normalizeRequirementFields(savedProjectConfig.value),
     ...normalized
   }
 })
@@ -917,6 +953,7 @@ const coolingEconomics = computed(() => {
 
 const greenPowerResult = computed(() => normalizeGreenPowerResult(draftOutput.value.green_power_result || {}, keyMetrics.value))
 const greenOptimization = computed(() => greenPowerResult.value.optimization || {})
+const greenProcurementPlan = computed(() => greenPowerResult.value.procurement_plan || {})
 const greenFiles = computed(() => greenPowerResult.value.generated_files || {})
 const greenArtifactFiles = computed(() => {
   const files = greenFiles.value || {}
@@ -980,6 +1017,7 @@ const costResult = computed(() => {
   const rawCost = intermediate.value.cost_calculation?.full_output || {}
   const economic = rawCost.economic_analysis_result || rawCost || {}
   const breakdown = economic.capex_breakdown || {}
+  const opexBreakdown = economic.opex_breakdown || {}
   const coolingCapex = toNumber(
     breakdown.cooling_system_lakh,
     toNumber(coolingResult.value.economic_indicators?.initial_investment, 0)
@@ -1001,6 +1039,7 @@ const costResult = computed(() => {
     budget_constraint_lakh: budgetConstraint || toNumber(economic.budget_constraint_lakh, 0),
     budget_delta_lakh: normalizedBudgetDelta,
     is_over_budget: budgetConstraint > 0 ? normalizedBudgetDelta < 0 : Boolean(economic.is_over_budget),
+    opex_breakdown: opexBreakdown,
     capex_breakdown: {
       ...breakdown,
       power_supply_system_lakh: powerSupplyCapex,
@@ -1027,6 +1066,94 @@ const keyMetricsRows = computed(() => {
 const economicRows = computed(() => formatObjectRows(economicContent.value))
 const powerRows = computed(() => formatObjectRows(powerContent.value))
 const environmentalRows = computed(() => formatObjectRows(environmentalContent.value))
+
+const sanitizeMarkdownCell = (value) => String(value ?? '-')
+  .replace(/\|/g, '\\|')
+  .replace(/\r?\n/g, '<br/>')
+
+const buildMarkdownTable = (rows = [], headers = ['\u6307\u6807', '\u6570\u503c']) => {
+  if (!Array.isArray(rows) || !rows.length) return '\u6682\u65e0\u6570\u636e'
+  const head = '| ' + headers.map(sanitizeMarkdownCell).join(' | ') + ' |'
+  const separator = '| ' + headers.map(() => '---').join(' | ') + ' |'
+  const body = rows.map((row) => '| ' + sanitizeMarkdownCell(row?.label) + ' | ' + sanitizeMarkdownCell(row?.value) + ' |')
+  return [head, separator, ...body].join('\n')
+}
+
+const buildMarkdownList = (items = [], formatter = (item) => String(item ?? '').trim()) => {
+  if (!Array.isArray(items) || !items.length) return '- \u6682\u65e0'
+  const lines = items
+    .map(item => formatter(item))
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
+  return lines.length ? lines.map(item => '- ' + item).join('\n') : '- \u6682\u65e0'
+}
+
+const generatedReportMarkdown = computed(() => {
+  const report = finalReportData.value || {}
+  const lines = [
+    '# ' + (report.name || '\u6570\u636e\u4e2d\u5fc3\u521d\u7a3f\u65b9\u6848\u62a5\u544a'),
+    '',
+    '## \u57fa\u672c\u4fe1\u606f',
+    '- \u65b9\u6848\u7f16\u53f7\uff1a' + (solutionId.value || '-'),
+    '- \u751f\u6210\u65f6\u95f4\uff1a' + (solutionData.value.created_at || '-'),
+    '- \u7f6e\u4fe1\u5ea6\uff1a' + formatPercent(report.confidence),
+    finalReportPath.value ? ('- \u62a5\u544a\u8def\u5f84\uff1a' + finalReportPath.value) : null,
+    '',
+    '## \u6267\u884c\u6458\u8981',
+    report.summary || '\u6682\u65e0\u6458\u8981',
+    '',
+    '## \u7efc\u5408\u8bc4\u5206',
+    buildMarkdownTable([
+      { label: '\u7ecf\u6d4e\u6027', value: formatPercent(overallScores.value.economic) },
+      { label: '\u53ef\u9760\u6027', value: formatPercent(overallScores.value.reliability) },
+      { label: '\u73af\u4fdd\u6027', value: formatPercent(overallScores.value.environmental) },
+      { label: '\u603b\u4f53', value: formatPercent(overallScores.value.overall) }
+    ]),
+    '',
+    '## \u5173\u952e\u6307\u6807',
+    buildMarkdownTable(keyMetricsRows.value),
+    '',
+    '## \u7ecf\u6d4e\u6027\u65b9\u6848',
+    economicSection.value.description || '\u6682\u65e0\u7ecf\u6d4e\u6027\u63cf\u8ff0',
+    '',
+    buildMarkdownTable(economicRows.value),
+    '',
+    '\u7ecf\u6d4e\u6027\u5efa\u8bae\uff1a',
+    buildMarkdownList(economicSection.value.recommendations),
+    '',
+    '## \u4f9b\u7535\u53ef\u9760\u6027\u65b9\u6848',
+    powerSection.value.description || '\u6682\u65e0\u4f9b\u7535\u53ef\u9760\u6027\u63cf\u8ff0',
+    '',
+    buildMarkdownTable(powerRows.value),
+    '',
+    '\u4f9b\u7535\u53ef\u9760\u6027\u5efa\u8bae\uff1a',
+    buildMarkdownList(powerSection.value.recommendations),
+    '',
+    '## \u73af\u4fdd\u65b9\u6848',
+    environmentalSection.value.description || '\u6682\u65e0\u73af\u4fdd\u63cf\u8ff0',
+    '',
+    buildMarkdownTable(environmentalRows.value),
+    '',
+    '\u73af\u4fdd\u5efa\u8bae\uff1a',
+    buildMarkdownList(environmentalSection.value.recommendations),
+    '',
+    '## \u5173\u952e\u6743\u8861',
+    buildMarkdownList(report.trade_offs, item => (item?.conflict || '-') + '\uff1a' + (item?.resolution || '-')),
+    '',
+    '## \u98ce\u9669\u6e05\u5355',
+    buildMarkdownList(report.risks, item => '[' + (item?.type || '\u672a\u5206\u7c7b') + '] ' + (item?.description || formatRisk(item))),
+    '',
+    '## \u6700\u7ec8\u5efa\u8bae',
+    buildMarkdownList(report.recommendations)
+  ].filter(item => item !== null)
+
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+})
+
+const exportableReportMarkdown = computed(() => {
+  const backendReport = String(reportMarkdown.value || solutionData.value?.final_report || '').trim()
+  return backendReport || generatedReportMarkdown.value
+})
 
 const coolingOptimization = computed(() => coolingResult.value.optimization_summary || {})
 const coolingWeights = computed(() => coolingOptimization.value.objective_weights || {})
@@ -1092,6 +1219,7 @@ const greenTrace = computed(() => ({
     `项目位置：${requirement.value.location || '-'}`,
     `负荷规模：${formatNumber(totalLoadMw.value, 2)} MW`,
     `绿电目标：${formatPercent(greenInputs.value.green_power_ratio ?? requirement.value.green_power_ratio, 0)}`,
+    `直连目标：${requirement.value.direct_connection_ratio != null ? formatPercent(requirement.value.direct_connection_ratio, 0) : '自动推荐'}`,
     `仿真时长：${greenInputs.value.sim_hours || requirement.value.sim_hours || 168} h`,
     `气象年份：${greenInputs.value.year || requirement.value.year || 2025}`,
     '容量边界：风/光 1-500MW，储能 0-500MWh'
@@ -1099,6 +1227,8 @@ const greenTrace = computed(() => ({
   facts: [
     { label: '仿真模式', value: greenProfiles.value.pv.mode || greenProfiles.value.wind.mode || '--' },
     { label: '资源曲线', value: '先生成 PV / Wind 单位出力曲线' },
+    { label: '采购方式', value: sanitizeProcurementMethodLabel(greenProcurementPlan.value.method_label || '--') },
+    { label: '采购补足占比', value: formatPercent(greenProcurementPlan.value.procured_green_ratio, 0) },
     { label: 'DE 参数', value: `maxiter ${greenInputs.value.maxiter || 60} · popsize ${greenInputs.value.popsize || 10} · seed ${greenInputs.value.seed || 42}` },
     { label: '后端产物', value: greenFiles.value.balance_plot ? '平衡图 + 曲线 CSV' : '容量优化结果' }
   ],
@@ -1111,6 +1241,7 @@ const greenTrace = computed(() => ({
   evidences: [
     '绿电方案不是直接估算容量，而是先生成当地风光出力曲线，再进入容量优化。',
     `当前负荷为 ${formatNumber(totalLoadMw.value, 2)} MW，绿电目标为 ${formatPercent(greenInputs.value.green_power_ratio ?? requirement.value.green_power_ratio, 0)}。`,
+    `系统先形成直连方案，再以 ${sanitizeProcurementMethodLabel(greenProcurementPlan.value.method_label || '市场化采购')} 补足剩余绿色电量。`,
     '差分进化参数、搜索边界和仿真时长都会影响容量优化的收敛路径和最终结果。'
   ]
 }))
@@ -1218,21 +1349,21 @@ const greenConfig = computed(() => {
       { type: '绿电系统', capacity: '计算失败', ratio: errorMessage || '-' }
     ]
   }
+  const procurement = greenProcurementPlan.value
   const wind = toNumber(greenOptimization.value.wind_capacity_mw, null)
   const pv = toNumber(greenOptimization.value.pv_capacity_mw, null)
   const storage = toNumber(greenOptimization.value.storage_capacity_mwh, null)
   const total = wind + pv + storage
-  if (!Number.isFinite(total) || total <= 0) {
-    const ratio = toNumber(keyMetrics.value.green_power_ratio, null)
-    return [
-      { type: '绿电占比(最终方案)', capacity: '-', ratio: ratio !== null ? (ratio * 100).toFixed(1) : '-' },
-      { type: '传统电占比(推导)', capacity: '-', ratio: ratio !== null ? (100 - ratio * 100).toFixed(1) : '-' }
-    ]
-  }
+  const totalGreenRatio = toNumber(procurement.total_green_power_ratio, keyMetrics.value.green_power_ratio)
+  const directRatio = toNumber(procurement.actual_direct_connection_ratio, keyMetrics.value.direct_connection_ratio)
+  const procuredRatio = toNumber(procurement.procured_green_ratio, keyMetrics.value.procured_green_ratio)
   return [
-    { type: '光伏', capacity: `${formatNumber(pv)} MW`, ratio: total ? ((pv / total) * 100).toFixed(1) : '0.0' },
-    { type: '风电', capacity: `${formatNumber(wind)} MW`, ratio: total ? ((wind / total) * 100).toFixed(1) : '0.0' },
-    { type: '储能', capacity: `${formatNumber(storage)} MWh`, ratio: total ? ((storage / total) * 100).toFixed(1) : '0.0' }
+    { type: '总绿电占比', capacity: '-', ratio: Number.isFinite(totalGreenRatio) ? (totalGreenRatio * 100).toFixed(1) : '-' },
+    { type: '直连占比', capacity: '-', ratio: Number.isFinite(directRatio) ? (directRatio * 100).toFixed(1) : '-' },
+    { type: '采购补足占比', capacity: sanitizeProcurementMethodLabel(greenProcurementPlan.value.method_label || '-'), ratio: Number.isFinite(procuredRatio) ? (procuredRatio * 100).toFixed(1) : '-' },
+    { type: '光伏装机', capacity: `${formatNumber(pv)} MWp`, ratio: Number.isFinite(total) && total > 0 ? ((pv / total) * 100).toFixed(1) : '0.0' },
+    { type: '风电装机', capacity: `${formatNumber(wind)} MW`, ratio: Number.isFinite(total) && total > 0 ? ((wind / total) * 100).toFixed(1) : '0.0' },
+    { type: '储能装机', capacity: `${formatNumber(storage)} MWh`, ratio: Number.isFinite(total) && total > 0 ? ((storage / total) * 100).toFixed(1) : '0.0' }
   ]
 })
 
@@ -1249,6 +1380,7 @@ const coolingTableData = computed(() => {
 
 const costStructureSegments = computed(() => {
   const breakdown = costResult.value.capex_breakdown || {}
+  const opexBreakdown = costResult.value.opex_breakdown || {}
   const total = toNumber(costResult.value.total_capex_lakh, 0)
   const safeRatio = (amount) => (total > 0 ? ((toNumber(amount, 0) / total) * 100).toFixed(1) : '0.0')
 
@@ -1284,7 +1416,12 @@ const costStructureSegments = computed(() => {
         { label: '储能CAPEX', value: `${formatNumber(breakdown.details?.storage_capex_lakh, 0)} 万元` },
         { label: '风电装机容量', value: `${formatNumber(greenOptimization.value.wind_capacity_mw, 2)} MW` },
         { label: '光伏装机容量', value: `${formatNumber(greenOptimization.value.pv_capacity_mw, 2)} MWp` },
-        { label: '储能额定能量', value: `${formatNumber(greenOptimization.value.storage_capacity_mwh, 2)} MWh` }
+        { label: '储能额定能量', value: `${formatNumber(greenOptimization.value.storage_capacity_mwh, 2)} MWh` },
+        { label: '总绿电占比', value: formatPercent(greenProcurementPlan.value.total_green_power_ratio, 0) },
+        { label: '直连占比', value: formatPercent(greenProcurementPlan.value.actual_direct_connection_ratio, 0) },
+        { label: '采购补足占比', value: formatPercent(greenProcurementPlan.value.procured_green_ratio, 0) },
+        { label: '采购方式', value: sanitizeProcurementMethodLabel(greenProcurementPlan.value.method_label || '-') },
+        { label: '年采购成本(OPEX)', value: `${formatNumber(opexBreakdown.annual_green_procurement_cost_lakh, 2)} 万元/年` }
       ]
     },
     {
@@ -1505,37 +1642,148 @@ const loadMarkdownReport = async () => {
   }
   try {
     const { data } = await solutionApi.exportMarkdown(solutionId.value)
-    reportMarkdown.value = data?.content || ''
+    reportMarkdown.value = (data?.content || '').trim() || generatedReportMarkdown.value
   } catch (error) {
-    reportMarkdown.value = ''
+    reportMarkdown.value = generatedReportMarkdown.value
   }
 }
 
 const exportMarkdown = async () => {
   await loadMarkdownReport()
-  const content = reportMarkdown.value || '暂无可导出的报告内容'
+  const content = exportableReportMarkdown.value || generatedReportMarkdown.value
   const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `方案报告_${solutionId.value}.md`
+  a.download = '\u65b9\u6848\u62a5\u544a_' + solutionId.value + '.md'
   a.click()
   URL.revokeObjectURL(url)
+}
+
+const exportPdf = async () => {
+  if (activeTab.value !== 'report') {
+    activeTab.value = 'report'
+    await nextTick()
+  }
+
+  if (!reportMarkdown.value) {
+    await loadMarkdownReport()
+    await nextTick()
+  }
+
+  const reportNode = reportExportRef.value
+  if (!reportNode) {
+    ElMessage.warning('\u672a\u627e\u5230\u53ef\u5bfc\u51fa\u7684\u62a5\u544a\u5185\u5bb9')
+    return
+  }
+
+  const printWindow = window.open('', '_blank', 'width=1200,height=900')
+  if (!printWindow) {
+    ElMessage.warning('\u6d4f\u89c8\u5668\u62e6\u622a\u4e86\u5f39\u7a97\uff0c\u8bf7\u5141\u8bb8\u5f39\u7a97\u540e\u91cd\u8bd5')
+    return
+  }
+
+  const title = finalReportData.value?.name || ('\u65b9\u6848\u62a5\u544a_' + solutionId.value)
+  printWindow.document.write(
+    '<!DOCTYPE html>' +
+    '<html lang="zh-CN">' +
+    '<head>' +
+    '<meta charset="UTF-8" />' +
+    '<title>' + title + '</title>' +
+    '<style>' +
+    '* { box-sizing: border-box; }' +
+    "body { margin: 0; padding: 32px; font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; color: #1f2d26; line-height: 1.65; background: #fff; }" +
+    'h1, h2, h3 { color: #10241a; margin: 0 0 14px; }' +
+    'h1 { font-size: 28px; }' +
+    'h2 { font-size: 20px; margin-top: 28px; padding-bottom: 8px; border-bottom: 1px solid #dfe9e3; }' +
+    'h3 { font-size: 16px; }' +
+    'p, li, span, div { font-size: 13px; }' +
+    'ul, ol { padding-left: 20px; }' +
+    'table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; }' +
+    'th, td { border: 1px solid #d9e3dc; padding: 10px 12px; text-align: left; vertical-align: top; }' +
+    'th { background: #f4f8f5; }' +
+    '.report-meta { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; color: #5d6d65; }' +
+    '.executive-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }' +
+    '.executive-item { border: 1px solid #dfe9e3; border-radius: 10px; padding: 12px 14px; background: #f8fbf9; }' +
+    '.executive-label { color: #6c7a73; margin-bottom: 6px; }' +
+    '.executive-value { color: #10241a; font-size: 18px; font-weight: 700; }' +
+    '.report-chapter { break-inside: avoid; page-break-inside: avoid; margin-bottom: 20px; }' +
+    '.markdown-rendered code { padding: 2px 6px; background: #f2f4f3; border-radius: 4px; }' +
+    '.markdown-table-wrap { overflow: visible; }' +
+    '@media print { body { padding: 18px; } .report-chapter { page-break-inside: avoid; } }' +
+    '</style>' +
+    '</head>' +
+    '<body>' + reportNode.innerHTML + '</body>' +
+    '</html>'
+  )
+  printWindow.document.close()
+  printWindow.focus()
+  setTimeout(() => {
+    printWindow.print()
+  }, 300)
 }
 
 const initPowerBalanceChart = () => {
   if (!powerBalanceChartRef.value) return
   if (charts.powerBalance) charts.powerBalance.dispose()
   const chart = echarts.init(powerBalanceChartRef.value)
-  const source = greenConfig.value
+  const totalGreenRatio = Math.max(0, Math.min(100, toNumber(greenProcurementPlan.value.total_green_power_ratio, keyMetrics.value.green_power_ratio) * 100))
+  const directRatio = Math.max(0, Math.min(totalGreenRatio, toNumber(greenProcurementPlan.value.actual_direct_connection_ratio, keyMetrics.value.direct_connection_ratio) * 100))
+  const procuredRatio = Math.max(0, Math.min(totalGreenRatio - directRatio, toNumber(greenProcurementPlan.value.procured_green_ratio, keyMetrics.value.procured_green_ratio) * 100))
+  const nonGreenRatio = Math.max(0, 100 - totalGreenRatio)
+  const source = [
+    { name: '直连绿电', value: Number(directRatio.toFixed(1)), color: '#1fbf84' },
+    { name: '采购补足', value: Number(procuredRatio.toFixed(1)), color: '#29b6d8' },
+    { name: '非绿电', value: Number(nonGreenRatio.toFixed(1)), color: '#d7e6de' }
+  ].filter(item => item.value > 0)
   chart.setOption({
-    tooltip: { trigger: 'item' },
+    tooltip: {
+      trigger: 'item',
+      formatter: ({ name, value }) => `${name}<br/>${value}%`
+    },
     series: [{
       type: 'pie',
       radius: ['40%', '70%'],
-      data: source.map(item => ({ name: item.type, value: toNumber(item.ratio, 0) })),
-      color: ['#10B981', '#34D399', '#06B6D4']
-    }]
+      avoidLabelOverlap: true,
+      label: {
+        formatter: '{b}',
+        color: '#2f3f38'
+      },
+      data: source.map(item => ({
+        name: item.name,
+        value: item.value,
+        itemStyle: { color: item.color }
+      }))
+    }],
+    graphic: [
+      {
+        type: 'group',
+        left: 'center',
+        top: '43%',
+        children: [
+          {
+            type: 'text',
+            style: {
+              text: '总绿电',
+              fill: '#64756d',
+              fontSize: 12,
+              textAlign: 'center'
+            }
+          },
+          {
+            type: 'text',
+            top: 18,
+            style: {
+              text: `${totalGreenRatio.toFixed(1)}%`,
+              fill: '#10241a',
+              fontSize: 20,
+              fontWeight: 700,
+              textAlign: 'center'
+            }
+          }
+        ]
+      }
+    ]
   })
   charts.powerBalance = chart
 }
@@ -1661,7 +1909,7 @@ const handleResize = () => {
 }
 
 onMounted(async () => {
-  savedProjectConfig.value = loadSavedProjectConfig()
+  savedProjectConfig.value = normalizeRequirementFields(loadSavedProjectConfig())
   await loadSolutionData()
   await nextTick()
   if (activeTab.value === 'green') initPowerBalanceChart()
@@ -1681,7 +1929,7 @@ watch(
     solutionId.value = newId
     solutionData.value = {}
     reportMarkdown.value = ''
-    savedProjectConfig.value = loadSavedProjectConfig()
+    savedProjectConfig.value = normalizeRequirementFields(loadSavedProjectConfig())
     await loadSolutionData()
     await nextTick()
     await handleTabChange(activeTab.value)
@@ -3258,3 +3506,4 @@ watch(
   }
 }
 </style>
+

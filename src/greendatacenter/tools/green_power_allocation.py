@@ -96,6 +96,33 @@ def _safe_file_stem(text: str) -> str:
     return "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in text).strip("_") or "location"
 
 
+def _recommended_storage_min_mwh(load_mw: float, green_power_ratio: float, sim_hours: int) -> float:
+    """
+    Provide a modest default storage floor for realistic data-center demos.
+
+    Rationale:
+    - Pure cost minimization tends to collapse storage to ~0 whenever the
+      direct green target can be met by oversizing wind/PV alone.
+    - Real projects usually keep a small storage base for smoothing,
+      dispatch flexibility, and operational resilience.
+    """
+    load_mw = max(float(load_mw), 0.0)
+    green_power_ratio = max(0.0, min(1.0, float(green_power_ratio)))
+
+    if green_power_ratio >= 0.6:
+        duration_hours = 0.20
+    elif green_power_ratio >= 0.3:
+        duration_hours = 0.12
+    else:
+        duration_hours = 0.08
+
+    if sim_hours >= 8760:
+        duration_hours += 0.05
+
+    recommended = load_mw * duration_hours
+    return round(max(3.0, recommended), 2)
+
+
 @tool("green_power_allocation", args_schema=GreenPowerAllocationInput, return_direct=True)
 def green_power_allocation_tool(
     location: str,
@@ -167,10 +194,20 @@ def green_power_allocation_tool(
         DEFAULT_LOAD_CSV_PATH if DEFAULT_LOAD_CSV_PATH.exists() else None
     )
 
+    if storage_capacity_bounds:
+        resolved_storage_bounds = tuple(storage_capacity_bounds)
+    else:
+        storage_floor = _recommended_storage_min_mwh(
+            load_mw=load_mw,
+            green_power_ratio=green_power_ratio,
+            sim_hours=sim_hours,
+        )
+        resolved_storage_bounds = (storage_floor, 500)
+
     resolved_bounds = (
         tuple(wind_capacity_bounds) if wind_capacity_bounds else (1, 500),
         tuple(pv_capacity_bounds) if pv_capacity_bounds else (1, 500),
-        tuple(storage_capacity_bounds) if storage_capacity_bounds else (0, 500),
+        resolved_storage_bounds,
     )
 
     sys.stdout.write("[green_power_allocation] Running DE optimization...\n")

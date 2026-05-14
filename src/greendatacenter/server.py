@@ -127,6 +127,47 @@ def _resolve_artifact_path(path_str: str) -> Path:
     return candidate
 
 
+def _load_report_markdown_from_solution(sol: dict) -> str:
+    solution = sol.get("solution", {}) or {}
+    final_report = solution.get("final_report", "") or ""
+
+    candidate_paths: list[str] = []
+    direct_path = solution.get("final_report_path")
+    if direct_path:
+        candidate_paths.append(str(direct_path))
+
+    for item in sol.get("streaming_output", []) or []:
+        if not isinstance(item, dict) or item.get("node") != "final_report":
+            continue
+        data = item.get("data", {}) or {}
+        if isinstance(data, dict):
+            inline_report = data.get("final_report")
+            if inline_report:
+                final_report = str(inline_report)
+                break
+
+            for maybe_path in (
+                data.get("final_report_path"),
+                data.get("path"),
+                ((data.get("full_output") or {}).get("path") if isinstance(data.get("full_output"), dict) else None),
+            ):
+                if maybe_path:
+                    candidate_paths.append(str(maybe_path))
+
+    if final_report:
+        return final_report
+
+    for report_path in candidate_paths:
+        try:
+            report_file = Path(report_path)
+            if report_file.exists() and report_file.is_file():
+                return report_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+
+    return ""
+
+
 async def _run_workflow(workflow_id: str, input_data: dict):
     queue = stream_queues.get(workflow_id)
     try:
@@ -433,18 +474,7 @@ async def export_markdown(solution_id: str):
         raise HTTPException(status_code=404, detail="Solution not found")
 
     sol = solutions_store[solution_id]
-    solution = sol.get("solution", {}) or {}
-    final_report = solution.get("final_report", "")
-    report_path = solution.get("final_report_path")
-
-    if (not final_report) and report_path:
-        try:
-            report_file = Path(report_path)
-            if report_file.exists() and report_file.is_file():
-                final_report = report_file.read_text(encoding="utf-8")
-        except OSError:
-            final_report = ""
-
+    final_report = _load_report_markdown_from_solution(sol)
     return {"content": final_report, "filename": f"report_{solution_id}.md"}
 
 

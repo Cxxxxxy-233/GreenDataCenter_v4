@@ -891,6 +891,10 @@ const normalizeRequirementFields = (raw = {}) => {
   if (Number.isFinite(ratio) && ratio > 1) {
     normalized.green_power_ratio = ratio / 100
   }
+  const directRatio = Number(normalized.direct_connection_ratio)
+  if (Number.isFinite(directRatio) && directRatio > 1) {
+    normalized.direct_connection_ratio = directRatio / 100
+  }
   return normalized
 }
 
@@ -992,7 +996,7 @@ const pickFirstFiniteNumber = (...values) => {
 const normalizeGreenPowerResult = (rawValue, parsedValue, keyMetrics = {}) => {
   const raw = unwrapGreenPowerResult(rawValue)
   const parsed = unwrapGreenPowerResult(parsedValue)
-  const merged = mergeStructuredResult(raw, parsed, ['optimization', 'inputs', 'generated_files', 'pv_profile', 'wind_profile'])
+  const merged = mergeStructuredResult(raw, parsed, ['optimization', 'inputs', 'generated_files', 'pv_profile', 'wind_profile', 'procurement_plan'])
   const isErrorResult = merged.status === 'error' || raw.status === 'error' || parsed.status === 'error'
   const optimizationSources = [
     merged.optimization,
@@ -1036,6 +1040,37 @@ const normalizeGreenPowerResult = (rawValue, parsedValue, keyMetrics = {}) => {
     merged.optimization = optimization
   }
 
+  const procurementSources = [
+    merged.procurement_plan,
+    raw.procurement_plan,
+    parsed.procurement_plan
+  ].filter(isNonEmptyObject)
+  const procurementPlan = procurementSources.reduce((acc, item) => ({ ...acc, ...item }), {})
+  const fallbackProcurement = {
+    total_green_power_ratio: pickFirstFiniteNumber(
+      procurementPlan.total_green_power_ratio,
+      keyMetrics.green_power_ratio
+    ),
+    actual_direct_connection_ratio: pickFirstFiniteNumber(
+      procurementPlan.actual_direct_connection_ratio,
+      keyMetrics.direct_connection_ratio
+    ),
+    procured_green_ratio: pickFirstFiniteNumber(
+      procurementPlan.procured_green_ratio,
+      keyMetrics.procured_green_ratio
+    ),
+    annual_procurement_cost_lakh: pickFirstFiniteNumber(
+      procurementPlan.annual_procurement_cost_lakh,
+      keyMetrics.annual_green_procurement_cost_lakh
+    )
+  }
+  Object.entries(fallbackProcurement).forEach(([key, value]) => {
+    if (value !== null) procurementPlan[key] = value
+  })
+  if (Object.keys(procurementPlan).length) {
+    merged.procurement_plan = procurementPlan
+  }
+
   return merged
 }
 
@@ -1066,6 +1101,15 @@ const formatPercentAuto = (v, digits = 1) => {
   const n = Number(v)
   if (!Number.isFinite(n)) return '--'
   return `${(n > 1 ? n : n * 100).toFixed(digits)}%`
+}
+
+const sanitizeProcurementMethodLabel = (value) => {
+  const label = String(value || '').trim()
+  if (!label) return '--'
+  if (label.includes('缁跨數浜ゆ槗') && label.includes('缁胯瘉琛ヨ冻')) return '绿电交易+绿证补足'
+  if (label.includes('缁跨數浜ゆ槗')) return '绿电交易'
+  if (label.includes('缁胯瘉琛ヨ冻')) return '绿证补足'
+  return label
 }
 
 const formatWithUnit = (v, unit, digits = 2) => {
@@ -1237,6 +1281,7 @@ const draftPlanTraceCards = computed(() => {
   const draft = draftSource.value
   const greenFull = draft.green_power_result || {}
   const green = greenFull.optimization || {}
+  const procurement = greenFull.procurement_plan || {}
   const greenFailed = greenFull.status === 'error'
   const greenErrorMessage = greenFull.error_message || greenFull.message || ''
   const greenInputs = greenFull.inputs || {}
@@ -1249,6 +1294,20 @@ const draftPlanTraceCards = computed(() => {
     green.target_green_ratio,
     toNumber(req.green_power_ratio, 0)
   )
+  const totalGreenRatio = toNumber(
+    procurement.total_green_power_ratio,
+    Number.isFinite(actualGreenRatio) ? actualGreenRatio : targetGreenRatio
+  )
+  const directGreenRatio = toNumber(
+    procurement.actual_direct_connection_ratio,
+    toNumber(req.direct_connection_ratio, Number.isFinite(actualGreenRatio) ? actualGreenRatio : 0)
+  )
+  const procuredGreenRatio = toNumber(
+    procurement.procured_green_ratio,
+    Math.max(0, totalGreenRatio - directGreenRatio)
+  )
+  const procurementMethod = sanitizeProcurementMethodLabel(procurement.method_label || '未配置')
+  const annualProcurementCost = toNumber(procurement.annual_procurement_cost_lakh, 0)
   const cooling = draft.cooling_result || {}
   const power = draft.power_supply_plan || {}
   const coolingOptimization = cooling.optimization_summary || {}
@@ -1293,20 +1352,28 @@ const draftPlanTraceCards = computed(() => {
       toneClass: 'tone-green',
       summary: '先根据项目所在地生成风光出力曲线，再在绿电目标约束下优化风电、光伏和储能装机配比。',
       metrics: [
+        { label: '总绿电占比', value: formatPercent(totalGreenRatio, 0) },
+        { label: '直连占比', value: formatPercent(directGreenRatio, 0) },
+        { label: '采购补足占比', value: formatPercent(procuredGreenRatio, 0) },
         { label: '光伏装机容量', value: `${formatNumber(green.pv_capacity_mw, 2)} MWp` },
         { label: '风电装机容量', value: `${formatNumber(green.wind_capacity_mw, 2)} MW` },
         { label: '储能额定能量', value: `${formatNumber(green.storage_capacity_mwh, 2)} MWh` },
         {
-          label: '绿电占比',
+          label: '采购方式',
+          value: greenFailed ? '计算失败' : procurementMethod
+        },
+        {
+          label: '年采购成本',
           value: greenFailed ? '计算失败' : Number.isFinite(actualGreenRatio)
-            ? `${formatPercent(actualGreenRatio, 0)}（目标 ${formatPercent(targetGreenRatio, 0)}）`
-            : formatPercent(targetGreenRatio, 0)
+            ? `${formatNumber(annualProcurementCost, 2)} 万元/年`
+            : '--'
         }
       ],
       inputs: [
         `项目位置：${req.location || '--'}`,
         `负荷规模：${formatNumber(greenLoadMw, 2)} MW`,
         `绿电目标：${formatPercent(req.green_power_ratio, 0)}`,
+        `直连目标：${req.direct_connection_ratio != null ? formatPercent(req.direct_connection_ratio, 0) : '自动推荐'}`,
         `仿真时长：${greenInputs.sim_hours || req.sim_hours || 168} h`,
         `气象年份：${greenInputs.year || req.year || 2025}`,
         '容量边界：风电/光伏 1-500MW，储能 0-500MWh'
@@ -1317,6 +1384,8 @@ const draftPlanTraceCards = computed(() => {
         { label: '仿真模式', value: greenFull.pv_profile?.mode || '--' },
         { label: '资源曲线', value: '先生成 PV/Wind 单位出力曲线' },
         { label: '负荷文件', value: greenFiles.load_csv ? '已载入负荷系数 CSV' : '使用默认负荷曲线' },
+        { label: '采购路径', value: procurementMethod },
+        { label: '自动推荐直连', value: procurement.is_direct_ratio_auto_recommended ? '是' : '否' },
         { label: 'DE 参数', value: `maxiter ${greenInputs.maxiter || 60} · popsize ${greenInputs.popsize || 10} · seed ${greenInputs.seed || 42}` },
         { label: '搜索边界', value: `风/光 ${greenInputs.bounds?.wind_capacity_bounds?.[0] || 1}-${greenInputs.bounds?.wind_capacity_bounds?.[1] || 500}MW，储能 ${greenInputs.bounds?.storage_capacity_bounds?.[0] || 20}-${greenInputs.bounds?.storage_capacity_bounds?.[1] || 500}MWh` },
         { label: '结果文件', value: greenFiles.balance_plot ? '同步输出绿电平衡图' : '仅返回优化结果' }
@@ -1347,6 +1416,7 @@ const draftPlanTraceCards = computed(() => {
         '后端 Tool 先生成 PV/Wind 曲线，再进入容量优化，不是直接对装机容量做静态估算。',
         `当前输入负荷为 ${formatNumber(greenLoadMw, 2)} MW，会直接影响风光储的容量上限需求。`,
         `绿电目标设置为 ${formatPercent(req.green_power_ratio, 0)}，目标越高，通常需要更大的装机与储能。`,
+        `系统先确定直连占比 ${formatPercent(directGreenRatio, 0)}，剩余 ${formatPercent(procuredGreenRatio, 0)} 通过${procurementMethod}补足。`,
         `DE 优化器当前使用 maxiter ${greenInputs.maxiter || 60}、popsize ${greenInputs.popsize || 10}、seed ${greenInputs.seed || 42}。`,
         'Tool 使用差分进化算法进行容量优化，而不是手工指定风光储配比。'
       ]
@@ -1498,8 +1568,10 @@ const costStructureSegments = computed(() => {
   const draft = draftSource.value
   const cost = nodeResults.costCalculation.raw || {}
   const breakdown = nodeResults.costCalculation.capex_breakdown || cost.capex_breakdown || {}
+  const opexBreakdown = nodeResults.costCalculation.raw?.opex_breakdown || cost.opex_breakdown || {}
   const greenDetails = breakdown.details || {}
   const coolingEco = draft.cooling_result?.economic_indicators || {}
+  const procurement = draft.green_power_result?.procurement_plan || {}
   const coolingCapex = toNumber(
     breakdown.cooling_system_lakh,
     toNumber(coolingEco.initial_investment, 0)
@@ -1536,7 +1608,12 @@ const costStructureSegments = computed(() => {
         { label: '储能 CAPEX', value: `${formatNumber(greenDetails.storage_capex_lakh, 0)} 万元` },
         { label: '风电装机容量', value: `${formatNumber(draft.green_power_result?.optimization?.wind_capacity_mw, 2)} MW` },
         { label: '光伏装机容量', value: `${formatNumber(draft.green_power_result?.optimization?.pv_capacity_mw, 2)} MWp` },
-        { label: '储能额定能量', value: `${formatNumber(draft.green_power_result?.optimization?.storage_capacity_mwh, 2)} MWh` }
+        { label: '储能额定能量', value: `${formatNumber(draft.green_power_result?.optimization?.storage_capacity_mwh, 2)} MWh` },
+        { label: '总绿电占比', value: formatPercent(procurement.total_green_power_ratio, 0) },
+        { label: '直连占比', value: formatPercent(procurement.actual_direct_connection_ratio, 0) },
+        { label: '采购补足占比', value: formatPercent(procurement.procured_green_ratio, 0) },
+        { label: '采购方式', value: sanitizeProcurementMethodLabel(procurement.method_label || '--') },
+        { label: '年采购成本(OPEX)', value: `${formatNumber(opexBreakdown.annual_green_procurement_cost_lakh, 2)} 万元/年` }
       ]
     },
     {

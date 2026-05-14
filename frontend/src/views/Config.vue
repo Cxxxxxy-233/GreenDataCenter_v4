@@ -171,7 +171,17 @@
                 :step="1"
                 placeholder="如：70"
               />
-              <span class="form-hint">若按绿电直连展示，建议填 30%-40%；60% 以上更适合解释为叠加绿证/PPA</span>
+              <span class="form-hint">展示建议：若演示乌兰察布等资源富集地区，可将总绿电目标设为 90%-95%；其中直连部分通常更适合控制在 25%-35%，剩余部分通过绿电交易或绿证补足。</span>
+            </el-form-item>
+            <el-form-item label="绿电直连占比(%)">
+              <el-input-number
+                v-model="formData.direct_connection_ratio"
+                :min="0"
+                :max="100"
+                :step="1"
+                placeholder="留空则自动推荐"
+              />
+              <span class="form-hint">可选填写。若留空，系统会根据当地风光资源、政策约束与经济性自动推荐直连比例，剩余部分通过绿电交易或绿证补足。</span>
             </el-form-item>
             <el-form-item label="预算约束(万元)" required>
               <el-input-number
@@ -431,7 +441,8 @@ const pageHighlights = computed(() => [
 const formData = reactive({
   location: '乌兰察布',
   planned_load_kw: 30000,
-  green_power_ratio: 30,
+  green_power_ratio: 92,
+  direct_connection_ratio: null,
   planned_area: 15000,
   budget_constraint: 32000,
   cooling_technology: '浸没式液冷',
@@ -488,6 +499,7 @@ const canProceed = computed(() => {
     formData.location &&
     formData.pue_target >= 1.05 &&
     formData.green_power_ratio >= 0 &&
+    (formData.direct_connection_ratio == null || formData.direct_connection_ratio <= formData.green_power_ratio) &&
     formData.budget_constraint > 0
 })
 
@@ -515,6 +527,9 @@ const transformToBackendFormat = () => {
     popsize: formData.popsize,
     seed: formData.seed
   }
+  if (formData.direct_connection_ratio != null && formData.direct_connection_ratio !== '') {
+    data.direct_connection_ratio = formData.direct_connection_ratio / 100
+  }
   if (formData.date) {
     const d = new Date(formData.date)
     data.date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -530,12 +545,13 @@ const saveParams = () => {
 const resetParams = () => {
   formData.location = '乌兰察布'
   formData.planned_load_kw = 30000
+  formData.direct_connection_ratio = null
   formData.computing_power_density = 20
   formData.planned_area = 15000
   formData.cooling_technology = '浸没式液冷'
   formData.machine_room_grade = 'A'
   formData.pue_target = 1.22
-  formData.green_power_ratio = 30
+  formData.green_power_ratio = 92
   formData.budget_constraint = 32000
   formData.pv_tilt = 41
   formData.pv_azimuth = 180
@@ -564,12 +580,13 @@ const applyDemoPreset = (presetKey) => {
     ulanqab: {
       location: '乌兰察布',
       planned_load_kw: 30000,
+      direct_connection_ratio: null,
       computing_power_density: 20,
       planned_area: 15000,
       cooling_technology: '浸没式液冷',
       machine_room_grade: 'A',
       pue_target: 1.22,
-      green_power_ratio: 30,
+      green_power_ratio: 92,
       budget_constraint: 32000,
       pv_tilt: 41,
       pv_azimuth: 180,
@@ -594,6 +611,7 @@ const applyDemoPreset = (presetKey) => {
     guiyang: {
       location: '贵阳',
       planned_load_kw: 12000,
+      direct_connection_ratio: null,
       computing_power_density: 10,
       planned_area: 18000,
       cooling_technology: '冷板式液冷',
