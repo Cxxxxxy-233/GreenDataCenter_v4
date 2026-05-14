@@ -952,9 +952,9 @@ const toNumber = (v, fallback = null) => {
 }
 
 const DEFAULT_GREEN_COST_FACTORS = {
-  wind_per_mw: 700,
+  wind_per_mw: 420,
   pv_per_mw: 350,
-  storage_per_mwh: 250
+  storage_per_mwh: 60
 }
 
 const isNonEmptyObject = (value) => {
@@ -1293,9 +1293,9 @@ const draftPlanTraceCards = computed(() => {
       toneClass: 'tone-green',
       summary: '先根据项目所在地生成风光出力曲线，再在绿电目标约束下优化风电、光伏和储能装机配比。',
       metrics: [
-        { label: '光伏容量', value: `${formatNumber(green.pv_capacity_mw, 2)} MW` },
-        { label: '风电容量', value: `${formatNumber(green.wind_capacity_mw, 2)} MW` },
-        { label: '储能容量', value: `${formatNumber(green.storage_capacity_mwh, 2)} MWh` },
+        { label: '光伏装机容量', value: `${formatNumber(green.pv_capacity_mw, 2)} MWp` },
+        { label: '风电装机容量', value: `${formatNumber(green.wind_capacity_mw, 2)} MW` },
+        { label: '储能额定能量', value: `${formatNumber(green.storage_capacity_mwh, 2)} MWh` },
         {
           label: '绿电占比',
           value: greenFailed ? '计算失败' : Number.isFinite(actualGreenRatio)
@@ -1309,7 +1309,7 @@ const draftPlanTraceCards = computed(() => {
         `绿电目标：${formatPercent(req.green_power_ratio, 0)}`,
         `仿真时长：${greenInputs.sim_hours || req.sim_hours || 168} h`,
         `气象年份：${greenInputs.year || req.year || 2025}`,
-        '容量边界：风电/光伏 1-500MW，储能 20-500MWh'
+        '容量边界：风电/光伏 1-500MW，储能 0-500MWh'
       ],
       traceFactsTitle: '优化设定',
       traceFacts: [
@@ -1535,8 +1535,8 @@ const costStructureSegments = computed(() => {
         { label: '光伏 CAPEX', value: `${formatNumber(greenDetails.pv_capex_lakh, 0)} 万元` },
         { label: '储能 CAPEX', value: `${formatNumber(greenDetails.storage_capex_lakh, 0)} 万元` },
         { label: '风电装机容量', value: `${formatNumber(draft.green_power_result?.optimization?.wind_capacity_mw, 2)} MW` },
-        { label: '光伏装机容量', value: `${formatNumber(draft.green_power_result?.optimization?.pv_capacity_mw, 2)} MW` },
-        { label: '储能容量', value: `${formatNumber(draft.green_power_result?.optimization?.storage_capacity_mwh, 2)} MWh` }
+        { label: '光伏装机容量', value: `${formatNumber(draft.green_power_result?.optimization?.pv_capacity_mw, 2)} MWp` },
+        { label: '储能额定能量', value: `${formatNumber(draft.green_power_result?.optimization?.storage_capacity_mwh, 2)} MWh` }
       ]
     },
     {

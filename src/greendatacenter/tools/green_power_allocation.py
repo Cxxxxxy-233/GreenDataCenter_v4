@@ -170,7 +170,7 @@ def green_power_allocation_tool(
     resolved_bounds = (
         tuple(wind_capacity_bounds) if wind_capacity_bounds else (1, 500),
         tuple(pv_capacity_bounds) if pv_capacity_bounds else (1, 500),
-        tuple(storage_capacity_bounds) if storage_capacity_bounds else (20, 500),
+        tuple(storage_capacity_bounds) if storage_capacity_bounds else (0, 500),
     )
 
     sys.stdout.write("[green_power_allocation] Running DE optimization...\n")

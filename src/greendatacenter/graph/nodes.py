@@ -25,9 +25,9 @@ from greendatacenter.tools.power_supply_config import power_supply_config_tool
 
 # 绿电与储能系统 CAPEX 单位成本（万元 / MW 或 万元 / MWh）
 COST_FACTORS = {
-    "wind_per_mw": 700,
+    "wind_per_mw": 420,
     "pv_per_mw": 350,
-    "storage_per_mwh": 250,
+    "storage_per_mwh": 60,
 }
 
 # 强制UTF-8输出（仅在交互式控制台模式下）
@@ -68,6 +68,55 @@ def _estimate_rack_count(requirement: dict[str, Any]) -> int:
 def _machine_grade_to_tier(machine_room_grade: str) -> int:
     mapping = {"A+": 4, "A": 3, "B": 2, "C": 1}
     return mapping.get((machine_room_grade or "").strip(), 3)
+
+
+CITY_ENVIRONMENT_PRESETS: dict[str, dict[str, float]] = {
+    "\u4e4c\u5170\u5bdf\u5e03": {"annual_temperature": 6.0},
+    "\u5f20\u5bb6\u53e3": {"annual_temperature": 8.0},
+    "\u5317\u4eac": {"annual_temperature": 13.0},
+    "\u4e0a\u6d77": {"annual_temperature": 18.0},
+    "\u676d\u5dde": {"annual_temperature": 17.5},
+    "\u5e7f\u5dde": {"annual_temperature": 22.5},
+    "\u6df1\u5733": {"annual_temperature": 23.0},
+    "\u8d35\u9633": {"annual_temperature": 15.5},
+    "\u4e3d\u6c5f": {"annual_temperature": 13.0},
+    "\u6b66\u6c49": {"annual_temperature": 17.0},
+    "\u897f\u5b89": {"annual_temperature": 14.0},
+    "\u5357\u4eac": {"annual_temperature": 16.0},
+    "\u4e09\u4e9a": {"annual_temperature": 25.0},
+}
+
+
+def _derive_environmental_data(requirement: dict[str, Any]) -> dict[str, Any]:
+    location = str(requirement.get("location") or "").strip()
+    preset = CITY_ENVIRONMENT_PRESETS.get(location, {})
+    annual_temperature = _safe_float(requirement.get("annual_temperature"), preset.get("annual_temperature", 15.0))
+    return {
+        "annual_temperature": annual_temperature,
+    }
+
+
+def _derive_cooling_priority(requirement: dict[str, Any], environmental_data: dict[str, Any]) -> str:
+    explicit_priority = str(requirement.get("priority") or "").strip()
+    if explicit_priority:
+        return explicit_priority
+
+    density = _safe_float(requirement.get("computing_power_density"), 0.0)
+    annual_temperature = _safe_float(environmental_data.get("annual_temperature"), 15.0)
+
+    if annual_temperature <= 10.0 and density >= 15.0:
+        return "green"
+    if density >= 18.0:
+        return "reliable"
+    return "economic"
+
+
+def _derive_facility_total_load_mw(requirement: dict[str, Any]) -> float:
+    it_load_mw = _safe_float(requirement.get("planned_load_kw"), 0.0) / 1000.0
+    pue_target = _safe_float(requirement.get("pue_target"), 1.25)
+    if it_load_mw <= 0:
+        return 0.0
+    return round(it_load_mw * max(pue_target, 1.0), 4)
 
 
 def _calculate_annual_carbon_emission_tons(
@@ -501,15 +550,17 @@ class DraftPlanAgentNode:
         try:
             sys.stdout.write("[Draft Plan Agent] Calling cooling-scheme-generator...\n")
             sys.stdout.flush()
+            environmental_data = _derive_environmental_data(req_data)
+            cooling_priority = _derive_cooling_priority(req_data, environmental_data)
             cooling_input = {
                 "user_requirements": req_data,
-                "environmental_data": {"annual_temperature": 15.0},
+                "environmental_data": environmental_data,
                 "location": req_data.get("location"),
                 "planned_load": req_data.get("planned_load_kw"),
                 "computing_power_density": req_data.get("computing_power_density", 8.0),
                 "pue_target": req_data.get("pue_target", 1.3),
                 "green_power_ratio": req_data.get("green_power_ratio", 0.7),
-                "priority": req_data.get("priority", "economic"),
+                "priority": cooling_priority,
             }
             cooling_result = cooling_scheme_generator_tool.invoke(cooling_input)
             sys.stdout.write("[Draft Plan Agent] cooling-scheme-generator completed\n")
@@ -523,7 +574,7 @@ class DraftPlanAgentNode:
             sys.stdout.flush()
             power_input = {
                 "machine_room_grade": req_data.get("machine_room_grade", "A"),
-                "total_load_mw": float(req_data.get("planned_load_kw", 0)) / 1000,
+                "total_load_mw": _derive_facility_total_load_mw(req_data),
                 "pue_target": req_data.get("pue_target", 1.3),
             }
             power_supply_plan = power_supply_config_tool.invoke(power_input)

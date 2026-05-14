@@ -82,7 +82,7 @@
                 :step="10"
                 placeholder="如：12000"
               />
-              <span class="form-hint">总IT设备功率需求</span>
+              <span class="form-hint">展示建议：12MW、30MW、40MW 这三个量级最容易得到可信输出</span>
             </el-form-item>
             <el-form-item label="单机柜算力功率密度(kW/机柜)" required>
               <el-input-number
@@ -92,7 +92,7 @@
                 :step="1"
                 placeholder="如：8"
               />
-              <span class="form-hint">推荐值：8-30 kW/机柜</span>
+              <span class="form-hint">通用云建议 8-12，训练/高密场景建议 15-20，超过 30 需谨慎展示</span>
             </el-form-item>
             <el-form-item label="机柜总数">
               <el-input
@@ -161,7 +161,7 @@
                 :step="0.01"
                 placeholder="如：1.3"
               />
-              <span class="form-hint">传统>1.8，高效<=1.3，超高效<=1.2</span>
+              <span class="form-hint">展示建议：新建绿色数据中心填 1.20-1.25，低于 1.18 容易显得过于激进</span>
             </el-form-item>
             <el-form-item label="绿电消纳率目标(%)" required>
               <el-input-number
@@ -171,7 +171,7 @@
                 :step="1"
                 placeholder="如：70"
               />
-              <span class="form-hint">优秀>=80%，良好>=60%，可接受>=40%</span>
+              <span class="form-hint">若按绿电直连展示，建议填 30%-40%；60% 以上更适合解释为叠加绿证/PPA</span>
             </el-form-item>
             <el-form-item label="预算约束(万元)" required>
               <el-input-number
@@ -181,7 +181,7 @@
                 :step="10"
                 placeholder="如：2000"
               />
-              <span class="form-hint">项目总投资预算上限</span>
+              <span class="form-hint">按当前模型展示：12MW 建议 1.3-1.6 亿元，30MW 建议 2.8-3.3 亿元</span>
             </el-form-item>
             <el-form-item label="制冷技术">
               <el-select v-model="formData.cooling_technology">
@@ -251,7 +251,7 @@
                 :max="2"
                 :step="0.1"
               />
-              <span class="form-hint">中国平均约0.5</span>
+              <span class="form-hint">展示建议：华北/蒙西附近可用 0.55-0.60，西南水电占比较高区域可用 0.45-0.50</span>
             </el-form-item>
           </el-form>
         </el-card>
@@ -269,7 +269,7 @@
                 :max="8760"
                 :step="24"
               />
-              <span class="form-hint">8760小时为全年仿真</span>
+              <span class="form-hint">展示推荐 168 小时，结果更稳且生成更快；8760 小时适合做严谨测算</span>
             </el-form-item>
             <el-form-item label="气象数据年份">
               <el-input-number
@@ -386,7 +386,9 @@
       <div class="config-footer-actions">
         <el-button @click="saveParams">保存参数</el-button>
         <el-button @click="resetParams">重置为默认值</el-button>
-        <el-button @click="loadSampleParams">加载示例参数</el-button>
+        
+        <el-button @click="applyDemoPreset('ulanqab')">加载乌兰察布展示参数</el-button>
+        <el-button @click="applyDemoPreset('guiyang')">加载贵阳展示参数</el-button>
         <el-button 
           class="primary-btn" 
           @click="nextStep" 
@@ -428,29 +430,29 @@ const pageHighlights = computed(() => [
 
 const formData = reactive({
   location: '乌兰察布',
-  planned_load_kw: 500,
-  green_power_ratio: 70,
-  planned_area: 500,
-  budget_constraint: 2000,
+  planned_load_kw: 30000,
+  green_power_ratio: 30,
+  planned_area: 15000,
+  budget_constraint: 32000,
   cooling_technology: '浸没式液冷',
   machine_room_grade: 'A',
-  pue_target: 1.3,
-  sim_hours: 160,
+  pue_target: 1.22,
+  sim_hours: 168,
   year: 2025,
   date: null,
-  pv_tilt: null,
+  pv_tilt: 41,
   pv_azimuth: 180.0,
   wind_cut_in_ms: 3.0,
   wind_rated_ms: 12.0,
   wind_cut_out_ms: 25.0,
-  computing_power_density: 8.0,
-  carbon_emission_factor: 0.5,
+  computing_power_density: 20.0,
+  carbon_emission_factor: 0.57,
   electricity_prices: {
-    '尖峰电价': 0.5,
-    '高峰电价': 0.4,
-    '平段电价': 0.3,
-    '低谷电价': 0.25,
-    '深谷电价': 0.2
+    '尖峰电价': 0.48,
+    '高峰电价': 0.42,
+    '平段电价': 0.35,
+    '低谷电价': 0.27,
+    '深谷电价': 0.22
   },
   maxiter: 60,
   popsize: 10,
@@ -527,29 +529,29 @@ const saveParams = () => {
 
 const resetParams = () => {
   formData.location = '乌兰察布'
-  formData.planned_load_kw = 500
-  formData.computing_power_density = 8
-  formData.planned_area = 500
+  formData.planned_load_kw = 30000
+  formData.computing_power_density = 20
+  formData.planned_area = 15000
   formData.cooling_technology = '浸没式液冷'
   formData.machine_room_grade = 'A'
-  formData.pue_target = 1.3
-  formData.green_power_ratio = 70
-  formData.budget_constraint = 2000
-  formData.pv_tilt = null
+  formData.pue_target = 1.22
+  formData.green_power_ratio = 30
+  formData.budget_constraint = 32000
+  formData.pv_tilt = 41
   formData.pv_azimuth = 180
   formData.wind_cut_in_ms = 3.0
   formData.wind_rated_ms = 12.0
   formData.wind_cut_out_ms = 25.0
-  formData.carbon_emission_factor = 0.5
-  formData.sim_hours = 160
+  formData.carbon_emission_factor = 0.57
+  formData.sim_hours = 168
   formData.year = 2025
   formData.date = null
   formData.electricity_prices = {
-    '尖峰电价': 0.5,
-    '高峰电价': 0.4,
-    '平段电价': 0.3,
-    '低谷电价': 0.25,
-    '深谷电价': 0.2
+    '尖峰电价': 0.48,
+    '高峰电价': 0.42,
+    '平段电价': 0.35,
+    '低谷电价': 0.27,
+    '深谷电价': 0.22
   }
   formData.maxiter = 60
   formData.popsize = 10
@@ -557,18 +559,73 @@ const resetParams = () => {
   ElMessage.info('已重置为默认值')
 }
 
-const loadSampleParams = () => {
-  formData.planned_load_kw = 12000
-  formData.computing_power_density = 30
-  formData.planned_area = 18000
-  formData.location = '乌兰察布'
-  formData.cooling_technology = '浸没式液冷'
-  formData.machine_room_grade = 'A+'
-  formData.pue_target = 1.18
-  formData.green_power_ratio = 95
-  formData.budget_constraint = 35000
-  formData.sim_hours = 168
-  ElMessage.success('已加载示例参数')
+const applyDemoPreset = (presetKey) => {
+  const presets = {
+    ulanqab: {
+      location: '乌兰察布',
+      planned_load_kw: 30000,
+      computing_power_density: 20,
+      planned_area: 15000,
+      cooling_technology: '浸没式液冷',
+      machine_room_grade: 'A',
+      pue_target: 1.22,
+      green_power_ratio: 30,
+      budget_constraint: 32000,
+      pv_tilt: 41,
+      pv_azimuth: 180,
+      wind_cut_in_ms: 3.0,
+      wind_rated_ms: 12.0,
+      wind_cut_out_ms: 25.0,
+      carbon_emission_factor: 0.57,
+      sim_hours: 168,
+      year: 2025,
+      date: null,
+      electricity_prices: {
+        '尖峰电价': 0.48,
+        '高峰电价': 0.42,
+        '平段电价': 0.35,
+        '低谷电价': 0.27,
+        '深谷电价': 0.22
+      },
+      maxiter: 60,
+      popsize: 10,
+      seed: 42
+    },
+    guiyang: {
+      location: '贵阳',
+      planned_load_kw: 12000,
+      computing_power_density: 10,
+      planned_area: 18000,
+      cooling_technology: '冷板式液冷',
+      machine_room_grade: 'A',
+      pue_target: 1.25,
+      green_power_ratio: 30,
+      budget_constraint: 15000,
+      pv_tilt: 26,
+      pv_azimuth: 180,
+      wind_cut_in_ms: 3.0,
+      wind_rated_ms: 12.0,
+      wind_cut_out_ms: 25.0,
+      carbon_emission_factor: 0.50,
+      sim_hours: 168,
+      year: 2025,
+      date: null,
+      electricity_prices: {
+        '尖峰电价': 0.62,
+        '高峰电价': 0.56,
+        '平段电价': 0.49,
+        '低谷电价': 0.39,
+        '深谷电价': 0.31
+      },
+      maxiter: 60,
+      popsize: 10,
+      seed: 42
+    }
+  }
+  const preset = presets[presetKey]
+  if (!preset) return
+  Object.assign(formData, preset)
+  ElMessage.success(presetKey === 'ulanqab' ? '已加载乌兰察布展示参数' : '已加载贵阳展示参数')
 }
 
 const nextStep = async () => {

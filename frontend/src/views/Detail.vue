@@ -1094,7 +1094,7 @@ const greenTrace = computed(() => ({
     `绿电目标：${formatPercent(greenInputs.value.green_power_ratio ?? requirement.value.green_power_ratio, 0)}`,
     `仿真时长：${greenInputs.value.sim_hours || requirement.value.sim_hours || 168} h`,
     `气象年份：${greenInputs.value.year || requirement.value.year || 2025}`,
-    '容量边界：风/光 1-500MW，储能 20-500MWh'
+    '容量边界：风/光 1-500MW，储能 0-500MWh'
   ],
   facts: [
     { label: '仿真模式', value: greenProfiles.value.pv.mode || greenProfiles.value.wind.mode || '--' },
@@ -1283,8 +1283,8 @@ const costStructureSegments = computed(() => {
         { label: '光伏CAPEX', value: `${formatNumber(breakdown.details?.pv_capex_lakh, 0)} 万元` },
         { label: '储能CAPEX', value: `${formatNumber(breakdown.details?.storage_capex_lakh, 0)} 万元` },
         { label: '风电装机容量', value: `${formatNumber(greenOptimization.value.wind_capacity_mw, 2)} MW` },
-        { label: '光伏装机容量', value: `${formatNumber(greenOptimization.value.pv_capacity_mw, 2)} MW` },
-        { label: '储能容量', value: `${formatNumber(greenOptimization.value.storage_capacity_mwh, 2)} MWh` }
+        { label: '光伏装机容量', value: `${formatNumber(greenOptimization.value.pv_capacity_mw, 2)} MWp` },
+        { label: '储能额定能量', value: `${formatNumber(greenOptimization.value.storage_capacity_mwh, 2)} MWh` }
       ]
     },
     {
