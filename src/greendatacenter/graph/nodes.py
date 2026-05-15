@@ -1589,6 +1589,37 @@ class FinalReportNode:
             "- 10. 鍏抽敭鎸囨爣姹囨€昏〃\n"
         )
 
+        system_prompt = (
+            "You are a senior data-center consulting partner writing the final Chinese deliverable for an owner/investor.\n"
+            "Use the provided state_json as the only source of project facts. Do not invent exact values that are not in the data.\n"
+            "Write in professional Chinese Markdown, with clear headings, tables, decision logic, assumptions, risks, and next-step actions.\n"
+            "The report should feel like a formal consulting scheme report for a green data center, not a short AI summary.\n\n"
+            "Mandatory quality requirements:\n"
+            "1. Start with an executive decision page: recommendation, score, confidence, and key go/no-go conditions.\n"
+            "2. Include project background, user inputs, capacity sizing, IT load, estimated rack count, PUE and green power targets.\n"
+            "3. Explain the integrated technical architecture: cooling, power reliability, green power absorption, energy storage/procurement.\n"
+            "4. Include economic analysis: CAPEX, OPEX, green-power cost, payback or cost-control logic when available.\n"
+            "5. Include energy and carbon analysis: annual energy, green energy share, carbon impact when available.\n"
+            "6. Include risk register with owner, trigger, impact, mitigation, and verification method.\n"
+            "7. Include implementation roadmap by phase: design deepening, procurement, construction, commissioning, operation optimization.\n"
+            "8. Include acceptance and monitoring KPIs: PUE, availability, green power ratio, carbon intensity, budget deviation.\n"
+            "9. Use Markdown tables where possible. Keep prose concise but substantial.\n"
+            "10. If information is missing, explicitly mark it as '待补充' and state why it matters.\n\n"
+            "Recommended section outline:\n"
+            "# 数据中心绿色供能与建设方案综合报告\n"
+            "## 0. 执行结论与决策建议\n"
+            "## 1. 项目概况与基础输入\n"
+            "## 2. 设计边界、依据与关键假设\n"
+            "## 3. 建设规模与容量测算\n"
+            "## 4. 综合技术方案\n"
+            "## 5. 经济性与全生命周期成本\n"
+            "## 6. 能耗、绿电消纳与碳排分析\n"
+            "## 7. 多专家评审与关键权衡\n"
+            "## 8. 风险清单与缓释措施\n"
+            "## 9. 实施路线、验收口径与后续工作\n"
+            "## 10. 附录：关键指标表\n"
+        )
+
         llm = create_final_report_llm()
         messages = [
             SystemMessage(content=system_prompt),
@@ -1597,6 +1628,8 @@ class FinalReportNode:
 
         response = llm.invoke(messages)
         report_text = response.content.strip()
+        report_text = self._ensure_project_overview_section(report_text, state_payload)
+        report_text = self._ensure_consultant_depth_sections(report_text, state_payload)
 
         output_dir = Path(__file__).resolve().parents[1] / "output"
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1626,6 +1659,345 @@ class FinalReportNode:
             "streaming_output": streaming_output,
         }
 
+    def _ensure_project_overview_section(self, report_text: str, state_payload: dict[str, Any]) -> str:
+        if "## 项目概况与基础输入" in report_text:
+            return report_text
+
+        overview = self._build_project_overview_section(state_payload)
+        if not overview:
+            return report_text
+
+        lines = report_text.splitlines()
+        heading_index = next((idx for idx, line in enumerate(lines) if line.lstrip().startswith("#")), None)
+        if heading_index is None:
+            return f"{overview}\n\n{report_text}".strip()
+
+        insert_at = heading_index + 1
+        while insert_at < len(lines):
+            current = lines[insert_at].strip()
+            if not current or current.startswith("**"):
+                insert_at += 1
+                continue
+            break
+
+        new_lines = lines[:insert_at] + ["", overview, ""] + lines[insert_at:]
+        return "\n".join(new_lines).strip()
+
+    def _build_project_overview_section(self, state_payload: dict[str, Any]) -> str:
+        requirement = state_payload.get("user_requirement") or {}
+        if not isinstance(requirement, dict) or not requirement:
+            return ""
+
+        planned_load_kw = _safe_float(requirement.get("planned_load_kw"), 0.0)
+        planned_area = _safe_float(requirement.get("planned_area"), 0.0)
+        density = _safe_float(requirement.get("computing_power_density"), 0.0)
+        green_ratio = _safe_float(requirement.get("green_power_ratio"), 0.0)
+        direct_ratio = requirement.get("direct_connection_ratio")
+        budget_constraint = _safe_float(requirement.get("budget_constraint"), 0.0)
+        pue_target = _safe_float(requirement.get("pue_target"), 0.0)
+        sim_hours = requirement.get("sim_hours")
+        year = requirement.get("year")
+        date = requirement.get("date")
+        location = requirement.get("location") or "--"
+        machine_room_grade = requirement.get("machine_room_grade") or "--"
+        cooling_technology = requirement.get("cooling_technology") or "--"
+
+        cabinet_count = round(planned_load_kw / density) if planned_load_kw > 0 and density > 0 else None
+        load_summary = "--"
+        if planned_load_kw > 0:
+            load_summary = f"{self._format_number(planned_load_kw / 1000.0, 2)} MW ({self._format_number(planned_load_kw, 0)} kW)"
+
+        rows = [
+            ("项目地点", str(location)),
+            ("建设规模", load_summary),
+            ("规划建筑面积", f"{self._format_number(planned_area, 0)} m²" if planned_area > 0 else "--"),
+            ("算力功率密度", f"{self._format_number(density, 2)} kW/柜" if density > 0 else "--"),
+            ("估算机柜数量", f"{self._format_number(cabinet_count, 0)} 柜" if cabinet_count else "--"),
+            ("机房等级", str(machine_room_grade)),
+            ("制冷偏好", str(cooling_technology)),
+            ("目标 PUE", self._format_number(pue_target, 2) if pue_target > 0 else "--"),
+            ("绿电目标占比", self._format_percent(green_ratio)),
+            ("绿电直连占比", self._format_percent(direct_ratio) if direct_ratio is not None else "未指定（可由系统推荐）"),
+            ("预算约束", f"{self._format_number(budget_constraint, 0)} 万元" if budget_constraint > 0 else "--"),
+            ("仿真参数", self._build_simulation_summary(sim_hours, year, date)),
+        ]
+
+        table = "\n".join(
+            f"| {self._escape_markdown_cell(label)} | {self._escape_markdown_cell(value)} |"
+            for label, value in rows
+        )
+        return "\n".join([
+            "## 项目概况与基础输入",
+            "",
+            "以下内容直接来自用户在参数配置阶段提供的项目基础输入，用于说明本报告对应的数据中心建设画像与关键约束：",
+            "",
+            "| 项目 | 用户输入摘要 |",
+            "| --- | --- |",
+            table,
+        ])
+
+    def _build_simulation_summary(self, sim_hours: Any, year: Any, date: Any) -> str:
+        parts: list[str] = []
+        sim_hours_num = _safe_float(sim_hours, 0.0)
+        if sim_hours_num > 0:
+            parts.append(f"{self._format_number(sim_hours_num, 0)} 小时")
+        if year:
+            parts.append(f"{year} 年气象数据")
+        if date:
+            parts.append(f"指定日期 {date}")
+        return "，".join(parts) if parts else "--"
+
+    def _format_number(self, value: Any, digits: int = 0) -> str:
+        number = _safe_float(value, float("nan"))
+        if number != number:
+            return "--"
+        if digits <= 0:
+            return f"{number:,.0f}"
+        return f"{number:,.{digits}f}"
+
+    def _format_percent(self, value: Any) -> str:
+        ratio = _safe_float(value, float("nan"))
+        if ratio != ratio:
+            return "--"
+        if ratio > 1:
+            ratio = ratio / 100.0
+        return f"{ratio * 100:.0f}%"
+
+    def _escape_markdown_cell(self, value: Any) -> str:
+        text = str(value if value not in (None, "") else "--")
+        return text.replace("|", "\\|").replace("\n", "<br>")
+
+    def _ensure_consultant_depth_sections(self, report_text: str, state_payload: dict[str, Any]) -> str:
+        sections = self._build_consultant_depth_sections(state_payload)
+        missing_sections = [
+            section for heading, section in sections
+            if heading.replace("## ", "") not in report_text
+        ]
+        if not missing_sections:
+            return report_text
+        return f"{report_text.rstrip()}\n\n" + "\n\n".join(missing_sections)
+
+    def _build_consultant_depth_sections(self, state_payload: dict[str, Any]) -> list[tuple[str, str]]:
+        requirement = self._as_dict(state_payload.get("user_requirement"))
+        solution = self._as_dict(state_payload.get("solution"))
+        cooling = self._as_dict(state_payload.get("cooling_result"))
+        green = self._as_dict(state_payload.get("green_power_result"))
+        power = self._as_dict(state_payload.get("power_supply_plan"))
+        economic = self._as_dict(state_payload.get("economic_analysis_result"))
+
+        return [
+            ("## 设计边界、依据与关键假设", self._build_design_basis_section(requirement, power)),
+            ("## 建设规模与容量测算", self._build_capacity_sizing_section(requirement, cooling, power)),
+            ("## 综合技术方案深化", self._build_technical_scheme_section(cooling, green, power)),
+            ("## 经济性与全生命周期成本", self._build_lifecycle_cost_section(requirement, economic, green, solution)),
+            ("## 能耗、绿电消纳与碳排分析", self._build_energy_carbon_section(requirement, cooling, green, solution)),
+            ("## 实施路线、验收口径与后续工作", self._build_delivery_section(solution)),
+            ("## 附录：顾问复核清单", self._build_consultant_checklist_section(requirement, cooling, green, power, economic)),
+        ]
+
+    def _build_design_basis_section(self, requirement: dict[str, Any], power: dict[str, Any]) -> str:
+        rows = [
+            ("项目定位", "新建或扩建数据中心绿色供能与基础设施综合方案，当前报告用于方案比选、投资测算和深化设计输入。"),
+            ("主要输入来源", "用户需求参数、制冷寻优结果、绿电容量优化、供电可靠性方案、经济性专家意见、多专家仲裁结果。"),
+            ("机房等级口径", requirement.get("machine_room_grade") or "待补充"),
+            ("供配电参考", power.get("standard_basis") or power.get("basis") or "GB 50174-2017、YD/T 5235-2019 等数据中心供配电设计口径，需在施工图阶段复核。"),
+            ("能效边界", "PUE、绿电占比、碳排放因子按方案阶段测算，最终以全年实测和电力交易结算数据校核。"),
+            ("投资边界", "CAPEX/OPEX 为方案阶段估算，未替代招标清单、施工图预算和设备厂家报价。"),
+        ]
+        return self._table_section(
+            "## 设计边界、依据与关键假设",
+            "本节明确报告的适用边界，避免将方案阶段测算误解为施工图或招标控制价。",
+            ["边界项", "说明"],
+            rows,
+        )
+
+    def _build_capacity_sizing_section(self, requirement: dict[str, Any], cooling: dict[str, Any], power: dict[str, Any]) -> str:
+        planned_load_kw = _safe_float(requirement.get("planned_load_kw"), 0.0)
+        density = _safe_float(requirement.get("computing_power_density"), 0.0)
+        planned_area = _safe_float(requirement.get("planned_area"), 0.0)
+        pue = _safe_float(cooling.get("estimated_pue"), _safe_float(requirement.get("pue_target"), 0.0))
+        rack_count = round(planned_load_kw / density) if planned_load_kw > 0 and density > 0 else 0
+        facility_load_kw = planned_load_kw * max(pue, 1.0) if planned_load_kw > 0 else 0
+        annual_energy_mwh = facility_load_kw * 8760 / 1000 if facility_load_kw > 0 else 0
+        area_density = planned_load_kw / planned_area if planned_area > 0 else 0
+        rows = [
+            ("IT 负荷规模", f"{self._format_number(planned_load_kw / 1000, 2)} MW" if planned_load_kw else "待补充"),
+            ("估算机柜数量", f"{self._format_number(rack_count, 0)} 柜" if rack_count else "待补充"),
+            ("单柜功率密度", f"{self._format_number(density, 2)} kW/柜" if density else "待补充"),
+            ("建筑面积负荷密度", f"{self._format_number(area_density, 2)} kW/m²" if area_density else "待补充"),
+            ("方案 PUE/目标 PUE", f"{self._format_number(pue, 3)} / {self._format_number(requirement.get('pue_target'), 3)}"),
+            ("估算设施总负荷", f"{self._format_number(facility_load_kw / 1000, 2)} MW" if facility_load_kw else "待补充"),
+            ("估算年用电量", f"{self._format_number(annual_energy_mwh, 0)} MWh/年" if annual_energy_mwh else "待补充"),
+            ("供电接入电压", power.get("external_voltage") or power.get("voltage_level") or "待补充"),
+        ]
+        return self._table_section(
+            "## 建设规模与容量测算",
+            "容量测算用于校核制冷、供配电、绿电和投资估算是否在同一负荷边界下展开。",
+            ["测算项", "方案值"],
+            rows,
+        )
+
+    def _build_technical_scheme_section(self, cooling: dict[str, Any], green: dict[str, Any], power: dict[str, Any]) -> str:
+        green_optimization = self._as_dict(green.get("optimization"))
+        procurement = self._as_dict(green.get("procurement_plan"))
+        rows = [
+            ("制冷系统", cooling.get("cooling_technology") or cooling.get("strategy") or "待补充", "重点校核 PUE、WUE、余热回收和高密机柜适配能力。"),
+            ("供配电系统", power.get("scheme_name") or power.get("name") or "待补充", f"外部电压：{power.get('external_voltage') or '待补充'}；冗余等级需与机房等级一致。"),
+            ("绿电直连", self._format_percent(procurement.get("actual_direct_connection_ratio") or green_optimization.get("green_supply_ratio")), "直连比例应结合场址资源、并网条件和负荷曲线复核。"),
+            ("绿电采购补足", procurement.get("method_label") or procurement.get("recommended_path") or "待补充", "建议同步配置绿电交易、绿证和碳核算台账。"),
+            ("风光储容量", self._format_green_capacity(green_optimization), "容量结果应在全年 8760h 负荷曲线上复核弃电、缺口和储能循环次数。"),
+            ("可运维性", "建议建立能源管理系统 EMS + DCIM 联动", "持续跟踪 PUE、绿电占比、碳排、储能 SOC 与关键设备健康状态。"),
+        ]
+        return self._table_section(
+            "## 综合技术方案深化",
+            "综合方案应把制冷、供电、绿电和运维监测视为一个系统，而不是三个孤立子方案。",
+            ["系统", "推荐配置", "专业说明"],
+            rows,
+        )
+
+    def _build_lifecycle_cost_section(
+        self,
+        requirement: dict[str, Any],
+        economic: dict[str, Any],
+        green: dict[str, Any],
+        solution: dict[str, Any],
+    ) -> str:
+        key_metrics = self._as_dict(solution.get("key_metrics"))
+        cost_breakdown = self._as_dict(solution.get("cost_breakdown"))
+        capex_breakdown = self._as_dict(economic.get("capex_breakdown"))
+        opex_breakdown = self._as_dict(economic.get("opex_breakdown"))
+        procurement = self._as_dict(green.get("procurement_plan"))
+        total_capex = (
+            economic.get("total_capex_lakh")
+            or solution.get("total_capex_lakh")
+            or key_metrics.get("total_cost")
+            or cost_breakdown.get("total")
+        )
+        rows = [
+            ("预算约束", f"{self._format_number(requirement.get('budget_constraint'), 0)} 万元"),
+            ("估算总 CAPEX", f"{self._format_number(total_capex, 0)} 万元" if _safe_float(total_capex, 0) else "待补充"),
+            ("供电系统 CAPEX", f"{self._format_number(capex_breakdown.get('power_supply_system_lakh'), 0)} 万元" if capex_breakdown else "待补充"),
+            ("绿电系统 CAPEX", f"{self._format_number(capex_breakdown.get('green_power_system_lakh'), 0)} 万元" if capex_breakdown else "待补充"),
+            ("制冷系统 CAPEX", f"{self._format_number(capex_breakdown.get('cooling_system_lakh'), 0)} 万元" if capex_breakdown else "待补充"),
+            ("年绿电交易成本", f"{self._format_number(procurement.get('annual_green_power_trade_cost_lakh'), 2)} 万元/年"),
+            ("年绿证成本", f"{self._format_number(procurement.get('annual_green_certificate_cost_lakh'), 2)} 万元/年"),
+            ("年运维成本", f"{self._format_number(opex_breakdown.get('annual_opex_lakh'), 2)} 万元/年" if opex_breakdown else "待补充"),
+        ]
+        return self._table_section(
+            "## 经济性与全生命周期成本",
+            "经济性判断不只看一次性投资，还应同时关注电费、绿电溢价、绿证成本、运维成本和未来扩容弹性。",
+            ["成本项", "估算值"],
+            rows,
+        )
+
+    def _build_energy_carbon_section(self, requirement: dict[str, Any], cooling: dict[str, Any], green: dict[str, Any], solution: dict[str, Any]) -> str:
+        procurement = self._as_dict(green.get("procurement_plan"))
+        key_metrics = self._as_dict(solution.get("key_metrics"))
+        planned_load_kw = _safe_float(requirement.get("planned_load_kw"), 0.0)
+        pue = _safe_float(cooling.get("estimated_pue"), _safe_float(requirement.get("pue_target"), 0.0))
+        annual_energy = _safe_float(procurement.get("annual_total_energy_mwh"), 0.0)
+        if annual_energy <= 0 and planned_load_kw > 0 and pue > 0:
+            annual_energy = planned_load_kw * pue * 8760 / 1000
+        green_ratio = _safe_float(
+            procurement.get("total_green_power_ratio"),
+            _safe_float(key_metrics.get("green_power_ratio"), _safe_float(requirement.get("green_power_ratio"), 0.0)),
+        )
+        carbon_factor = _safe_float(requirement.get("carbon_emission_factor"), 0.0)
+        residual_grid_energy = annual_energy * max(0.0, 1.0 - green_ratio)
+        residual_emission = residual_grid_energy * carbon_factor
+        rows = [
+            ("估算年总用电量", f"{self._format_number(annual_energy, 0)} MWh/年" if annual_energy else "待补充"),
+            ("目标绿电占比", self._format_percent(green_ratio)),
+            ("直连绿电电量", f"{self._format_number(procurement.get('annual_direct_green_energy_mwh'), 0)} MWh/年"),
+            ("市场化绿电/绿证补足", f"{self._format_number(procurement.get('annual_procured_green_energy_mwh'), 0)} MWh/年"),
+            ("剩余网电电量", f"{self._format_number(residual_grid_energy, 0)} MWh/年" if annual_energy else "待补充"),
+            ("电网排放因子", f"{self._format_number(carbon_factor, 3)} tCO2/MWh" if carbon_factor else "待补充"),
+            ("剩余范围二排放", f"{self._format_number(residual_emission, 0)} tCO2/年" if annual_energy and carbon_factor else "待补充"),
+        ]
+        return self._table_section(
+            "## 能耗、绿电消纳与碳排分析",
+            "本节将能耗、绿电消纳和碳排放放在同一张账中，便于后续 ESG 披露和运营考核。",
+            ["指标", "测算值"],
+            rows,
+        )
+
+    def _build_delivery_section(self, solution: dict[str, Any]) -> str:
+        risks = solution.get("risks") if isinstance(solution.get("risks"), list) else []
+        risk_summary = "；".join(
+            str(item.get("description") or item.get("type") or item) for item in risks[:3]
+            if item
+        ) or "待在深化设计阶段形成正式风险台账"
+        rows = [
+            ("方案深化", "复核负荷边界、机柜密度、供电接入条件、绿电交易路径和全年气象/负荷曲线。"),
+            ("初步设计", "形成总图、供配电一次方案、制冷系统图、能源站边界、EMS/DCIM 接口和投资估算。"),
+            ("招采与施工图", "锁定设备参数、冗余策略、施工图预算、招标技术规格书和交付责任边界。"),
+            ("施工与调试", "完成单机调试、系统联调、带载测试、PUE 初测、绿电计量链路验证。"),
+            ("运营优化", "按月跟踪 PUE、绿电占比、碳排强度、储能利用率和预算偏差，形成持续优化闭环。"),
+            ("当前重点风险", risk_summary),
+        ]
+        return self._table_section(
+            "## 实施路线、验收口径与后续工作",
+            "建议将本报告作为下一阶段设计任务书和专项复核清单的输入，而不是作为最终施工依据。",
+            ["阶段", "关键工作"],
+            rows,
+        )
+
+    def _build_consultant_checklist_section(
+        self,
+        requirement: dict[str, Any],
+        cooling: dict[str, Any],
+        green: dict[str, Any],
+        power: dict[str, Any],
+        economic: dict[str, Any],
+    ) -> str:
+        rows = [
+            ("负荷边界", "IT 负荷、PUE、机柜密度、建筑面积是否一致", "已形成" if requirement else "待补充"),
+            ("制冷路线", "是否输出 PUE/WUE/制冷功耗/余热回收指标", "已形成" if cooling else "待补充"),
+            ("供电可靠性", "是否明确电压等级、冗余结构、等级依据", "已形成" if power else "待补充"),
+            ("绿电消纳", "是否明确直连、交易、绿证、储能容量和年度电量", "已形成" if green else "待补充"),
+            ("经济性", "是否有 CAPEX/OPEX、预算约束和成本敏感项", "已形成" if economic else "待补充"),
+            ("验收指标", "是否可被后续监测系统持续采集", "需在施工图和运维平台阶段落表"),
+        ]
+        return self._table_section(
+            "## 附录：顾问复核清单",
+            "以下清单用于判断报告是否具备进入深化设计和投资评审的基本完整度。",
+            ["复核项", "检查内容", "当前状态"],
+            rows,
+        )
+
+    def _table_section(self, heading: str, lead: str, headers: list[str], rows: list[tuple[Any, ...]]) -> str:
+        table = [
+            "| " + " | ".join(self._escape_markdown_cell(header) for header in headers) + " |",
+            "| " + " | ".join("---" for _ in headers) + " |",
+        ]
+        for row in rows:
+            values = list(row)[:len(headers)]
+            values.extend([""] * (len(headers) - len(values)))
+            table.append("| " + " | ".join(self._escape_markdown_cell(value) for value in values) + " |")
+        return "\n".join([heading, "", lead, "", *table])
+
+    def _as_dict(self, value: Any) -> dict[str, Any]:
+        if value is None:
+            return {}
+        if hasattr(value, "model_dump"):
+            return value.model_dump()
+        if isinstance(value, dict):
+            return value
+        return {}
+
+    def _format_green_capacity(self, optimization: dict[str, Any]) -> str:
+        parts = []
+        wind = _safe_float(optimization.get("wind_capacity_mw"), 0.0)
+        pv = _safe_float(optimization.get("pv_capacity_mw"), 0.0)
+        storage = _safe_float(optimization.get("storage_capacity_mwh"), 0.0)
+        if wind > 0:
+            parts.append(f"风电 {self._format_number(wind, 2)} MW")
+        if pv > 0:
+            parts.append(f"光伏 {self._format_number(pv, 2)} MWp")
+        if storage > 0:
+            parts.append(f"储能 {self._format_number(storage, 2)} MWh")
+        return "；".join(parts) if parts else "待补充"
+
     def _serialize_state(self, state: GraphState) -> dict[str, Any]:
         def _dump(value: Any) -> Any:
             if hasattr(value, "model_dump"):
@@ -1634,6 +2006,7 @@ class FinalReportNode:
 
         return {
             "user_requirement": _dump(state.get("user_requirement")),
+            "solution": state.get("solution"),
             "power_supply_plan": state.get("power_supply_plan"),
             "green_power_result": state.get("green_power_result"),
             "cooling_result": state.get("cooling_result"),

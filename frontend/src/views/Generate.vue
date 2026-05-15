@@ -648,6 +648,16 @@
           />
           <el-card class="report-preview">
             <h4>报告摘要</h4>
+            <div v-if="reportRequirementFacts.length" class="report-requirement-grid">
+              <div
+                v-for="fact in reportRequirementFacts"
+                :key="fact.label"
+                class="report-requirement-item"
+              >
+                <span class="report-requirement-label">{{ fact.label }}</span>
+                <span class="report-requirement-value">{{ fact.value }}</span>
+              </div>
+            </div>
             <div class="report-content" v-html="finalReport.summary"></div>
             <div class="report-metrics">
               <div class="report-metric">
@@ -772,6 +782,7 @@
       width="560px"
       destroy-on-close
       class="cost-detail-dialog"
+      modal-class="cost-detail-overlay"
     >
       <template #header>
         <div class="cost-detail-header">
@@ -1124,6 +1135,89 @@ const formatWithUnit = (v, unit, digits = 2) => {
   return `${n.toFixed(digits)} ${unit}`
 }
 
+const escapeHtml = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+
+const cleanMarkdownInline = (value = '') => String(value)
+  .replace(/!\[.*?\]\(.*?\)/g, '')
+  .replace(/\[([^\]]+)\]\((.*?)\)/g, '$1')
+  .replace(/`([^`]+)`/g, '$1')
+  .replace(/\*\*(.*?)\*\*/g, '$1')
+  .replace(/\*(.*?)\*/g, '$1')
+  .replace(/_(.*?)_/g, '$1')
+  .replace(/~~(.*?)~~/g, '$1')
+  .trim()
+
+const buildReportPreviewHtml = (markdownContent, fallbackText = '') => {
+  const markdown = String(markdownContent || '').replace(/\r\n/g, '\n')
+  if (markdown) {
+    const lines = markdown.split('\n')
+    const paragraphs = []
+    let buffer = []
+    let skipOverviewSection = false
+
+    const flushBuffer = () => {
+      if (!buffer.length) return
+      const text = cleanMarkdownInline(buffer.join(' ')).replace(/\s+/g, ' ').trim()
+      if (text) {
+        paragraphs.push(text)
+      }
+      buffer = []
+    }
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim()
+
+      if (skipOverviewSection) {
+        if (line.startsWith('#')) {
+          skipOverviewSection = false
+        } else {
+          continue
+        }
+      }
+
+      if (!line) {
+        flushBuffer()
+        continue
+      }
+
+      if (line === '## 项目概况与基础输入') {
+        flushBuffer()
+        skipOverviewSection = true
+        continue
+      }
+
+      if (
+        line.startsWith('#') ||
+        line.startsWith('**报告编号') ||
+        line.startsWith('**报告日期') ||
+        line.startsWith('**报告版本') ||
+        line.startsWith('|') ||
+        /^[-:|\s]+$/.test(line)
+      ) {
+        flushBuffer()
+        continue
+      }
+
+      buffer.push(line)
+    }
+
+    flushBuffer()
+
+    const selected = paragraphs.slice(0, 2)
+    if (selected.length) {
+      return selected.map(item => `<p>${escapeHtml(item)}</p>`).join('')
+    }
+  }
+
+  const fallback = cleanMarkdownInline(fallbackText || '方案报告已生成，可前往方案详情页查看完整内容。')
+  return `<p>${escapeHtml(fallback)}</p>`
+}
+
 const addLog = (content, type = 'info') => {
   const now = new Date()
   const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
@@ -1256,6 +1350,61 @@ const activeDebateRound = computed(() => {
 const requirementSource = computed(() => {
   const base = nodeResults.requirementParser?.raw || savedProjectConfig.value || {}
   return normalizeRequirementFields(base)
+})
+
+const reportRequirementFacts = computed(() => {
+  const req = requirementSource.value || {}
+  const plannedLoadKw = toNumber(req.planned_load_kw, 0)
+  const density = toNumber(req.computing_power_density, 0)
+  const area = toNumber(req.planned_area, 0)
+  const cabinetCount = plannedLoadKw > 0 && density > 0
+    ? Math.round(plannedLoadKw / density)
+    : null
+
+  const facts = [
+    {
+      label: '项目地点',
+      value: req.location || '--'
+    },
+    {
+      label: '建设规模',
+      value: plannedLoadKw > 0 ? `${formatNumber(plannedLoadKw / 1000, 2)} MW` : '--'
+    },
+    {
+      label: '建筑面积',
+      value: area > 0 ? `${formatNumber(area, 0)} m²` : '--'
+    },
+    {
+      label: '算力密度',
+      value: density > 0 ? `${formatNumber(density, 0)} kW/柜` : '--'
+    },
+    {
+      label: '估算机柜',
+      value: cabinetCount ? `${formatNumber(cabinetCount, 0)} 柜` : '--'
+    },
+    {
+      label: '机房等级',
+      value: req.machine_room_grade || '--'
+    },
+    {
+      label: '目标 PUE',
+      value: toNumber(req.pue_target, null) != null ? formatNumber(req.pue_target, 2) : '--'
+    },
+    {
+      label: '绿电目标',
+      value: toNumber(req.green_power_ratio, null) != null ? formatPercent(req.green_power_ratio, 0) : '--'
+    },
+    {
+      label: '预算约束',
+      value: toNumber(req.budget_constraint, 0) > 0 ? `${formatNumber(req.budget_constraint, 0)} 万元` : '--'
+    },
+    {
+      label: '制冷偏好',
+      value: req.cooling_technology || '--'
+    }
+  ]
+
+  return facts.filter(item => item.value && item.value !== '--')
 })
 
 const draftSource = computed(() => nodeResults.draftPlan || {})
@@ -1972,13 +2121,16 @@ const applyArbitratorData = (data, { silent = false } = {}) => {
 
 const applyFinalReportData = (data, { silent = false } = {}) => {
   const path = data?.path || finalReport.value?.path || '-'
+  const content = typeof data?.content === 'string' ? data.content : (finalReport.value?.content || '')
+  const fallbackSummary = finalReport.value?.summaryText || arbitratorResult.summary || '方案报告已生成，可前往方案详情页查看完整内容。'
   finalReport.value = {
-    summary: arbitratorResult.summary || finalReport.value?.summary || '方案报告已生成，可前往方案详情页查看完整内容。',
+    summary: buildReportPreviewHtml(content, fallbackSummary),
+    summaryText: fallbackSummary,
     path,
     wordCount: typeof data?.word_count === 'number'
       ? data.word_count
-      : (typeof data?.content === 'string' ? data.content.length : (finalReport.value?.wordCount || 0)),
-    content: typeof data?.content === 'string' ? data.content : (finalReport.value?.content || '')
+      : (content ? content.length : (finalReport.value?.wordCount || 0)),
+    content
   }
 
   if (!silent) {
@@ -2045,17 +2197,19 @@ const initCostChart = () => {
           shadowColor: 'rgba(6, 20, 15, 0.28)'
         },
         label: {
-          color: 'rgba(230, 244, 235, 0.88)',
+          color: 'rgba(238, 250, 243, 0.96)',
           formatter: ({ name, value }) => `${name}\n${value} 万元`,
           fontSize: 12,
           lineHeight: 18,
-          fontWeight: 600
+          fontWeight: 700,
+          textBorderColor: 'rgba(2, 14, 10, 0.92)',
+          textBorderWidth: 3
         },
         labelLine: {
           length: 14,
           length2: 10,
           lineStyle: {
-            color: 'rgba(167, 216, 190, 0.34)'
+            color: 'rgba(174, 226, 199, 0.58)'
           }
         },
         emphasis: {
@@ -2207,11 +2361,13 @@ const hydrateFromSolutionData = async (solutionData) => {
     const { data } = await solutionApi.exportMarkdown(persistedSolutionId)
     const content = data?.content || ''
     if (content || finalReport.value) {
+      const fallbackSummary = finalReport.value?.summaryText || arbitratorResult.summary || '方案报告已生成，可继续查看完整内容'
       finalReport.value = {
-        summary: finalReport.value?.summary || arbitratorResult.summary || '方案报告已生成，可继续查看完整内容',
+        summary: buildReportPreviewHtml(content, fallbackSummary),
+        summaryText: fallbackSummary,
         path: finalReport.value?.path || '-',
         wordCount: content.length,
-        content
+        content: content || (finalReport.value?.content || '')
       }
     }
   } catch (error) {
@@ -2660,12 +2816,16 @@ onUnmounted(() => {
 }
 
 .result-card {
-  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border: 1px solid rgba(121, 239, 171, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(121, 239, 171, 0.06), transparent 34%),
+    linear-gradient(180deg, rgba(10, 37, 28, 0.92), rgba(7, 27, 21, 0.96));
+  box-shadow: inset 0 1px 0 rgba(242, 255, 247, 0.04);
 }
 
 .result-content p {
   font-size: 14px;
-  color: var(--text-secondary);
+  color: rgba(224, 244, 234, 0.94);
   line-height: 1.7;
   margin-bottom: 16px;
 }
@@ -2673,6 +2833,21 @@ onUnmounted(() => {
 .result-metrics {
   display: flex;
   gap: 30px;
+  flex-wrap: wrap;
+}
+
+.result-metrics .metric-label {
+  display: block;
+  font-size: 12px;
+  color: rgba(181, 213, 197, 0.78);
+  margin-bottom: 6px;
+}
+
+.result-metrics .metric-value {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(242, 252, 247, 0.98);
 }
 
 .draft-overview-panel {
@@ -3558,7 +3733,72 @@ onUnmounted(() => {
 }
 
 .cost-detail-dialog :deep(.el-dialog) {
+  overflow: hidden;
   border-radius: 22px;
+  border: 1px solid rgba(137, 178, 156, 0.22);
+  background:
+    radial-gradient(circle at 14% 0%, rgba(126, 188, 153, 0.12), transparent 34%),
+    radial-gradient(circle at 94% 8%, rgba(215, 178, 97, 0.09), transparent 26%),
+    linear-gradient(180deg, rgba(25, 34, 33, 0.98), rgba(16, 23, 23, 0.99));
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.42);
+}
+
+.cost-detail-dialog :deep(.el-dialog__header) {
+  padding: 24px 24px 14px;
+  margin: 0;
+}
+
+.cost-detail-dialog :deep(.el-dialog__body) {
+  padding: 0 24px 24px;
+}
+
+.cost-detail-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(214, 228, 221, 0.78);
+}
+
+.cost-detail-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: rgba(244, 250, 247, 0.96);
+}
+
+:global(.cost-detail-overlay .el-dialog),
+:global(.cost-detail-dialog.el-dialog),
+:global(.cost-detail-dialog) {
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(137, 178, 156, 0.22);
+  background:
+    radial-gradient(circle at 14% 0%, rgba(126, 188, 153, 0.12), transparent 34%),
+    radial-gradient(circle at 94% 8%, rgba(215, 178, 97, 0.09), transparent 26%),
+    linear-gradient(180deg, rgba(25, 34, 33, 0.98), rgba(16, 23, 23, 0.99)) !important;
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.42);
+  --el-dialog-bg-color: transparent;
+  --el-bg-color: transparent;
+  --el-text-color-primary: rgba(242, 248, 245, 0.98);
+}
+
+:global(.cost-detail-overlay .el-dialog__header),
+:global(.cost-detail-dialog.el-dialog .el-dialog__header),
+:global(.cost-detail-dialog .el-dialog__header) {
+  padding: 24px 24px 14px;
+  margin: 0;
+  background: transparent !important;
+}
+
+:global(.cost-detail-overlay .el-dialog__body),
+:global(.cost-detail-dialog.el-dialog .el-dialog__body),
+:global(.cost-detail-dialog .el-dialog__body) {
+  padding: 0 24px 24px;
+  background: transparent !important;
+}
+
+:global(.cost-detail-overlay .el-dialog__headerbtn .el-dialog__close),
+:global(.cost-detail-dialog .el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(214, 228, 221, 0.78);
+}
+
+:global(.cost-detail-overlay .el-dialog__headerbtn:hover .el-dialog__close),
+:global(.cost-detail-dialog .el-dialog__headerbtn:hover .el-dialog__close) {
+  color: rgba(244, 250, 247, 0.96);
 }
 
 .cost-detail-header {
@@ -3583,13 +3823,13 @@ onUnmounted(() => {
 .detail-title {
   font-size: 18px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: rgba(242, 248, 245, 0.98);
 }
 
 .detail-subtitle {
   font-size: 13px;
   line-height: 1.7;
-  color: var(--text-secondary);
+  color: rgba(184, 207, 195, 0.86);
 }
 
 .cost-detail-body {
@@ -3607,21 +3847,24 @@ onUnmounted(() => {
 .detail-kpi-item {
   padding: 14px 16px;
   border-radius: 16px;
-  border: 1px solid var(--border-light);
-  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border: 1px solid rgba(137, 178, 156, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(126, 188, 153, 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(12, 41, 31, 0.95), rgba(8, 29, 23, 0.98));
+  box-shadow: inset 0 1px 0 rgba(242, 255, 247, 0.035);
 }
 
 .detail-kpi-label {
   display: block;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: rgba(181, 211, 196, 0.8);
   margin-bottom: 8px;
 }
 
 .detail-kpi-value {
   font-size: 16px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: rgba(246, 252, 249, 0.98);
   line-height: 1.5;
 }
 
@@ -3638,20 +3881,21 @@ onUnmounted(() => {
   align-items: flex-start;
   padding: 12px 14px;
   border-radius: 14px;
-  border: 1px solid var(--border-light);
-  background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
+  border: 1px solid rgba(134, 170, 154, 0.14);
+  background: rgba(8, 26, 21, 0.92);
+  box-shadow: inset 0 1px 0 rgba(242, 255, 247, 0.026);
 }
 
 .detail-row-label {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: rgba(184, 209, 196, 0.82);
 }
 
 .detail-row-value {
   font-size: 13px;
   line-height: 1.65;
   font-weight: 600;
-  color: var(--text-primary);
+  color: rgba(243, 250, 247, 0.98);
   text-align: right;
 }
 
@@ -4651,6 +4895,39 @@ onUnmounted(() => {
     linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.03) 48%, transparent 78%);
 }
 
+.report-requirement-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 16px;
+}
+
+.report-requirement-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(18, 58, 43, 0.78), rgba(9, 28, 21, 0.72));
+  border: 1px solid rgba(121, 239, 171, 0.12);
+  box-shadow: inset 0 1px 0 rgba(240, 255, 245, 0.05);
+}
+
+.report-requirement-label {
+  display: block;
+  color: rgba(214, 238, 223, 0.78);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.report-requirement-value {
+  display: block;
+  margin-top: 6px;
+  color: rgba(242, 251, 246, 0.98);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .stage-panel--output .preview-item {
   position: relative;
   min-height: 104px;
@@ -4882,6 +5159,10 @@ onUnmounted(() => {
   
   .report-metrics {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .report-requirement-grid {
+    grid-template-columns: 1fr;
   }
 
   .cost-kpi-grid,

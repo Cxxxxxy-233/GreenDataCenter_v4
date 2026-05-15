@@ -586,13 +586,24 @@
               <span class="report-cover-kicker">Project Deliverable</span>
               <div class="report-cover-grid">
                 <div class="report-cover-main">
-              <h1 class="report-title">{{ finalReportData.name || '数据中心绿电消纳方案报告' }}</h1>
-              <p class="report-cover-subtitle">Final delivery pack for presentation, including key metrics, arbitration conclusion, and three domain schemes.</p>
-              <div class="report-meta">
-                <span>方案编号：{{ solutionId }}</span>
-                <span>生成时间：{{ solutionData.created_at || '-' }}</span>
-                <span>置信度：{{ formatPercent(finalReportData.confidence) }}</span>
-              </div>
+                  <h1 class="report-title">{{ finalReportData.name || '数据中心绿电消纳方案报告' }}</h1>
+                  <p class="report-cover-subtitle">Final delivery pack for presentation, including key metrics, arbitration conclusion, and three domain schemes.</p>
+                  <div class="report-meta">
+                    <span>方案编号：{{ solutionId }}</span>
+                    <span>生成时间：{{ solutionData.created_at || '-' }}</span>
+                    <span>置信度：{{ formatPercent(finalReportData.confidence) }}</span>
+                  </div>
+                  <div class="report-decision-banner" :class="reportDecision.toneClass">
+                    <div class="report-decision-copy">
+                      <span class="report-decision-label">建议结论</span>
+                      <strong>{{ reportDecision.label }}</strong>
+                      <p>{{ reportDecision.description }}</p>
+                    </div>
+                    <div class="report-decision-meta">
+                      <span>综合评分 {{ formatPercent(overallScores.overall) }}</span>
+                      <span>结论用于汇报首页与立项判断</span>
+                    </div>
+                  </div>
                 </div>
                 <div class="report-cover-score">
                   <span class="report-cover-score-label">Overall Score</span>
@@ -601,26 +612,70 @@
                 </div>
               </div>
             </div>
+            <div v-if="reportPrimaryFacts.length || reportSecondaryFacts.length" class="report-input-summary">
+              <div class="report-chapter-head">
+                <h2>项目关键输入</h2>
+                <p>以下内容来自方案生成前的参数配置，用于说明本报告对应的数据中心建设画像与约束边界。</p>
+              </div>
+              <div v-if="reportPrimaryFacts.length" class="report-input-primary">
+                <div
+                  v-for="fact in reportPrimaryFacts"
+                  :key="fact.label"
+                  class="report-input-item report-input-item--primary"
+                >
+                  <div class="report-input-label">{{ fact.label }}</div>
+                  <div class="report-input-value">{{ fact.value }}</div>
+                </div>
+              </div>
+              <div v-if="reportSecondaryFacts.length" class="report-input-grid">
+                <div
+                  v-for="fact in reportSecondaryFacts"
+                  :key="fact.label"
+                  class="report-input-item"
+                >
+                  <div class="report-input-label">{{ fact.label }}</div>
+                  <div class="report-input-value">{{ fact.value }}</div>
+                </div>
+              </div>
+            </div>
             <div class="report-executive-summary">
-              <h2>执行摘要</h2>
-              <p class="summary-text">{{ finalReportData.summary || '暂无摘要' }}</p>
-              <div class="executive-grid">
-                <div class="executive-item">
-                  <div class="executive-label">推荐制冷方案</div>
-                  <div class="executive-value">{{ coolingResult.cooling_technology || '-' }}</div>
+              <div class="report-executive-layout">
+                <div class="report-executive-main">
+                  <h2>执行摘要</h2>
+                  <p class="summary-text">{{ reportSummaryLead }}</p>
+                  <ul v-if="reportSummaryPoints.length" class="report-summary-points">
+                    <li v-for="point in reportSummaryPoints" :key="point">{{ point }}</li>
+                  </ul>
                 </div>
-                <div class="executive-item">
-                  <div class="executive-label">预测PUE</div>
-                  <div class="executive-value highlight">{{ formatNumber(keyMetrics.pue || coolingResult.estimated_pue, 3) }}</div>
+                <div class="report-executive-side">
+                  <div class="executive-grid">
+                    <div class="executive-item">
+                      <div class="executive-label">推荐制冷方案</div>
+                      <div class="executive-value">{{ coolingResult.cooling_technology || '-' }}</div>
+                    </div>
+                    <div class="executive-item">
+                      <div class="executive-label">预测PUE</div>
+                      <div class="executive-value highlight">{{ formatNumber(keyMetrics.pue || coolingResult.estimated_pue, 3) }}</div>
+                    </div>
+                    <div class="executive-item">
+                      <div class="executive-label">绿电消纳率</div>
+                      <div class="executive-value highlight">{{ formatPercent(keyMetrics.green_power_ratio) }}</div>
+                    </div>
+                    <div class="executive-item">
+                      <div class="executive-label">总投资</div>
+                      <div class="executive-value">{{ formatNumber(costResult.total_capex_lakh || keyMetrics.total_cost, 2) }} 万元</div>
+                    </div>
+                  </div>
                 </div>
-                <div class="executive-item">
-                  <div class="executive-label">绿电消纳率</div>
-                  <div class="executive-value highlight">{{ formatPercent(keyMetrics.green_power_ratio) }}</div>
-                </div>
-                <div class="executive-item">
-                  <div class="executive-label">总投资</div>
-                  <div class="executive-value">{{ formatNumber(costResult.total_capex_lakh || keyMetrics.total_cost, 2) }} 万元</div>
-                </div>
+              </div>
+            </div>
+            <div class="report-chapter report-chapter--document">
+              <div class="report-chapter-head">
+                <h2>顾问报告正文</h2>
+                <p>以下为系统生成并补齐后的完整方案正文，包含设计边界、容量测算、技术路线、成本、能耗碳排、实施路线与验收口径。</p>
+              </div>
+              <div class="report-section-item report-section-item--document">
+                <div class="markdown-rendered markdown-rendered--document" v-html="reportDocumentHtml"></div>
               </div>
             </div>
             <div class="report-chapter">
@@ -725,12 +780,12 @@
                 <p v-else>暂无最终建议</p>
               </div>
             </div>
-            <div class="report-chapter" v-if="reportMarkdown">
-              <h2>Markdown 报告预览</h2>
-              <div class="report-section-item">
+            <details v-if="reportMarkdown" class="report-appendix">
+              <summary>附录：查看 Markdown 渲染内容</summary>
+              <div class="report-section-item report-section-item--appendix">
                 <div class="markdown-rendered" v-html="reportHtml"></div>
               </div>
-            </div>
+            </details>
           </div>
           </div>
         </div>
@@ -1101,6 +1156,83 @@ const finalReportData = computed(() => ({
   ...arbitrator.value,
   ...solutionData.value
 }))
+const reportRequirementFacts = computed(() => {
+  const req = requirement.value || {}
+  const plannedLoadKw = toNumber(req.planned_load_kw, 0)
+  const density = toNumber(req.computing_power_density, 0)
+  const area = toNumber(req.planned_area, 0)
+  const cabinetCount = plannedLoadKw > 0 && density > 0
+    ? Math.round(plannedLoadKw / density)
+    : null
+
+  const facts = [
+    { label: '项目地点', value: req.location || '-' },
+    { label: '建设规模', value: plannedLoadKw > 0 ? `${formatNumber(plannedLoadKw / 1000, 2)} MW` : '-' },
+    { label: '规划建筑面积', value: area > 0 ? `${formatNumber(area, 0)} m²` : '-' },
+    { label: '算力功率密度', value: density > 0 ? `${formatNumber(density, 0)} kW/柜` : '-' },
+    { label: '估算机柜数量', value: cabinetCount ? `${formatNumber(cabinetCount, 0)} 柜` : '-' },
+    { label: '机房等级', value: req.machine_room_grade || '-' },
+    { label: '目标 PUE', value: req.pue_target ? formatNumber(req.pue_target, 2) : '-' },
+    { label: '绿电目标', value: req.green_power_ratio != null ? formatPercent(req.green_power_ratio) : '-' },
+    {
+      label: '绿电直连占比',
+      value: req.direct_connection_ratio != null && req.direct_connection_ratio !== ''
+        ? formatPercent(req.direct_connection_ratio)
+        : '未指定'
+    },
+    { label: '预算约束', value: req.budget_constraint ? `${formatNumber(req.budget_constraint, 0)} 万元` : '-' },
+    { label: '制冷偏好', value: req.cooling_technology || '-' },
+    { label: '仿真时长', value: req.sim_hours ? `${formatNumber(req.sim_hours, 0)} 小时` : '-' }
+  ]
+
+  return facts.filter(item => item.value && item.value !== '-')
+})
+const reportPrimaryFacts = computed(() => reportRequirementFacts.value.filter(item => ['建设规模', '项目地点', '预算约束'].includes(item.label)))
+const reportSecondaryFacts = computed(() => reportRequirementFacts.value.filter(item => !['建设规模', '项目地点', '预算约束'].includes(item.label)))
+const reportSummaryLead = computed(() => {
+  const summary = String(finalReportData.value.summary || '').trim()
+  if (!summary) return '暂无摘要'
+  const firstSentence = summary.split(/[。！？]/).map(item => item.trim()).filter(Boolean)[0]
+  return firstSentence || summary
+})
+const reportSummaryPoints = computed(() => {
+  const points = []
+  if (Array.isArray(finalReportData.value.recommendations)) {
+    points.push(...finalReportData.value.recommendations.slice(0, 2))
+  }
+  const firstTradeoff = Array.isArray(finalReportData.value.trade_offs) ? finalReportData.value.trade_offs[0] : null
+  if (firstTradeoff?.conflict || firstTradeoff?.resolution) {
+    points.push(`关键权衡：${firstTradeoff.conflict || '核心取舍'}，${firstTradeoff.resolution || '需进一步明确'}`)
+  }
+  const firstRisk = Array.isArray(finalReportData.value.risks) ? finalReportData.value.risks[0] : null
+  if (firstRisk?.description) {
+    points.push(`主要风险：${firstRisk.description}`)
+  }
+  return points.map(item => String(item || '').trim()).filter(Boolean).slice(0, 3)
+})
+const reportDecision = computed(() => {
+  const score = toNumber(overallScores.value.overall, 0)
+  const hasRisks = Array.isArray(finalReportData.value.risks) && finalReportData.value.risks.length > 0
+  if (score >= 0.85) {
+    return {
+      label: '建议推进，附带优化条件',
+      toneClass: hasRisks ? 'is-caution' : 'is-positive',
+      description: '整体方案已具备较强可行性，建议在预算、冗余和绿电边界校准后进入下一阶段。'
+    }
+  }
+  if (score >= 0.7) {
+    return {
+      label: '有条件推进',
+      toneClass: 'is-caution',
+      description: '当前方案具备基础可行性，但仍需围绕关键风险、成本结构或系统边界补充验证。'
+    }
+  }
+  return {
+    label: '建议暂缓推进',
+    toneClass: 'is-warning',
+    description: '当前方案关键信息或关键指标不足以支撑落地决策，建议优先补齐约束条件与验证结果。'
+  }
+})
 const keyMetricsRows = computed(() => {
   const metrics = keyMetrics.value || {}
   return [
@@ -1199,10 +1331,120 @@ const generatedReportMarkdown = computed(() => {
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 })
 
+const professionalReportSectionsMarkdown = computed(() => {
+  const req = requirement.value || {}
+  const plannedLoadKw = toNumber(req.planned_load_kw, 0)
+  const density = toNumber(req.computing_power_density, 0)
+  const area = toNumber(req.planned_area, 0)
+  const pue = toNumber(keyMetrics.value.pue || coolingResult.value.estimated_pue || req.pue_target, 0)
+  const rackCount = plannedLoadKw > 0 && density > 0 ? Math.round(plannedLoadKw / density) : 0
+  const facilityLoadKw = plannedLoadKw > 0 ? plannedLoadKw * Math.max(pue || 1, 1) : 0
+  const annualEnergyMwh = facilityLoadKw > 0 ? facilityLoadKw * 8760 / 1000 : 0
+  const carbonFactor = toNumber(req.carbon_emission_factor, 0)
+  const greenRatio = toNumber(greenProcurementPlan.value.total_green_power_ratio, toNumber(keyMetrics.value.green_power_ratio || req.green_power_ratio, 0))
+  const residualEnergyMwh = annualEnergyMwh * Math.max(0, 1 - greenRatio)
+  const residualCarbon = residualEnergyMwh * carbonFactor
+  const capexBreakdown = costResult.value.capex_breakdown || {}
+  const opexBreakdown = costResult.value.opex_breakdown || {}
+
+  const lines = [
+    '## \u8bbe\u8ba1\u8fb9\u754c\u3001\u4f9d\u636e\u4e0e\u5173\u952e\u5047\u8bbe',
+    '\u672c\u8282\u7528\u4e8e\u660e\u786e\u62a5\u544a\u7684\u9002\u7528\u8fb9\u754c\uff0c\u907f\u514d\u5c06\u65b9\u6848\u9636\u6bb5\u6d4b\u7b97\u76f4\u63a5\u7b49\u540c\u4e8e\u65bd\u5de5\u56fe\u6216\u62db\u6807\u63a7\u5236\u4ef7\u3002',
+    '',
+    buildMarkdownTable([
+      { label: '\u9879\u76ee\u5b9a\u4f4d', value: '\u6570\u636e\u4e2d\u5fc3\u7eff\u8272\u4f9b\u80fd\u4e0e\u57fa\u7840\u8bbe\u65bd\u7efc\u5408\u65b9\u6848' },
+      { label: '\u8f93\u5165\u6765\u6e90', value: '\u7528\u6237\u53c2\u6570\u3001\u5236\u51b7\u5bfb\u4f18\u3001\u7eff\u7535\u5bb9\u91cf\u4f18\u5316\u3001\u4f9b\u7535\u53ef\u9760\u6027\u5206\u6790\u3001\u591a\u4e13\u5bb6\u4ef2\u88c1' },
+      { label: '\u673a\u623f\u7b49\u7ea7', value: req.machine_room_grade || '\u5f85\u8865\u5145' },
+      { label: '\u8bbe\u8ba1\u53c2\u8003', value: 'GB 50174-2017 / YD/T 5235-2019 \u7b49\u6570\u636e\u4e2d\u5fc3\u8bbe\u8ba1\u53e3\u5f84\uff0c\u540e\u7eed\u9700\u5728\u65bd\u5de5\u56fe\u9636\u6bb5\u590d\u6838' },
+      { label: '\u6295\u8d44\u8fb9\u754c', value: 'CAPEX/OPEX \u4e3a\u65b9\u6848\u9636\u6bb5\u4f30\u7b97\uff0c\u9700\u4e0e\u5382\u5bb6\u62a5\u4ef7\u548c\u62db\u6807\u6e05\u5355\u95ed\u73af' }
+    ], ['\u8fb9\u754c\u9879', '\u8bf4\u660e']),
+    '',
+    '## \u5efa\u8bbe\u89c4\u6a21\u4e0e\u5bb9\u91cf\u6d4b\u7b97',
+    '\u5bb9\u91cf\u6d4b\u7b97\u7528\u4e8e\u6821\u6838\u5236\u51b7\u3001\u4f9b\u914d\u7535\u3001\u7eff\u7535\u548c\u6295\u8d44\u4f30\u7b97\u662f\u5426\u5728\u540c\u4e00\u8d1f\u8377\u8fb9\u754c\u4e0b\u5c55\u5f00\u3002',
+    '',
+    buildMarkdownTable([
+      { label: 'IT \u8d1f\u8377\u89c4\u6a21', value: plannedLoadKw > 0 ? `${formatNumber(plannedLoadKw / 1000, 2)} MW` : '\u5f85\u8865\u5145' },
+      { label: '\u4f30\u7b97\u673a\u67dc\u6570\u91cf', value: rackCount ? `${formatNumber(rackCount, 0)} \u67dc` : '\u5f85\u8865\u5145' },
+      { label: '\u5355\u67dc\u529f\u7387\u5bc6\u5ea6', value: density > 0 ? `${formatNumber(density, 2)} kW/\u67dc` : '\u5f85\u8865\u5145' },
+      { label: '\u5efa\u7b51\u9762\u79ef\u8d1f\u8377\u5bc6\u5ea6', value: area > 0 && plannedLoadKw > 0 ? `${formatNumber(plannedLoadKw / area, 2)} kW/m\u00b2` : '\u5f85\u8865\u5145' },
+      { label: '\u65b9\u6848 PUE / \u76ee\u6807 PUE', value: `${formatNumber(pue, 3)} / ${formatNumber(req.pue_target, 3)}` },
+      { label: '\u4f30\u7b97\u8bbe\u65bd\u603b\u8d1f\u8377', value: facilityLoadKw > 0 ? `${formatNumber(facilityLoadKw / 1000, 2)} MW` : '\u5f85\u8865\u5145' },
+      { label: '\u4f30\u7b97\u5e74\u7528\u7535\u91cf', value: annualEnergyMwh > 0 ? `${formatNumber(annualEnergyMwh, 0)} MWh/\u5e74` : '\u5f85\u8865\u5145' }
+    ], ['\u6d4b\u7b97\u9879', '\u65b9\u6848\u503c']),
+    '',
+    '## \u7efc\u5408\u6280\u672f\u65b9\u6848\u6df1\u5316',
+    '\u987e\u95ee\u62a5\u544a\u9700\u5c06\u5236\u51b7\u3001\u4f9b\u7535\u3001\u7eff\u7535\u548c\u8fd0\u7ef4\u76d1\u6d4b\u89c6\u4e3a\u4e00\u4e2a\u7cfb\u7edf\uff0c\u800c\u4e0d\u662f\u4e09\u4e2a\u5b64\u7acb\u5b50\u65b9\u6848\u3002',
+    '',
+    buildMarkdownTable([
+      { label: '\u5236\u51b7\u7cfb\u7edf', value: coolingResult.value.cooling_technology || '\u5f85\u8865\u5145' },
+      { label: '\u4f9b\u914d\u7535\u7cfb\u7edf', value: powerPlan.value.scheme_name || powerPlan.value.external_voltage || '\u5f85\u8865\u5145' },
+      { label: '\u7eff\u7535\u76f4\u8fde', value: formatPercent(greenProcurementPlan.value.actual_direct_connection_ratio, 0) },
+      { label: '\u7eff\u7535\u91c7\u8d2d\u8865\u8db3', value: sanitizeProcurementMethodLabel(greenProcurementPlan.value.method_label || '\u5f85\u8865\u5145') },
+      { label: '\u98ce\u5149\u50a8\u5bb9\u91cf', value: `\u98ce\u7535 ${formatNumber(greenOptimization.value.wind_capacity_mw, 2)} MW\uff1b\u5149\u4f0f ${formatNumber(greenOptimization.value.pv_capacity_mw, 2)} MWp\uff1b\u50a8\u80fd ${formatNumber(greenOptimization.value.storage_capacity_mwh, 2)} MWh` },
+      { label: '\u53ef\u8fd0\u7ef4\u6027', value: '\u5efa\u8bae\u5efa\u7acb EMS + DCIM \u8054\u52a8\uff0c\u6301\u7eed\u8ddf\u8e2a PUE\u3001\u7eff\u7535\u5360\u6bd4\u3001\u78b3\u6392\u548c\u8bbe\u5907\u5065\u5eb7\u72b6\u6001' }
+    ], ['\u7cfb\u7edf', '\u63a8\u8350\u914d\u7f6e/\u8bf4\u660e']),
+    '',
+    '## \u7ecf\u6d4e\u6027\u4e0e\u5168\u751f\u547d\u5468\u671f\u6210\u672c',
+    '\u7ecf\u6d4e\u6027\u5224\u65ad\u4e0d\u53ea\u770b\u4e00\u6b21\u6027\u6295\u8d44\uff0c\u8fd8\u5e94\u540c\u65f6\u5173\u6ce8\u7535\u8d39\u3001\u7eff\u7535\u6ea2\u4ef7\u3001\u7eff\u8bc1\u6210\u672c\u3001\u8fd0\u7ef4\u6210\u672c\u548c\u672a\u6765\u6269\u5bb9\u5f39\u6027\u3002',
+    '',
+    buildMarkdownTable([
+      { label: '\u9884\u7b97\u7ea6\u675f', value: req.budget_constraint ? `${formatNumber(req.budget_constraint, 0)} \u4e07\u5143` : '\u5f85\u8865\u5145' },
+      { label: '\u4f30\u7b97\u603b CAPEX', value: `${formatNumber(costResult.value.total_capex_lakh || keyMetrics.value.total_cost, 0)} \u4e07\u5143` },
+      { label: '\u4f9b\u7535\u7cfb\u7edf CAPEX', value: `${formatNumber(capexBreakdown.power_supply_system_lakh, 0)} \u4e07\u5143` },
+      { label: '\u7eff\u7535\u7cfb\u7edf CAPEX', value: `${formatNumber(capexBreakdown.green_power_system_lakh, 0)} \u4e07\u5143` },
+      { label: '\u5236\u51b7\u7cfb\u7edf CAPEX', value: `${formatNumber(capexBreakdown.cooling_system_lakh, 0)} \u4e07\u5143` },
+      { label: '\u5e74\u8fd0\u7ef4\u6210\u672c', value: opexBreakdown.annual_opex_lakh ? `${formatNumber(opexBreakdown.annual_opex_lakh, 2)} \u4e07\u5143/\u5e74` : '\u5f85\u8865\u5145' }
+    ], ['\u6210\u672c\u9879', '\u4f30\u7b97\u503c']),
+    '',
+    '## \u80fd\u8017\u3001\u7eff\u7535\u6d88\u7eb3\u4e0e\u78b3\u6392\u5206\u6790',
+    '\u672c\u8282\u5c06\u80fd\u8017\u3001\u7eff\u7535\u6d88\u7eb3\u548c\u78b3\u6392\u653e\u653e\u5728\u540c\u4e00\u5f20\u8d26\u4e2d\uff0c\u4fbf\u4e8e\u540e\u7eed ESG \u62ab\u9732\u548c\u8fd0\u8425\u8003\u6838\u3002',
+    '',
+    buildMarkdownTable([
+      { label: '\u4f30\u7b97\u5e74\u603b\u7528\u7535\u91cf', value: annualEnergyMwh > 0 ? `${formatNumber(annualEnergyMwh, 0)} MWh/\u5e74` : '\u5f85\u8865\u5145' },
+      { label: '\u76ee\u6807\u7eff\u7535\u5360\u6bd4', value: formatPercent(greenRatio, 0) },
+      { label: '\u76f4\u8fde\u7eff\u7535\u7535\u91cf', value: `${formatNumber(greenProcurementPlan.value.annual_direct_green_energy_mwh, 0)} MWh/\u5e74` },
+      { label: '\u5e02\u573a\u5316\u7eff\u7535/\u7eff\u8bc1\u8865\u8db3', value: `${formatNumber(greenProcurementPlan.value.annual_procured_green_energy_mwh, 0)} MWh/\u5e74` },
+      { label: '\u5269\u4f59\u7f51\u7535\u7535\u91cf', value: annualEnergyMwh > 0 ? `${formatNumber(residualEnergyMwh, 0)} MWh/\u5e74` : '\u5f85\u8865\u5145' },
+      { label: '\u5269\u4f59\u8303\u56f4\u4e8c\u6392\u653e', value: annualEnergyMwh > 0 && carbonFactor > 0 ? `${formatNumber(residualCarbon, 0)} tCO2/\u5e74` : '\u5f85\u8865\u5145' }
+    ], ['\u6307\u6807', '\u6d4b\u7b97\u503c']),
+    '',
+    '## \u5b9e\u65bd\u8def\u7ebf\u3001\u9a8c\u6536\u53e3\u5f84\u4e0e\u540e\u7eed\u5de5\u4f5c',
+    buildMarkdownTable([
+      { label: '\u65b9\u6848\u6df1\u5316', value: '\u590d\u6838\u8d1f\u8377\u8fb9\u754c\u3001\u673a\u67dc\u5bc6\u5ea6\u3001\u4f9b\u7535\u63a5\u5165\u6761\u4ef6\u3001\u7eff\u7535\u4ea4\u6613\u8def\u5f84\u548c\u5168\u5e74\u6c14\u8c61/\u8d1f\u8377\u66f2\u7ebf' },
+      { label: '\u521d\u6b65\u8bbe\u8ba1', value: '\u5f62\u6210\u603b\u56fe\u3001\u4f9b\u914d\u7535\u4e00\u6b21\u65b9\u6848\u3001\u5236\u51b7\u7cfb\u7edf\u56fe\u3001\u80fd\u6e90\u7ad9\u8fb9\u754c\u3001EMS/DCIM \u63a5\u53e3\u548c\u6295\u8d44\u4f30\u7b97' },
+      { label: '\u62db\u91c7\u4e0e\u65bd\u5de5\u56fe', value: '\u9501\u5b9a\u8bbe\u5907\u53c2\u6570\u3001\u5197\u4f59\u7b56\u7565\u3001\u65bd\u5de5\u56fe\u9884\u7b97\u3001\u62db\u6807\u6280\u672f\u89c4\u683c\u4e66\u548c\u4ea4\u4ed8\u8d23\u4efb\u8fb9\u754c' },
+      { label: '\u65bd\u5de5\u4e0e\u8c03\u8bd5', value: '\u5b8c\u6210\u5355\u673a\u8c03\u8bd5\u3001\u7cfb\u7edf\u8054\u8c03\u3001\u5e26\u8f7d\u6d4b\u8bd5\u3001PUE \u521d\u6d4b\u3001\u7eff\u7535\u8ba1\u91cf\u94fe\u8def\u9a8c\u8bc1' },
+      { label: '\u8fd0\u8425\u4f18\u5316', value: '\u6309\u6708\u8ddf\u8e2a PUE\u3001\u7eff\u7535\u5360\u6bd4\u3001\u78b3\u6392\u5f3a\u5ea6\u3001\u50a8\u80fd\u5229\u7528\u7387\u548c\u9884\u7b97\u504f\u5dee' }
+    ], ['\u9636\u6bb5', '\u5173\u952e\u5de5\u4f5c'])
+  ]
+
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+})
+
+const enrichProfessionalReportMarkdown = (content = '') => {
+  const base = String(content || '').trim()
+  const tail = professionalReportSectionsMarkdown.value
+  if (!tail) return base
+  const missingTail = tail
+    .split('\n## ')
+    .map((section, index) => index === 0 ? section : '## ' + section)
+    .filter(section => {
+      const heading = section.split('\n')[0].trim()
+      const title = heading.replace(/^##\s+/, '').replace(/^\d+\.\s*/, '')
+      return heading && title && !base.includes(title)
+    })
+  if (!base) return tail
+  return missingTail.length ? `${base}\n\n${missingTail.join('\n\n')}` : base
+}
+
 const exportableReportMarkdown = computed(() => {
   const backendReport = String(reportMarkdown.value || solutionData.value?.final_report || '').trim()
-  return backendReport || generatedReportMarkdown.value
+  return enrichProfessionalReportMarkdown(backendReport || generatedReportMarkdown.value)
 })
+
+const stripReportTitle = (content = '') => String(content || '').replace(/^#\s+.+\n+/, '').trim()
+
+const reportDocumentMarkdown = computed(() => stripReportTitle(exportableReportMarkdown.value || generatedReportMarkdown.value))
 
 const coolingOptimization = computed(() => coolingResult.value.optimization_summary || {})
 const coolingWeights = computed(() => coolingOptimization.value.objective_weights || {})
@@ -1515,9 +1757,10 @@ const overviewMetrics = computed(() => [
 ])
 
 const filteredMarkdown = computed(() => {
-  if (!searchKeyword.value) return reportMarkdown.value
+  const source = reportDocumentMarkdown.value || reportMarkdown.value
+  if (!searchKeyword.value) return source
   const kw = searchKeyword.value.toLowerCase()
-  return reportMarkdown.value
+  return source
     .split('\n')
     .filter(line => line.toLowerCase().includes(kw))
     .join('\n')
@@ -1660,6 +1903,7 @@ const markdownToHtml = (md) => {
 }
 
 const reportHtml = computed(() => markdownToHtml(filteredMarkdown.value))
+const reportDocumentHtml = computed(() => markdownToHtml(filteredMarkdown.value))
 
 const getExpertColor = (type) => {
   if (type?.includes('economic')) return 'linear-gradient(135deg, #10B981 0%, #059669 100%)'
@@ -1677,7 +1921,7 @@ const loadSolutionData = async () => {
     const { data } = await solutionApi.getById(solutionId.value)
     solutionData.value = data || {}
     if (solutionData.value?.final_report) {
-      reportMarkdown.value = solutionData.value.final_report
+      reportMarkdown.value = enrichProfessionalReportMarkdown(solutionData.value.final_report)
     }
   } catch (error) {
     ElMessage.error(`加载方案失败: ${error.message}`)
@@ -1686,14 +1930,14 @@ const loadSolutionData = async () => {
 
 const loadMarkdownReport = async () => {
   if (solutionData.value?.final_report) {
-    reportMarkdown.value = solutionData.value.final_report
+    reportMarkdown.value = enrichProfessionalReportMarkdown(solutionData.value.final_report)
     return
   }
   try {
     const { data } = await solutionApi.exportMarkdown(solutionId.value)
-    reportMarkdown.value = (data?.content || '').trim() || generatedReportMarkdown.value
+    reportMarkdown.value = enrichProfessionalReportMarkdown((data?.content || '').trim() || generatedReportMarkdown.value)
   } catch (error) {
-    reportMarkdown.value = generatedReportMarkdown.value
+    reportMarkdown.value = enrichProfessionalReportMarkdown(generatedReportMarkdown.value)
   }
 }
 
@@ -3186,6 +3430,65 @@ watch(
   gap: 12px;
 }
 
+.report-decision-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(121, 239, 171, 0.16);
+  background: linear-gradient(180deg, rgba(15, 51, 38, 0.84), rgba(10, 31, 24, 0.72));
+  box-shadow: inset 0 1px 0 rgba(232, 255, 241, 0.05);
+}
+
+.report-decision-banner.is-caution {
+  border-color: rgba(246, 197, 106, 0.18);
+  background: linear-gradient(180deg, rgba(52, 43, 22, 0.72), rgba(17, 25, 20, 0.72));
+}
+
+.report-decision-banner.is-warning {
+  border-color: rgba(255, 132, 132, 0.16);
+  background: linear-gradient(180deg, rgba(58, 27, 27, 0.74), rgba(24, 19, 19, 0.72));
+}
+
+.report-decision-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report-decision-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(183, 230, 202, 0.76);
+}
+
+.report-decision-copy strong {
+  font-size: 24px;
+  line-height: 1.2;
+  color: rgba(244, 252, 247, 0.98);
+}
+
+.report-decision-copy p {
+  margin: 0;
+  max-width: 56ch;
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgba(213, 236, 222, 0.78);
+}
+
+.report-decision-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: right;
+  font-size: 12px;
+  color: rgba(189, 225, 203, 0.76);
+}
+
 .report-cover-subtitle {
   max-width: 62ch;
   margin: 0;
@@ -3250,6 +3553,142 @@ watch(
   padding: 24px;
   margin-bottom: 24px;
   border: 1px solid var(--border-light);
+}
+
+.report-input-summary {
+  margin-bottom: 24px;
+  padding: 22px 24px;
+  border-radius: 18px;
+  border: 1px solid var(--border-light);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 95%, var(--primary-color) 5%) 0%, color-mix(in oklab, var(--bg-card) 97%, var(--primary-color) 3%) 100%);
+}
+
+.report-input-primary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.report-chapter-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.report-chapter-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.report-chapter-head p {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.report-input-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.report-input-item {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--primary-color) 10%, var(--border-default));
+  background: color-mix(in oklab, var(--bg-panel) 98%, var(--primary-color) 2%);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--primary-light) 5%, transparent);
+}
+
+.report-input-item--primary {
+  padding: 18px 18px 16px;
+  border-color: color-mix(in oklab, var(--primary-color) 16%, var(--border-default));
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 0%, color-mix(in oklab, var(--bg-card) 96%, var(--primary-color) 4%) 100%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--primary-light) 7%, transparent),
+    0 10px 20px rgba(8, 24, 17, 0.06);
+}
+
+.report-input-label {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.report-input-value {
+  margin-top: 8px;
+  font-size: 16px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.report-input-item--primary .report-input-value {
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.report-executive-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.report-executive-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.report-executive-main h2 {
+  margin-top: 0;
+}
+
+.report-summary-points {
+  margin: 16px 0 0;
+  padding-left: 20px;
+}
+
+.report-summary-points li {
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.report-executive-side .executive-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.report-appendix {
+  margin-top: 10px;
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
+  background: color-mix(in oklab, var(--bg-panel) 97%, var(--primary-color) 3%);
+}
+
+.report-appendix summary {
+  padding: 16px 18px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  list-style: none;
+}
+
+.report-appendix summary::-webkit-details-marker {
+  display: none;
+}
+
+.report-section-item--appendix {
+  padding: 0 18px 18px;
 }
 
 .report-executive-summary h2 {
@@ -3675,7 +4114,20 @@ watch(
 .detail-page {
   position: relative;
   gap: 26px;
-  color: rgba(236, 242, 239, 0.94);
+  color: rgba(228, 235, 232, 0.94);
+  --detail-ink-strong: rgba(242, 246, 244, 0.97);
+  --detail-ink: rgba(226, 233, 230, 0.9);
+  --detail-muted: rgba(182, 194, 189, 0.74);
+  --detail-line: rgba(132, 167, 152, 0.16);
+  --detail-line-strong: rgba(147, 190, 168, 0.24);
+  --detail-shell:
+    linear-gradient(180deg, rgba(29, 35, 35, 0.96), rgba(22, 27, 27, 0.98));
+  --detail-panel:
+    linear-gradient(180deg, rgba(35, 42, 41, 0.94), rgba(28, 34, 34, 0.97));
+  --detail-panel-soft:
+    linear-gradient(180deg, rgba(41, 48, 47, 0.9), rgba(32, 38, 38, 0.95));
+  --detail-panel-quiet:
+    linear-gradient(180deg, rgba(31, 37, 37, 0.9), rgba(25, 30, 30, 0.95));
 }
 
 .detail-page::before {
@@ -3684,12 +4136,12 @@ watch(
   inset: var(--header-height) 0 0 var(--sidebar-width);
   pointer-events: none;
   background:
-    linear-gradient(rgba(110, 255, 172, 0.016) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(110, 255, 172, 0.016) 1px, transparent 1px),
-    radial-gradient(circle at 16% 8%, rgba(63, 201, 121, 0.07), transparent 24%),
-    radial-gradient(circle at 86% 14%, rgba(77, 255, 172, 0.05), transparent 22%),
-    linear-gradient(180deg, rgba(17, 20, 24, 0.96), rgba(11, 13, 17, 0.99));
-  background-size: 42px 42px, 42px 42px, auto, auto;
+    linear-gradient(rgba(124, 158, 144, 0.014) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 158, 144, 0.014) 1px, transparent 1px),
+    radial-gradient(circle at 16% 8%, rgba(95, 158, 128, 0.06), transparent 24%),
+    radial-gradient(circle at 86% 14%, rgba(178, 156, 98, 0.04), transparent 20%),
+    linear-gradient(180deg, rgba(20, 24, 24, 0.98), rgba(14, 17, 18, 0.995));
+  background-size: 48px 48px, 48px 48px, auto, auto;
   z-index: 0;
 }
 
@@ -3703,12 +4155,11 @@ watch(
   overflow: hidden;
   padding: 24px 28px;
   background:
-    radial-gradient(circle at 20% 18%, rgba(65, 214, 128, 0.08), transparent 28%),
-    linear-gradient(145deg, rgba(33, 37, 44, 0.94), rgba(23, 26, 32, 0.97));
-  border: 1px solid rgba(109, 232, 160, 0.16);
+    radial-gradient(circle at 18% 18%, rgba(112, 170, 139, 0.08), transparent 28%),
+    linear-gradient(145deg, rgba(36, 42, 43, 0.95), rgba(27, 32, 33, 0.98));
+  border: 1px solid var(--detail-line-strong);
   border-radius: 26px;
-  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(16px);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .detail-header::after {
@@ -3718,18 +4169,18 @@ watch(
   right: 26px;
   bottom: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(88, 232, 144, 0.34), rgba(88, 232, 144, 0.12), transparent);
+  background: linear-gradient(90deg, transparent, rgba(132, 186, 156, 0.28), rgba(132, 186, 156, 0.08), transparent);
 }
 
 .detail-header h1 {
-  color: rgba(244, 247, 246, 0.98);
+  color: var(--detail-ink-strong);
   font-size: 28px;
 }
 
 .header-actions :deep(.el-button:not(.el-button--primary)) {
-  background: rgba(35, 39, 46, 0.78);
-  border-color: rgba(111, 224, 158, 0.14);
-  color: rgba(224, 232, 229, 0.9);
+  background: rgba(39, 45, 45, 0.84);
+  border-color: rgba(135, 171, 156, 0.18);
+  color: rgba(225, 232, 229, 0.9);
 }
 
 .detail-tabs {
@@ -3742,29 +4193,28 @@ watch(
   z-index: 4;
   padding: 8px 12px 0;
   background:
-    radial-gradient(circle at top left, rgba(88, 232, 144, 0.05), transparent 32%),
-    linear-gradient(180deg, rgba(34, 38, 45, 0.92), rgba(23, 26, 32, 0.96));
-  border: 1px solid rgba(111, 224, 158, 0.12);
+    radial-gradient(circle at top left, rgba(105, 163, 134, 0.05), transparent 32%),
+    linear-gradient(180deg, rgba(34, 40, 40, 0.94), rgba(26, 31, 32, 0.97));
+  border: 1px solid var(--detail-line);
   border-radius: 20px;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
-  backdrop-filter: blur(14px);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
 }
 
 .detail-tabs :deep(.el-tabs__item) {
-  color: rgba(181, 194, 190, 0.76);
+  color: var(--detail-muted);
 }
 
 .detail-tabs :deep(.el-tabs__item.is-active) {
-  color: rgba(138, 247, 181, 0.98);
+  color: rgba(214, 229, 221, 0.98);
 }
 
 .detail-tabs :deep(.el-tabs__active-bar) {
-  background: linear-gradient(90deg, rgba(43, 201, 119, 0.96), rgba(115, 255, 191, 0.96));
-  box-shadow: 0 0 16px rgba(67, 223, 139, 0.28);
+  background: linear-gradient(90deg, rgba(132, 177, 152, 0.96), rgba(196, 173, 112, 0.92));
+  box-shadow: none;
 }
 
 .detail-tabs :deep(.el-tabs__item:hover) {
-  color: rgba(226, 240, 235, 0.94);
+  color: rgba(230, 237, 234, 0.94);
 }
 
 .overview-section {
@@ -3784,12 +4234,11 @@ watch(
   gap: 18px;
   padding: 22px 24px;
   border-radius: 24px;
-  border: 1px solid rgba(109, 232, 160, 0.14);
+  border: 1px solid rgba(138, 170, 156, 0.16);
   background:
-    radial-gradient(circle at top left, rgba(65, 214, 128, 0.07), transparent 34%),
-    linear-gradient(145deg, rgba(34, 38, 45, 0.92), rgba(23, 26, 32, 0.95));
-  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(16px);
+    radial-gradient(circle at top left, rgba(108, 161, 133, 0.07), transparent 34%),
+    linear-gradient(145deg, rgba(35, 41, 42, 0.94), rgba(26, 31, 32, 0.97));
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .overview-hero-head {
@@ -3806,9 +4255,9 @@ watch(
   min-height: 24px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(109, 232, 160, 0.16);
-  background: rgba(28, 34, 40, 0.82);
-  color: rgba(145, 244, 185, 0.94);
+  border: 1px solid rgba(148, 175, 163, 0.2);
+  background: rgba(41, 47, 47, 0.88);
+  color: rgba(204, 217, 211, 0.9);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -3828,7 +4277,7 @@ watch(
   margin: 0;
   font-size: 14px;
   line-height: 1.8;
-  color: rgba(198, 210, 206, 0.82);
+  color: rgba(192, 203, 199, 0.82);
 }
 
 .overview-hero-badge {
@@ -3837,11 +4286,11 @@ watch(
   gap: 6px;
   padding: 18px 16px;
   border-radius: 20px;
-  border: 1px solid rgba(109, 232, 160, 0.16);
+  border: 1px solid rgba(148, 176, 163, 0.16);
   background:
-    radial-gradient(circle at top, rgba(57, 196, 118, 0.1), transparent 60%),
-    linear-gradient(180deg, rgba(36, 40, 47, 0.94), rgba(24, 27, 33, 0.96));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    radial-gradient(circle at top, rgba(173, 154, 101, 0.12), transparent 58%),
+    linear-gradient(180deg, rgba(38, 43, 44, 0.95), rgba(27, 31, 32, 0.97));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .overview-hero-badge-label,
@@ -3984,11 +4433,11 @@ watch(
 .report-header,
 .report-content {
   background:
-    radial-gradient(circle at top left, rgba(65, 214, 128, 0.04), transparent 34%),
-    linear-gradient(180deg, rgba(36, 40, 47, 0.9), rgba(24, 27, 33, 0.95));
-  border-color: rgba(109, 232, 160, 0.12);
-  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.028);
-  backdrop-filter: blur(14px);
+    radial-gradient(circle at top left, rgba(100, 153, 126, 0.055), transparent 32%),
+    radial-gradient(circle at 88% 10%, rgba(178, 157, 104, 0.045), transparent 18%),
+    var(--detail-shell);
+  border-color: var(--detail-line);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.022);
 }
 
 .report-title-section,
@@ -4000,9 +4449,9 @@ watch(
 .debate-round,
 .expert-opinion-card {
   background:
-    radial-gradient(circle at top left, rgba(65, 214, 128, 0.035), transparent 34%),
-    linear-gradient(180deg, rgba(40, 44, 51, 0.84), rgba(27, 30, 36, 0.9));
-  border-color: rgba(109, 232, 160, 0.1);
+    radial-gradient(circle at top left, rgba(98, 150, 124, 0.035), transparent 32%),
+    var(--detail-panel);
+  border-color: rgba(138, 171, 157, 0.12);
 }
 
 .metric-card {
@@ -4043,11 +4492,152 @@ watch(
   color: rgba(242, 246, 245, 0.98);
 }
 
+.report-cover-kicker {
+  border-color: rgba(148, 176, 163, 0.18);
+  background: rgba(39, 45, 45, 0.84);
+  color: rgba(206, 219, 212, 0.9);
+}
+
+.report-cover-score {
+  border-color: rgba(147, 176, 163, 0.16);
+  background:
+    radial-gradient(circle at top, rgba(178, 157, 104, 0.14), transparent 55%),
+    linear-gradient(180deg, rgba(36, 43, 43, 0.78), rgba(27, 33, 33, 0.84));
+  box-shadow: inset 0 1px 0 rgba(230, 255, 239, 0.03);
+}
+
+.report-cover-score strong {
+  color: rgba(227, 209, 156, 0.96);
+}
+
+.report-decision-banner {
+  border-color: rgba(145, 177, 163, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(116, 164, 138, 0.14), transparent 40%),
+    linear-gradient(180deg, rgba(39, 48, 46, 0.94), rgba(30, 38, 37, 0.97));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.028);
+}
+
+.report-decision-banner.is-caution {
+  border-color: rgba(196, 170, 112, 0.22);
+  background:
+    radial-gradient(circle at top left, rgba(196, 170, 112, 0.12), transparent 40%),
+    linear-gradient(180deg, rgba(49, 44, 35, 0.95), rgba(36, 32, 28, 0.97));
+}
+
+.report-decision-banner.is-warning {
+  border-color: rgba(178, 126, 116, 0.22);
+  background:
+    radial-gradient(circle at top left, rgba(178, 126, 116, 0.12), transparent 40%),
+    linear-gradient(180deg, rgba(53, 39, 37, 0.95), rgba(38, 30, 29, 0.97));
+}
+
+.report-decision-label {
+  color: rgba(191, 204, 198, 0.75);
+}
+
+.report-decision-copy p,
+.report-decision-meta {
+  color: rgba(196, 206, 202, 0.78);
+}
+
+.report-input-summary {
+  background:
+    radial-gradient(circle at top left, rgba(106, 159, 132, 0.05), transparent 34%),
+    linear-gradient(180deg, rgba(37, 44, 44, 0.92), rgba(29, 35, 35, 0.96));
+  border-color: rgba(141, 172, 158, 0.14);
+}
+
+.report-input-item {
+  background: linear-gradient(180deg, rgba(40, 46, 46, 0.94), rgba(33, 39, 39, 0.97));
+  border-color: rgba(134, 165, 151, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.report-input-item--primary {
+  border-color: rgba(173, 156, 110, 0.18);
+  background:
+    radial-gradient(circle at top left, rgba(173, 156, 110, 0.08), transparent 38%),
+    linear-gradient(180deg, rgba(45, 43, 38, 0.95), rgba(35, 35, 31, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.024),
+    0 12px 24px rgba(0, 0, 0, 0.12);
+}
+
+.executive-item {
+  background:
+    radial-gradient(circle at top left, rgba(105, 158, 132, 0.045), transparent 34%),
+    linear-gradient(180deg, rgba(40, 46, 46, 0.94), rgba(32, 38, 38, 0.97));
+  border-color: rgba(139, 169, 156, 0.13);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.report-chapter {
+  padding: 20px 22px 18px;
+  border: 1px solid rgba(136, 167, 153, 0.12);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top left, rgba(96, 148, 123, 0.04), transparent 34%),
+    linear-gradient(180deg, rgba(36, 43, 42, 0.92), rgba(28, 34, 34, 0.96));
+}
+
+.report-chapter--document {
+  padding: 24px;
+  border-color: rgba(164, 190, 176, 0.18);
+  background:
+    radial-gradient(circle at top left, rgba(139, 181, 155, 0.065), transparent 34%),
+    radial-gradient(circle at 96% 0%, rgba(202, 174, 108, 0.05), transparent 22%),
+    linear-gradient(180deg, rgba(38, 45, 44, 0.95), rgba(28, 34, 34, 0.98));
+}
+
+.report-section-item {
+  padding: 0;
+}
+
+.report-section-item--document {
+  margin-top: 16px;
+}
+
+.markdown-rendered--document {
+  padding: 24px;
+  background:
+    linear-gradient(180deg, rgba(25, 31, 31, 0.96), rgba(20, 25, 25, 0.98));
+  border-color: rgba(143, 174, 160, 0.16);
+}
+
+.markdown-rendered--document :deep(h2) {
+  margin-top: 26px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(135, 170, 154, 0.16);
+}
+
+.markdown-rendered--document :deep(h2:first-child) {
+  margin-top: 0;
+}
+
+.markdown-rendered--document :deep(p) {
+  max-width: 88ch;
+  color: rgba(202, 212, 208, 0.86);
+}
+
+.markdown-rendered--document :deep(table) {
+  margin: 14px 0 22px;
+}
+
+.report-appendix {
+  border-color: rgba(133, 163, 150, 0.13);
+  background: linear-gradient(180deg, rgba(31, 36, 37, 0.9), rgba(25, 30, 31, 0.95));
+}
+
+.report-appendix summary {
+  color: rgba(216, 224, 220, 0.92);
+}
+
 .metric-value.highlight,
 .trace-ranking-order,
 .system-trace-badge,
 .economic-kpi-value.success {
-  color: rgba(136, 245, 179, 0.98);
+  color: rgba(171, 214, 189, 0.98);
 }
 
 .metric-label,
@@ -4075,7 +4665,7 @@ watch(
 .expert-metrics,
 .debate-message .content,
 .arbitration-summary {
-  color: rgba(193, 204, 201, 0.82);
+  color: rgba(188, 198, 194, 0.82);
 }
 
 .info-value,
@@ -4117,8 +4707,8 @@ watch(
 
 .trace-chip,
 .artifact-item-actions a {
-  border-color: rgba(109, 232, 160, 0.14);
-  background: rgba(33, 38, 45, 0.88);
+  border-color: rgba(136, 170, 155, 0.16);
+  background: rgba(35, 40, 41, 0.9);
 }
 
 .chart-container,
@@ -4127,8 +4717,8 @@ watch(
 .artifact-placeholder,
 .markdown-rendered,
 .report-preview-shell {
-  background: rgba(20, 23, 29, 0.74);
-  border-color: rgba(109, 232, 160, 0.1);
+  background: rgba(24, 29, 30, 0.82);
+  border-color: rgba(134, 165, 151, 0.12);
 }
 
 .green-chart-card,
@@ -4154,7 +4744,7 @@ watch(
   right: 18px;
   top: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(121, 239, 171, 0.18), transparent);
+  background: linear-gradient(90deg, transparent, rgba(162, 190, 156, 0.18), transparent);
   pointer-events: none;
 }
 
@@ -4166,8 +4756,8 @@ watch(
 .green-summary-card {
   padding: 18px;
   background:
-    radial-gradient(circle at top left, rgba(65, 214, 128, 0.03), transparent 30%),
-    linear-gradient(180deg, rgba(44, 49, 56, 0.88), rgba(31, 35, 41, 0.94));
+    radial-gradient(circle at top left, rgba(101, 155, 128, 0.04), transparent 30%),
+    linear-gradient(180deg, rgba(43, 49, 49, 0.9), rgba(33, 39, 39, 0.95));
 }
 
 .green-chart-card h4,
@@ -4181,18 +4771,18 @@ watch(
   flex-direction: column;
   justify-content: space-between;
   background:
-    radial-gradient(circle at 50% 0%, rgba(86, 237, 150, 0.07), transparent 42%),
-    linear-gradient(180deg, rgba(39, 44, 51, 0.9), rgba(26, 29, 35, 0.95));
+    radial-gradient(circle at 50% 0%, rgba(136, 181, 153, 0.09), transparent 42%),
+    linear-gradient(180deg, rgba(39, 45, 46, 0.91), rgba(29, 34, 35, 0.96));
 }
 
 .chart-container,
 .economic-cost-chart {
   border-radius: 18px;
   background:
-    radial-gradient(circle at top, rgba(88, 232, 144, 0.05), transparent 55%),
-    linear-gradient(180deg, rgba(28, 32, 39, 0.9), rgba(19, 22, 28, 0.94));
+    radial-gradient(circle at top, rgba(133, 176, 150, 0.055), transparent 55%),
+    linear-gradient(180deg, rgba(30, 35, 36, 0.92), rgba(22, 26, 27, 0.95));
   box-shadow:
-    inset 0 0 0 1px rgba(109, 232, 160, 0.06),
+    inset 0 0 0 1px rgba(139, 172, 158, 0.07),
     inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
@@ -4205,10 +4795,10 @@ watch(
   padding: 10px;
   border-radius: 22px;
   background:
-    radial-gradient(circle at top left, rgba(65, 214, 128, 0.05), transparent 34%),
-    linear-gradient(180deg, rgba(31, 35, 42, 0.88), rgba(21, 24, 30, 0.94));
+    radial-gradient(circle at top left, rgba(104, 155, 129, 0.05), transparent 34%),
+    linear-gradient(180deg, rgba(32, 37, 38, 0.9), rgba(23, 27, 28, 0.95));
   box-shadow:
-    inset 0 0 0 1px rgba(109, 232, 160, 0.06),
+    inset 0 0 0 1px rgba(138, 170, 156, 0.07),
     0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
@@ -4218,16 +4808,16 @@ watch(
 
 .economic-chart-note {
   margin-top: 14px;
-  background: rgba(34, 39, 46, 0.78);
-  border: 1px solid rgba(109, 232, 160, 0.08);
-  color: rgba(199, 208, 206, 0.82);
+  background: rgba(37, 42, 43, 0.84);
+  border: 1px solid rgba(136, 168, 154, 0.1);
+  color: rgba(196, 205, 202, 0.82);
 }
 
 .economic-cost-summary {
   padding: 0;
   background:
-    radial-gradient(circle at top left, rgba(84, 235, 146, 0.05), transparent 38%),
-    linear-gradient(180deg, rgba(34, 38, 45, 0.92), rgba(24, 27, 33, 0.96));
+    radial-gradient(circle at top left, rgba(107, 161, 133, 0.05), transparent 38%),
+    linear-gradient(180deg, rgba(34, 39, 40, 0.94), rgba(25, 29, 30, 0.97));
 }
 
 .economic-summary-shell {
@@ -4241,8 +4831,8 @@ watch(
 .table-card {
   padding: 18px;
   background:
-    radial-gradient(circle at top left, rgba(65, 214, 128, 0.025), transparent 32%),
-    linear-gradient(180deg, rgba(40, 44, 51, 0.84), rgba(28, 31, 37, 0.92));
+    radial-gradient(circle at top left, rgba(100, 153, 126, 0.03), transparent 32%),
+    linear-gradient(180deg, rgba(41, 47, 47, 0.88), rgba(31, 36, 36, 0.94));
 }
 
 .report-section-item--table,
@@ -4250,22 +4840,22 @@ watch(
   padding: 14px;
   border-radius: 22px;
   background:
-    radial-gradient(circle at top left, rgba(65, 214, 128, 0.022), transparent 30%),
-    linear-gradient(180deg, rgba(49, 53, 60, 0.92), rgba(35, 39, 45, 0.96));
-  border: 1px solid rgba(126, 224, 166, 0.07);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    radial-gradient(circle at top left, rgba(100, 154, 127, 0.026), transparent 30%),
+    linear-gradient(180deg, rgba(44, 50, 51, 0.94), rgba(34, 39, 40, 0.97));
+  border: 1px solid rgba(137, 169, 156, 0.11);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018);
 }
 
 .green-section :deep(.el-table),
 .cooling-section :deep(.el-table),
 .power-section :deep(.el-table),
 .report-section :deep(.el-table) {
-  --el-table-border-color: rgba(129, 220, 167, 0.07);
-  --el-table-header-bg-color: rgba(56, 61, 69, 0.98);
-  --el-table-row-hover-bg-color: rgba(70, 78, 89, 0.94);
-  background: rgba(32, 36, 43, 0.9);
-  color: rgba(230, 235, 233, 0.92);
-  box-shadow: inset 0 0 0 1px rgba(109, 232, 160, 0.03);
+  --el-table-border-color: rgba(132, 161, 148, 0.12);
+  --el-table-header-bg-color: rgba(47, 53, 53, 0.98);
+  --el-table-row-hover-bg-color: rgba(62, 69, 69, 0.96);
+  background: rgba(31, 36, 37, 0.92);
+  color: rgba(228, 234, 231, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(135, 166, 152, 0.05);
 }
 
 .green-section :deep(.el-table__inner-wrapper),
@@ -4281,55 +4871,55 @@ watch(
 .cooling-section :deep(.el-table th),
 .power-section :deep(.el-table th),
 .report-section :deep(.el-table th) {
-  color: rgba(243, 246, 245, 0.96);
+  color: rgba(239, 243, 241, 0.95);
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 }
 
 .green-section :deep(.el-table td),
 .cooling-section :deep(.el-table td),
 .power-section :deep(.el-table td),
 .report-section :deep(.el-table td) {
-  background: rgba(52, 57, 65, 0.96);
-  color: rgba(231, 236, 234, 0.94);
-  border-color: rgba(129, 220, 167, 0.045);
+  background: rgba(43, 49, 49, 0.95);
+  color: rgba(228, 234, 232, 0.93);
+  border-color: rgba(132, 161, 148, 0.08);
 }
 
 .green-section :deep(.el-table__row:nth-child(even) td),
 .cooling-section :deep(.el-table__row:nth-child(even) td),
 .power-section :deep(.el-table__row:nth-child(even) td),
 .report-section :deep(.el-table__row:nth-child(even) td) {
-  background: rgba(58, 63, 72, 0.97);
+  background: rgba(47, 53, 53, 0.97);
 }
 
 .green-section :deep(.el-table__row:hover > td),
 .cooling-section :deep(.el-table__row:hover > td),
 .power-section :deep(.el-table__row:hover > td),
 .report-section :deep(.el-table__row:hover > td) {
-  background: rgba(73, 81, 92, 0.98) !important;
+  background: rgba(58, 66, 66, 0.98) !important;
 }
 
 .green-section :deep(.el-table::before),
 .cooling-section :deep(.el-table::before),
 .power-section :deep(.el-table::before),
 .report-section :deep(.el-table::before) {
-  background: rgba(109, 232, 160, 0.05);
+  background: rgba(136, 167, 154, 0.1);
 }
 
 .report-content :deep(.el-table__inner-wrapper::before),
 .report-content :deep(.el-table--border::before),
 .report-content :deep(.el-table--border::after) {
-  background: rgba(109, 232, 160, 0.08);
+  background: rgba(135, 166, 152, 0.12);
 }
 
 .report-content :deep(.el-table) {
-  --el-table-border-color: rgba(127, 220, 166, 0.075);
-  --el-table-header-bg-color: rgba(58, 63, 71, 0.98);
-  --el-table-row-hover-bg-color: rgba(76, 84, 95, 0.92);
+  --el-table-border-color: rgba(134, 164, 151, 0.13);
+  --el-table-header-bg-color: rgba(46, 52, 52, 0.98);
+  --el-table-row-hover-bg-color: rgba(61, 68, 68, 0.96);
   border-radius: 16px;
   overflow: hidden;
-  background: rgba(34, 38, 45, 0.92);
-  box-shadow: inset 0 0 0 1px rgba(109, 232, 160, 0.035);
+  background: rgba(31, 36, 37, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(135, 166, 152, 0.06);
 }
 
 .report-content :deep(.el-table__inner-wrapper) {
@@ -4347,45 +4937,45 @@ watch(
   padding-top: 12px;
   padding-bottom: 12px;
   background:
-    linear-gradient(180deg, rgba(63, 68, 77, 0.98), rgba(50, 55, 63, 0.98));
+    linear-gradient(180deg, rgba(49, 55, 55, 0.98), rgba(41, 47, 47, 0.98));
   font-size: 12px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: none;
-  color: rgba(241, 245, 244, 0.95);
-  border-bottom-color: rgba(118, 217, 160, 0.08) !important;
+  color: rgba(238, 242, 240, 0.95);
+  border-bottom-color: rgba(136, 167, 154, 0.12) !important;
 }
 
 .report-content :deep(.el-table td) {
   padding-top: 14px;
   padding-bottom: 14px;
-  background: rgba(54, 59, 67, 0.97);
-  color: rgba(232, 236, 234, 0.93);
-  border-color: rgba(122, 216, 161, 0.04);
+  background: rgba(42, 48, 48, 0.97);
+  color: rgba(227, 232, 230, 0.93);
+  border-color: rgba(132, 162, 149, 0.08);
 }
 
 .report-content :deep(.el-table__row:nth-child(even) td) {
-  background: rgba(59, 65, 74, 0.97);
+  background: rgba(46, 52, 52, 0.97);
 }
 
 .report-content :deep(.el-table__row:hover > td) {
-  background: rgba(74, 82, 93, 0.98) !important;
+  background: rgba(57, 64, 64, 0.98) !important;
 }
 
 .report-content :deep(.el-table td:first-child) {
   background:
-    linear-gradient(180deg, rgba(46, 53, 61, 0.98), rgba(37, 42, 49, 0.98));
-  color: rgba(241, 246, 244, 0.96);
+    linear-gradient(180deg, rgba(40, 46, 46, 0.98), rgba(34, 39, 39, 0.98));
+  color: rgba(240, 244, 242, 0.96);
   font-weight: 600;
 }
 
 .report-content :deep(.el-table th:first-child) {
   background:
-    linear-gradient(180deg, rgba(67, 72, 80, 0.98), rgba(53, 58, 66, 0.98));
+    linear-gradient(180deg, rgba(52, 58, 58, 0.98), rgba(43, 49, 49, 0.98));
 }
 
 .report-content :deep(.el-table tr td + td),
 .report-content :deep(.el-table tr th + th) {
-  box-shadow: inset 1px 0 0 rgba(121, 239, 171, 0.06);
+  box-shadow: inset 1px 0 0 rgba(136, 166, 153, 0.09);
 }
 
 .architecture-diagram {
@@ -4431,7 +5021,9 @@ watch(
   .green-section,
   .power-section,
   .economic-section,
-  .economic-cost-panel {
+  .economic-cost-panel,
+  .report-input-grid,
+  .report-executive-layout {
     grid-template-columns: 1fr;
   }
 
@@ -4444,6 +5036,10 @@ watch(
   }
 
   .report-cover-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-input-primary {
     grid-template-columns: 1fr;
   }
 }
@@ -4473,8 +5069,20 @@ watch(
     align-items: flex-start;
   }
 
+  .report-decision-banner {
+    grid-template-columns: 1fr;
+  }
+
+  .report-decision-meta {
+    text-align: left;
+  }
+
   .report-content,
   .report-title-section {
+    padding: 18px;
+  }
+
+  .report-input-summary {
     padding: 18px;
   }
 }
