@@ -72,7 +72,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="investment" label="总投资(万元)" width="130" />
-        <el-table-column prop="actions" label="操作" width="240">
+        <el-table-column prop="actions" label="操作" min-width="300">
           <template #default="scope">
             <div class="actions-cell">
               <el-button type="primary" link size="small" @click="viewDetail(scope.row)">
@@ -332,27 +332,72 @@ watch([searchKeyword, statusFilter, dateRange, sortBy], () => {
 
 .table-section {
   flex: 1;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
+  background:
+    radial-gradient(circle at top right, color-mix(in oklab, var(--accent-color) 8%, transparent), transparent 22%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 97%, var(--primary-color) 3%) 0%, color-mix(in oklab, var(--bg-panel) 95%, var(--primary-color) 5%) 100%);
   border-radius: 22px;
   overflow: hidden;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-light);
 }
 
+.project-table :deep(.el-table),
+.project-table :deep(.el-table__inner-wrapper),
+.project-table :deep(.el-table__body-wrapper),
+.project-table :deep(.el-scrollbar__view) {
+  background: transparent !important;
+}
+
+.project-table :deep(.el-table__inner-wrapper::before),
+.project-table :deep(.el-table--border::after),
+.project-table :deep(.el-table--border::before) {
+  background-color: color-mix(in oklab, var(--primary-color) 18%, var(--border-light)) !important;
+}
+
 .project-table :deep(.el-table__header th) {
-  background: color-mix(in oklab, var(--bg-panel) 90%, var(--primary-color) 10%) !important;
-  color: var(--text-secondary);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 74%, var(--primary-dark) 26%) 0%, color-mix(in oklab, var(--bg-card) 78%, var(--primary-dark) 22%) 100%) !important;
+  color: color-mix(in oklab, var(--text-primary) 88%, white);
   font-weight: 600;
   font-size: 13px;
-  border-bottom: 1px solid var(--border-light);
+  border-bottom: 1px solid color-mix(in oklab, var(--primary-color) 24%, var(--border-light));
+}
+
+.project-table :deep(.el-table__body tr),
+.project-table :deep(.el-table__row),
+.project-table :deep(.el-table__body td),
+.project-table :deep(.el-table__fixed),
+.project-table :deep(.el-table__fixed-right),
+.project-table :deep(.el-table-fixed-column--left),
+.project-table :deep(.el-table-fixed-column--right) {
+  background: transparent !important;
 }
 
 .project-table :deep(.el-table__body td) {
-  border-color: var(--border-light);
+  border-color: color-mix(in oklab, var(--primary-color) 14%, var(--border-light));
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 82%, var(--primary-color) 18%) 0%, color-mix(in oklab, var(--bg-card) 86%, var(--primary-color) 14%) 100%) !important;
+  color: color-mix(in oklab, var(--text-primary) 90%, white);
 }
 
-.project-table :deep(.el-table__body tr:hover) {
-  background: color-mix(in oklab, var(--primary-color) 6%, var(--bg-card));
+.project-table :deep(.el-table__body tr:nth-child(odd) td) {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 76%, var(--primary-color) 24%) 0%, color-mix(in oklab, var(--bg-card) 82%, var(--primary-color) 18%) 100%) !important;
+}
+
+.project-table :deep(.el-table__body tr:hover > td) {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 70%, var(--primary-color) 30%) 0%, color-mix(in oklab, var(--bg-card) 78%, var(--accent-color) 22%) 100%) !important;
+}
+
+.project-table :deep(.el-table__empty-block),
+.project-table :deep(.el-table__empty-text) {
+  background: transparent !important;
+  color: var(--text-secondary);
+}
+
+.project-table :deep(.el-table__cell) {
+  box-shadow: inset -1px 0 0 color-mix(in oklab, var(--primary-color) 10%, transparent);
 }
 
 .project-name-cell {
@@ -376,18 +421,45 @@ watch([searchKeyword, statusFilter, dateRange, sortBy], () => {
 
 .project-name {
   font-weight: 500;
-  color: var(--text-primary);
+  color: color-mix(in oklab, var(--text-primary) 92%, white);
   font-size: 14px;
 }
 
 .highlight {
-  color: var(--primary-dark);
+  color: color-mix(in oklab, var(--primary-light) 46%, var(--primary-color));
   font-weight: 600;
 }
 
 .actions-cell {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+}
+
+.actions-cell :deep(.el-button) {
+  margin-left: 0;
+  padding: 0;
+  min-height: auto;
+  line-height: 1.4;
+  color: color-mix(in oklab, var(--accent-light) 34%, var(--accent-color));
+}
+
+.actions-cell :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.actions-cell :deep(.el-button:hover) {
+  color: color-mix(in oklab, var(--accent-light) 52%, white);
+}
+
+.actions-cell :deep(.el-button--danger) {
+  color: color-mix(in oklab, var(--danger-color) 82%, white);
+}
+
+.actions-cell :deep(.el-button--danger:hover) {
+  color: color-mix(in oklab, var(--danger-color) 66%, white);
 }
 
 .pagination-section {

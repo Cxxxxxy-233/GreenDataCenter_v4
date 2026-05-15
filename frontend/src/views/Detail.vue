@@ -3,25 +3,48 @@
     <div class="detail-header">
       <h1>方案详情</h1>
       <div class="header-actions">
-        <el-button @click="exportMarkdown">&#23548;&#20986;Markdown&#25253;&#21578;</el-button>
-        <el-button type="primary" plain @click="exportPdf">&#23548;&#20986;PDF&#25253;&#21578;</el-button>
+        <div class="header-actions-meta">
+          <span class="header-actions-kicker">Deliverables</span>
+          <span class="header-actions-note">Markdown / PDF</span>
+        </div>
+        <div class="header-action-buttons">
+          <el-button class="header-action-btn" @click="exportMarkdown">&#23548;&#20986;Markdown&#25253;&#21578;</el-button>
+          <el-button class="header-action-btn header-action-btn--primary" type="primary" plain @click="exportPdf">&#23548;&#20986;PDF&#25253;&#21578;</el-button>
+        </div>
       </div>
     </div>
 
     <el-tabs v-model="activeTab" class="detail-tabs" @tab-change="handleTabChange">
       <el-tab-pane label="方案概览" name="overview">
         <div class="overview-section">
-          <div class="metrics-grid">
-            <div class="metric-card" v-for="(metric, index) in overviewMetrics" :key="index" :style="{ animationDelay: `${index * 100}ms` }">
-              <div class="metric-label">{{ metric.label }}</div>
-              <div class="metric-value" :class="{ highlight: metric.highlight }">{{ metric.value }}</div>
-              <div v-if="metric.unit" class="metric-unit">{{ metric.unit }}</div>
+          <div class="overview-hero">
+            <div class="overview-hero-head">
+              <div class="overview-hero-copy">
+                <span class="overview-kicker">Final Recommended Scheme</span>
+                <h2>{{ finalReportData.name || solutionData.name || '数据中心绿电消纳推荐方案' }}</h2>
+                <p class="overview-hero-summary">{{ arbitrator.summary || '暂无后端仲裁摘要' }}</p>
+              </div>
+              <div class="overview-hero-badge">
+                <span class="overview-hero-badge-label">综合评分</span>
+                <strong>{{ formatPercent(overallScores.overall) }}</strong>
+                <span class="overview-hero-badge-note">多专家仲裁输出</span>
+              </div>
+            </div>
+
+            <div class="metrics-grid">
+              <div class="metric-card" v-for="(metric, index) in overviewMetrics" :key="index" :style="{ animationDelay: `${index * 100}ms` }">
+                <div class="metric-label">{{ metric.label }}</div>
+                <div class="metric-value" :class="{ highlight: metric.highlight }">{{ metric.value }}</div>
+                <div v-if="metric.unit" class="metric-unit">{{ metric.unit }}</div>
+              </div>
             </div>
           </div>
 
           <div class="summary-section">
-            <h3>方案摘要</h3>
-            <p class="summary-text">{{ arbitrator.summary || '暂无后端仲裁摘要' }}</p>
+            <div class="summary-section-head">
+              <h3>执行判断</h3>
+              <span class="summary-section-tag">方案已完成仲裁</span>
+            </div>
             <div class="budget-status" :class="costResult.is_over_budget ? 'fail' : 'success'">
               <el-icon><CircleCheckFilled /></el-icon>
               <span v-if="costResult.is_over_budget">当前方案超预算 {{ formatNumber(Math.abs(costResult.budget_delta_lakh), 2) }} 万元</span>
@@ -47,7 +70,10 @@
           </div>
 
           <div class="info-section">
-            <h3>生成信息</h3>
+            <div class="info-section-head">
+              <h3>方案信息</h3>
+              <span class="info-section-note">用于项目归档与报告导出</span>
+            </div>
             <el-row :gutter="20">
               <el-col :span="6">
                 <div class="info-item">方案ID</div>
@@ -71,7 +97,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="制冷系统详情" name="cooling">
-        <div class="cooling-section">
+        <div class="cooling-section detail-workbench">
           <div class="param-cards">
             <el-card class="param-card">
               <h4>制冷方案核心参数</h4>
@@ -185,7 +211,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="绿电系统详情" name="green">
-        <div class="green-section">
+        <div class="green-section detail-workbench">
           <section class="system-trace-shell">
             <div class="system-trace-header">
               <div>
@@ -234,7 +260,7 @@
             </div>
           </section>
 
-          <el-card>
+          <el-card class="green-summary-card">
             <h4>风光储容量配置表</h4>
             <el-table :data="greenConfig" border>
               <el-table-column prop="type" label="类型" />
@@ -242,7 +268,7 @@
               <el-table-column prop="ratio" label="占比(%)" />
             </el-table>
           </el-card>
-          <el-card>
+          <el-card class="green-chart-card">
             <h4>绿电占比分布图</h4>
             <div ref="powerBalanceChartRef" class="chart-container"></div>
           </el-card>
@@ -284,7 +310,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="供电系统详情" name="power">
-        <div class="power-section">
+        <div class="power-section detail-workbench">
           <section class="system-trace-shell">
             <div class="system-trace-header">
               <div>
@@ -333,7 +359,7 @@
             </div>
           </section>
 
-          <el-card>
+          <el-card class="power-architecture-card">
             <h4>主备供电架构</h4>
             <div class="architecture-diagram">
               <div class="arch-item">{{ powerPlan.external_source_type || '外部电源' }}</div>
@@ -345,7 +371,7 @@
               <div class="arch-item">{{ powerPlan.secondary_voltage || '负载侧' }}</div>
             </div>
           </el-card>
-          <el-card>
+          <el-card class="power-kpi-card">
             <h4>系统参数</h4>
             <div class="availability-stats">
               <div class="stat-item">外部电压：{{ powerPlan.external_voltage || '-' }}</div>
@@ -357,7 +383,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="经济分析" name="economic">
-        <div class="economic-section">
+        <div class="economic-section detail-workbench detail-workbench--economic">
           <div class="economic-cost-panel">
             <section class="economic-cost-main">
               <div class="economic-cost-header">
@@ -539,18 +565,36 @@
       </el-tab-pane>
 
       <el-tab-pane label="完整方案报告" name="report">
-        <div class="report-section">
+        <div class="report-section detail-workbench detail-workbench--report">
           <div class="report-header">
-            <h3>完整方案报告</h3>
-            <el-input v-model="searchKeyword" placeholder="搜索报告内容" />
+            <div class="report-header-copy">
+              <span class="report-header-kicker">Solution Report</span>
+              <h3>完整方案报告</h3>
+              <p>按“结论、指标、论证、建议”的顺序组织，便于项目汇报、归档与导出。</p>
+            </div>
+            <div class="report-header-tools">
+              <el-input v-model="searchKeyword" placeholder="搜索报告内容" />
+            </div>
           </div>
+          <div class="report-preview-shell">
           <div ref="reportExportRef" class="report-content">
             <div class="report-title-section">
+              <span class="report-cover-kicker">Project Deliverable</span>
+              <div class="report-cover-grid">
+                <div class="report-cover-main">
               <h1 class="report-title">{{ finalReportData.name || '数据中心绿电消纳方案报告' }}</h1>
+              <p class="report-cover-subtitle">Final delivery pack for presentation, including key metrics, arbitration conclusion, and three domain schemes.</p>
               <div class="report-meta">
                 <span>方案编号：{{ solutionId }}</span>
                 <span>生成时间：{{ solutionData.created_at || '-' }}</span>
                 <span>置信度：{{ formatPercent(finalReportData.confidence) }}</span>
+              </div>
+                </div>
+                <div class="report-cover-score">
+                  <span class="report-cover-score-label">Overall Score</span>
+                  <strong>{{ formatPercent(overallScores.overall) }}</strong>
+                  <small>Multi-agent arbitration</small>
+                </div>
               </div>
             </div>
             <div class="report-executive-summary">
@@ -600,7 +644,7 @@
             </div>
             <div class="report-chapter">
               <h2>关键指标</h2>
-              <div class="report-section-item">
+              <div class="report-section-item report-section-item--table">
                 <el-table :data="keyMetricsRows" border>
                   <el-table-column prop="label" label="指标" width="240" />
                   <el-table-column prop="value" label="数值" />
@@ -611,7 +655,7 @@
               <h2>经济性方案</h2>
               <div class="report-section-item">
                 <p>{{ economicSection.description || '暂无经济性描述' }}</p>
-                <el-table v-if="economicRows.length" :data="economicRows" border>
+                <el-table v-if="economicRows.length" :data="economicRows" border class="report-data-table">
                   <el-table-column prop="label" label="指标" width="240" />
                   <el-table-column prop="value" label="数值" />
                 </el-table>
@@ -624,7 +668,7 @@
               <h2>供电可靠性方案</h2>
               <div class="report-section-item">
                 <p>{{ powerSection.description || '暂无供电可靠性描述' }}</p>
-                <el-table v-if="powerRows.length" :data="powerRows" border>
+                <el-table v-if="powerRows.length" :data="powerRows" border class="report-data-table">
                   <el-table-column prop="label" label="指标" width="240" />
                   <el-table-column prop="value" label="数值" />
                 </el-table>
@@ -637,7 +681,7 @@
               <h2>环保方案</h2>
               <div class="report-section-item">
                 <p>{{ environmentalSection.description || '暂无环保描述' }}</p>
-                <el-table v-if="environmentalRows.length" :data="environmentalRows" border>
+                <el-table v-if="environmentalRows.length" :data="environmentalRows" border class="report-data-table">
                   <el-table-column prop="label" label="指标" width="240" />
                   <el-table-column prop="value" label="数值" />
                 </el-table>
@@ -683,6 +727,7 @@
                 <div class="markdown-rendered" v-html="reportHtml"></div>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </el-tab-pane>
@@ -3046,6 +3091,30 @@ watch(
   flex-direction: column;
 }
 
+.report-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.report-header-copy h3 {
+  margin: 0;
+  font-size: 22px;
+  color: rgba(244, 252, 247, 0.99);
+}
+
+.report-header-copy p {
+  max-width: 58ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgba(211, 235, 224, 0.72);
+}
+
+.report-header-tools {
+  width: min(320px, 100%);
+}
+
 .report-header {
   display: flex;
   justify-content: space-between;
@@ -3062,20 +3131,95 @@ watch(
 .report-content {
   flex: 1;
   overflow-y: auto;
-  padding: 22px;
+  padding: 28px;
   background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 99%, var(--primary-color) 1%) 0%, color-mix(in oklab, var(--bg-panel) 97%, var(--primary-color) 3%) 100%);
   border: 1px solid var(--border-light);
   border-radius: 20px;
   box-shadow: var(--shadow-sm);
 }
 
+.report-preview-shell {
+  padding: 14px;
+  border-radius: 24px;
+}
+
 .report-title-section {
-  text-align: center;
-  padding: 24px;
+  text-align: left;
+  padding: 26px 26px 24px;
   border-bottom: 1px solid color-mix(in oklab, var(--primary-color) 24%, var(--border-default));
   margin-bottom: 24px;
   background: linear-gradient(180deg, color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%) 0%, transparent 100%);
   border-radius: 18px;
+}
+
+.report-cover-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(121, 239, 171, 0.16);
+  background: rgba(7, 26, 22, 0.72);
+  color: rgba(154, 247, 196, 0.94);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.report-cover-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 22px;
+  align-items: start;
+}
+
+.report-cover-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.report-cover-subtitle {
+  max-width: 62ch;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: rgba(216, 238, 224, 0.78);
+}
+
+.report-cover-score {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(121, 239, 171, 0.14);
+  background:
+    radial-gradient(circle at top, rgba(121, 239, 171, 0.12), transparent 55%),
+    linear-gradient(180deg, rgba(24, 73, 57, 0.68), rgba(12, 36, 29, 0.68));
+  box-shadow: inset 0 1px 0 rgba(230, 255, 239, 0.04);
+}
+
+.report-cover-score-label,
+.report-cover-score small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.report-cover-score-label {
+  color: rgba(211, 235, 224, 0.72);
+}
+
+.report-cover-score strong {
+  font-size: 30px;
+  line-height: 1;
+  color: rgba(121, 239, 171, 0.98);
+}
+
+.report-cover-score small {
+  color: rgba(188, 225, 203, 0.76);
 }
 
 .report-title {
@@ -3088,7 +3232,7 @@ watch(
 
 .report-meta {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 30px;
   font-size: 13px;
   color: var(--text-secondary);
@@ -3156,6 +3300,22 @@ watch(
 
 .report-section-item {
   margin-bottom: 16px;
+}
+
+.report-section-item--table,
+.report-data-table {
+  margin-top: 14px;
+}
+
+.report-data-table,
+.report-section-item--table {
+  padding: 12px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top left, rgba(121, 239, 171, 0.05), transparent 34%),
+    linear-gradient(180deg, rgba(8, 27, 22, 0.72), rgba(4, 15, 12, 0.82));
+  border: 1px solid rgba(121, 239, 171, 0.12);
+  box-shadow: inset 0 1px 0 rgba(230, 255, 239, 0.03);
 }
 
 .report-section-item p {
@@ -3505,5 +3665,614 @@ watch(
     padding-right: 12px;
   }
 }
-</style>
 
+/* Deep-green solution cockpit overrides */
+.detail-page {
+  position: relative;
+  gap: 26px;
+  color: rgba(232, 255, 243, 0.94);
+}
+
+.detail-page::before {
+  content: '';
+  position: fixed;
+  inset: var(--header-height) 0 0 var(--sidebar-width);
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(121, 239, 171, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(121, 239, 171, 0.028) 1px, transparent 1px),
+    radial-gradient(circle at 14% 10%, rgba(121, 239, 171, 0.12), transparent 28%),
+    radial-gradient(circle at 88% 18%, rgba(37, 214, 210, 0.1), transparent 26%),
+    linear-gradient(180deg, rgba(6, 22, 18, 0.12), transparent 34%);
+  background-size: 42px 42px, 42px 42px, auto, auto;
+  z-index: 0;
+}
+
+.detail-page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.detail-header {
+  position: relative;
+  overflow: hidden;
+  padding: 24px 28px;
+  background:
+    radial-gradient(circle at 18% 25%, rgba(121, 239, 171, 0.16), transparent 30%),
+    radial-gradient(circle at 86% 20%, rgba(37, 214, 210, 0.13), transparent 26%),
+    linear-gradient(135deg, rgba(7, 24, 20, 0.98), rgba(12, 41, 33, 0.95));
+  border: 1px solid rgba(121, 239, 171, 0.2);
+  border-radius: 26px;
+  box-shadow: 0 24px 56px rgba(2, 12, 8, 0.24);
+}
+
+.detail-header::after {
+  content: '';
+  position: absolute;
+  left: 26px;
+  right: 26px;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(121, 239, 171, 0.45), rgba(37, 214, 210, 0.34), transparent);
+}
+
+.detail-header h1 {
+  color: rgba(239, 252, 245, 0.98);
+  font-size: 28px;
+}
+
+.header-actions :deep(.el-button:not(.el-button--primary)) {
+  background: rgba(7, 28, 23, 0.68);
+  border-color: rgba(121, 239, 171, 0.18);
+  color: rgba(211, 235, 224, 0.86);
+}
+
+.detail-tabs {
+  overflow: visible;
+}
+
+.detail-tabs :deep(.el-tabs__header) {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  padding: 8px 12px 0;
+  background:
+    radial-gradient(circle at top left, rgba(121, 239, 171, 0.09), transparent 32%),
+    linear-gradient(180deg, rgba(8, 30, 25, 0.9), rgba(5, 18, 16, 0.94));
+  border: 1px solid rgba(121, 239, 171, 0.16);
+  border-radius: 20px;
+  box-shadow: 0 16px 38px rgba(2, 12, 8, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.detail-tabs :deep(.el-tabs__item) {
+  color: rgba(211, 235, 224, 0.72);
+}
+
+.detail-tabs :deep(.el-tabs__item.is-active) {
+  color: rgba(121, 239, 171, 0.98);
+}
+
+.detail-tabs :deep(.el-tabs__active-bar) {
+  background: linear-gradient(90deg, rgba(25, 195, 125, 0.95), rgba(37, 214, 210, 0.95));
+  box-shadow: 0 0 16px rgba(37, 214, 210, 0.35);
+}
+
+.detail-tabs :deep(.el-tabs__item:hover) {
+  color: rgba(189, 245, 210, 0.94);
+}
+
+.overview-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.overview-section .metrics-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.overview-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 24px;
+  border-radius: 24px;
+  border: 1px solid rgba(121, 239, 171, 0.17);
+  background:
+    radial-gradient(circle at top left, rgba(121, 239, 171, 0.13), transparent 34%),
+    radial-gradient(circle at 90% 18%, rgba(37, 214, 210, 0.09), transparent 24%),
+    linear-gradient(135deg, rgba(8, 30, 25, 0.92), rgba(9, 34, 28, 0.88));
+  box-shadow: 0 20px 46px rgba(2, 12, 8, 0.16);
+}
+
+.overview-hero-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 18px;
+  align-items: start;
+}
+
+.overview-kicker,
+.report-header-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(121, 239, 171, 0.16);
+  background: rgba(7, 26, 22, 0.66);
+  color: rgba(140, 248, 191, 0.92);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.overview-hero-copy h2 {
+  margin: 12px 0 10px;
+  font-size: 30px;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  color: rgba(244, 252, 247, 0.99);
+}
+
+.overview-hero-summary {
+  max-width: 62ch;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: rgba(214, 238, 223, 0.84);
+}
+
+.overview-hero-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(121, 239, 171, 0.18);
+  background: linear-gradient(180deg, rgba(18, 65, 50, 0.82), rgba(7, 28, 23, 0.8));
+  box-shadow: inset 0 1px 0 rgba(221, 255, 234, 0.06);
+}
+
+.overview-hero-badge-label,
+.overview-hero-badge-note,
+.summary-section-tag,
+.info-section-note {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.overview-hero-badge-label {
+  color: rgba(211, 235, 224, 0.72);
+}
+
+.overview-hero-badge strong {
+  font-size: 30px;
+  line-height: 1;
+  color: rgba(121, 239, 171, 0.98);
+}
+
+.overview-hero-badge-note {
+  color: rgba(188, 225, 203, 0.76);
+}
+
+.overview-section .summary-section {
+  min-height: 100%;
+}
+
+.overview-section .info-section {
+  grid-column: 1 / -1;
+}
+
+.summary-section-head,
+.info-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.summary-section-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(121, 239, 171, 0.18);
+  background: rgba(7, 28, 23, 0.7);
+  color: rgba(140, 248, 191, 0.92);
+  font-weight: 600;
+}
+
+.info-section-note {
+  color: rgba(211, 235, 224, 0.62);
+}
+
+.cooling-section,
+.green-section,
+.power-section,
+.economic-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.cooling-section .system-trace-shell,
+.green-section .system-trace-shell,
+.power-section .system-trace-shell,
+.economic-cost-panel,
+.report-section {
+  grid-column: 1 / -1;
+}
+
+.param-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metrics-grid,
+.param-cards,
+.trace-fact-grid,
+.trace-weight-grid,
+.economic-kpi-grid {
+  align-items: stretch;
+}
+
+.metric-card,
+.summary-section,
+.info-section,
+.param-card,
+.system-trace-shell,
+.green-section :deep(.el-card),
+.power-section :deep(.el-card),
+.economic-section :deep(.el-card),
+.economic-cost-main,
+.economic-cost-summary,
+.economic-kpi-card,
+.economic-cost-item,
+.economic-summary-row,
+.trace-block,
+.trace-fact-item,
+.trace-weight-item,
+.trace-ranking-item,
+.artifact-card-panel,
+.report-header,
+.report-content {
+  background:
+    radial-gradient(circle at top left, rgba(121, 239, 171, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(8, 30, 25, 0.8), rgba(5, 18, 16, 0.9));
+  border-color: rgba(121, 239, 171, 0.14);
+  box-shadow: inset 0 1px 0 rgba(224, 255, 235, 0.05), 0 18px 42px rgba(2, 12, 8, 0.14);
+}
+
+.report-title-section,
+.report-executive-summary,
+.executive-item,
+.report-chapter,
+.report-section-item,
+.arbitration-result,
+.debate-round,
+.expert-opinion-card {
+  background:
+    radial-gradient(circle at top left, rgba(121, 239, 171, 0.06), transparent 34%),
+    linear-gradient(180deg, rgba(9, 33, 28, 0.72), rgba(6, 22, 18, 0.82));
+  border-color: rgba(121, 239, 171, 0.12);
+}
+
+.metric-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.metric-card::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(121, 239, 171, 0.34), transparent);
+}
+
+.metric-card:hover {
+  border-color: rgba(121, 239, 171, 0.32);
+  box-shadow: 0 26px 68px rgba(2, 24, 16, 0.28);
+}
+
+.metric-value,
+.summary-section h3,
+.info-section h3,
+.param-card h4,
+.system-trace-header h4,
+.trace-block-title,
+.economic-cost-header h4,
+.economic-kpi-value,
+.economic-cost-value,
+.economic-summary-value,
+.artifact-item-title,
+.report-title,
+.report-header-copy h3,
+.report-chapter h2,
+.executive-value {
+  color: rgba(239, 252, 245, 0.98);
+}
+
+.metric-value.highlight,
+.trace-ranking-order,
+.system-trace-badge,
+.economic-kpi-value.success {
+  color: rgba(121, 239, 171, 0.98);
+}
+
+.metric-label,
+.metric-unit,
+.summary-text,
+.expert-recommendations li,
+.info-item,
+.param-item,
+.system-trace-header p,
+.trace-chip,
+.trace-fact-label,
+.trace-step-desc,
+.trace-evidence-list li,
+.economic-cost-desc,
+.economic-kpi-note,
+.economic-chart-note,
+.artifact-item-desc,
+.artifact-item-path,
+.report-header-copy p,
+.report-meta,
+.report-section-item p,
+.report-section-item li,
+.markdown-rendered,
+.expert-summary,
+.expert-metrics,
+.debate-message .content,
+.arbitration-summary {
+  color: rgba(211, 235, 224, 0.74);
+}
+
+.info-value,
+.trace-fact-value,
+.trace-weight-value,
+.trace-ranking-name,
+.economic-cost-title,
+.economic-kpi-label,
+.economic-summary-label,
+.expert-name,
+.debate-message .speaker {
+  color: rgba(232, 255, 243, 0.9);
+}
+
+.system-trace-shell {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+}
+
+.system-trace-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(121, 239, 171, 0.08), transparent 18%, transparent 82%, rgba(37, 214, 210, 0.06)),
+    linear-gradient(rgba(121, 239, 171, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(121, 239, 171, 0.035) 1px, transparent 1px);
+  background-size: auto, 36px 36px, 36px 36px;
+}
+
+.system-trace-header,
+.system-trace-topology,
+.trace-block {
+  position: relative;
+  z-index: 1;
+}
+
+.trace-chip,
+.artifact-item-actions a {
+  border-color: rgba(121, 239, 171, 0.16);
+  background: rgba(7, 26, 22, 0.72);
+}
+
+.chart-container,
+.economic-chart-shell,
+.artifact-image-shell,
+.artifact-placeholder,
+.markdown-rendered,
+.report-preview-shell {
+  background: rgba(4, 18, 15, 0.5);
+  border-color: rgba(121, 239, 171, 0.12);
+}
+
+.green-section :deep(.el-table),
+.cooling-section :deep(.el-table),
+.power-section :deep(.el-table),
+.report-section :deep(.el-table) {
+  --el-table-border-color: rgba(121, 239, 171, 0.1);
+  --el-table-header-bg-color: rgba(8, 34, 28, 0.96);
+  --el-table-row-hover-bg-color: rgba(22, 66, 53, 0.72);
+  background: rgba(5, 19, 15, 0.4);
+  color: rgba(221, 240, 229, 0.88);
+}
+
+.green-section :deep(.el-table th),
+.cooling-section :deep(.el-table th),
+.power-section :deep(.el-table th),
+.report-section :deep(.el-table th) {
+  color: rgba(230, 247, 237, 0.9);
+}
+
+.green-section :deep(.el-table td),
+.cooling-section :deep(.el-table td),
+.power-section :deep(.el-table td),
+.report-section :deep(.el-table td) {
+  background: rgba(14, 40, 33, 0.82);
+  color: rgba(224, 240, 231, 0.88);
+  border-color: rgba(121, 239, 171, 0.09);
+}
+
+.report-content :deep(.el-table__inner-wrapper::before),
+.report-content :deep(.el-table--border::before),
+.report-content :deep(.el-table--border::after) {
+  background: rgba(121, 239, 171, 0.12);
+}
+
+.report-content :deep(.el-table) {
+  --el-table-border-color: rgba(104, 190, 147, 0.12);
+  --el-table-header-bg-color: rgba(8, 34, 28, 0.96);
+  --el-table-row-hover-bg-color: rgba(18, 58, 46, 0.72);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(5, 19, 15, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(121, 239, 171, 0.08);
+}
+
+.report-content :deep(.el-table__inner-wrapper) {
+  background: transparent;
+}
+
+.report-content :deep(.el-table__header-wrapper),
+.report-content :deep(.el-table__body-wrapper) {
+  background: transparent;
+}
+
+.report-content :deep(.el-table th) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  background:
+    linear-gradient(180deg, rgba(10, 43, 34, 0.98), rgba(6, 28, 22, 0.96));
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: rgba(234, 248, 239, 0.94);
+  border-bottom-color: rgba(121, 239, 171, 0.12) !important;
+}
+
+.report-content :deep(.el-table td) {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  background: rgba(16, 42, 35, 0.8);
+  color: rgba(228, 241, 234, 0.9);
+  border-color: rgba(121, 239, 171, 0.07);
+}
+
+.report-content :deep(.el-table__row:nth-child(even) td) {
+  background: rgba(20, 48, 40, 0.82);
+}
+
+.report-content :deep(.el-table__row:hover > td) {
+  background: rgba(23, 62, 49, 0.94) !important;
+}
+
+.report-content :deep(.el-table td:first-child) {
+  background:
+    linear-gradient(180deg, rgba(12, 37, 31, 0.9), rgba(9, 30, 25, 0.94));
+  color: rgba(241, 252, 246, 0.96);
+  font-weight: 600;
+}
+
+.report-content :deep(.el-table th:first-child) {
+  background:
+    linear-gradient(180deg, rgba(10, 50, 39, 0.98), rgba(7, 34, 27, 0.98));
+}
+
+.report-content :deep(.el-table tr td + td),
+.report-content :deep(.el-table tr th + th) {
+  box-shadow: inset 1px 0 0 rgba(121, 239, 171, 0.06);
+}
+
+.architecture-diagram {
+  padding: 18px;
+  border-radius: 18px;
+  background:
+    linear-gradient(rgba(121, 239, 171, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(121, 239, 171, 0.04) 1px, transparent 1px),
+    rgba(3, 16, 13, 0.5);
+  background-size: 34px 34px;
+  border: 1px solid rgba(121, 239, 171, 0.13);
+}
+
+.arch-item,
+.stat-item {
+  background: rgba(7, 26, 22, 0.72);
+  border-color: rgba(121, 239, 171, 0.14);
+  color: rgba(232, 255, 243, 0.9);
+}
+
+.arch-arrow {
+  color: rgba(37, 214, 210, 0.88);
+  text-shadow: 0 0 14px rgba(37, 214, 210, 0.32);
+}
+
+.economic-cost-panel {
+  grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr);
+}
+
+.economic-cost-item:hover {
+  border-color: rgba(121, 239, 171, 0.32);
+  background: rgba(15, 54, 42, 0.82);
+}
+
+.economic-cost-chart {
+  min-height: 360px;
+}
+
+@media (max-width: 1200px) {
+  .overview-section,
+  .cooling-section,
+  .green-section,
+  .power-section,
+  .economic-section,
+  .economic-cost-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-section .metrics-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .overview-hero-head {
+    grid-template-columns: 1fr;
+  }
+
+  .report-cover-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 992px) {
+  .param-cards,
+  .overview-section .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .detail-page::before {
+    left: 0;
+  }
+
+  .param-cards,
+  .overview-section .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-section-head,
+  .info-section-head,
+  .report-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .report-content,
+  .report-title-section {
+    padding: 18px;
+  }
+}
+</style>

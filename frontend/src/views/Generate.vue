@@ -576,13 +576,13 @@
         </div>
       </div>
 
-      <div v-if="currentNodeIndex >= 7 || anyNodeCompleted(7)" class="stage-panel" :class="{ active: currentNodeIndex === 7 }">
+      <div v-if="currentNodeIndex >= 7 || anyNodeCompleted(7)" class="stage-panel stage-panel--arbitration" :class="{ active: currentNodeIndex === 7 }">
         <div class="stage-header">
           <h3><el-icon class="stage-icon"><Document /></el-icon> {{ workflowNodes[7].name }}</h3>
           <el-tag :type="getNodeTagType(7)">{{ getNodeStatus(7) }}</el-tag>
         </div>
         <div v-if="arbitratorResult" class="arbitrator-panel">
-          <el-card class="arbitrator-card">
+          <el-card class="arbitrator-card arbitrator-card--highlight">
             <div class="arbitrator-header">
               <span class="arbitrator-title">仲裁决策结果</span>
               <span class="confidence-badge">置信度: {{ formatPercent(arbitratorResult.confidence, 0) }}</span>
@@ -633,16 +633,16 @@
         </div>
       </div>
 
-      <div v-if="currentNodeIndex >= 8 || anyNodeCompleted(8)" class="stage-panel" :class="{ active: currentNodeIndex === 8 }">
+      <div v-if="currentNodeIndex >= 8 || anyNodeCompleted(8)" class="stage-panel stage-panel--report" :class="{ active: currentNodeIndex === 8 }">
         <div class="stage-header">
           <h3><el-icon class="stage-icon"><Files /></el-icon> {{ workflowNodes[8].name }}</h3>
           <el-tag :type="getNodeTagType(8)">{{ getNodeStatus(8) }}</el-tag>
         </div>
         <div v-if="finalReport" class="report-panel">
-          <el-alert
+          <el-alert class="report-success-alert"
             title="报告生成完成"
             type="success"
-            description="方案报告已生成，包含完整的可行性分析和实施建议"
+            description="方案报告已整理完成，包含可行性分析、关键指标与实施建议"
             :closable="false"
             show-icon
           />
@@ -671,15 +671,15 @@
         </div>
       </div>
 
-      <div v-if="currentNodeIndex >= 9 || isCompleted" class="stage-panel" :class="{ active: currentNodeIndex === 9 }">
+      <div v-if="currentNodeIndex >= 9 || isCompleted" class="stage-panel stage-panel--output" :class="{ active: currentNodeIndex === 9 }">
         <div class="stage-header">
           <h3><el-icon class="stage-icon"><Download /></el-icon> {{ workflowNodes[9].name }}</h3>
           <el-tag type="success">已完成</el-tag>
         </div>
-        <el-alert
+        <el-alert class="output-success-alert"
           title="方案生成成功！"
           type="success"
-          description="点击下方按钮查看完整方案详情"
+          description="可继续查看完整方案详情与各阶段输出结果"
           :closable="false"
           show-icon
         />
@@ -1106,9 +1106,15 @@ const formatPercentAuto = (v, digits = 1) => {
 const sanitizeProcurementMethodLabel = (value) => {
   const label = String(value || '').trim()
   if (!label) return '--'
-  if (label.includes('缁跨數浜ゆ槗') && label.includes('缁胯瘉琛ヨ冻')) return '绿电交易+绿证补足'
-  if (label.includes('缁跨數浜ゆ槗')) return '绿电交易'
-  if (label.includes('缁胯瘉琛ヨ冻')) return '绿证补足'
+  const aliases = {
+    greenTrade: ['绿电交易', '缁跨數浜ゆ槗', '缂佽法鏁告禍銈嗘'],
+    greenCert: ['绿证补足', '缁胯瘉琛ヨ冻', '缂佽儻鐦夌悰銉ㄥ喕']
+  }
+  const hasGreenTrade = aliases.greenTrade.some(item => label.includes(item))
+  const hasGreenCert = aliases.greenCert.some(item => label.includes(item))
+  if (hasGreenTrade && hasGreenCert) return '绿电交易+绿证补足'
+  if (hasGreenTrade) return '绿电交易'
+  if (hasGreenCert) return '绿证补足'
   return label
 }
 
@@ -1582,7 +1588,7 @@ const costStructureSegments = computed(() => {
       key: 'power_supply',
       name: '供电系统成本',
       amount: toNumber(breakdown.power_supply_system_lakh, 0),
-      color: '#16b8c4',
+      color: '#2fbfd0',
       includedInTotal: true,
       shortDescription: '35kV 双路接入与高可靠供配电架构',
       summary: '当前总投资口径中的供电系统建设成本，反映电压等级、冗余与配电架构带来的 CAPEX。',
@@ -1598,7 +1604,7 @@ const costStructureSegments = computed(() => {
       key: 'green_power',
       name: '绿电系统成本',
       amount: toNumber(breakdown.green_power_system_lakh, 0),
-      color: '#18b26b',
+      color: '#23c57a',
       includedInTotal: true,
       shortDescription: '风光储协同配置的绿电建设成本',
       summary: '当前总投资口径中的绿电系统建设成本，点击后可查看风电、光伏和储能的真实拆分。',
@@ -1620,7 +1626,7 @@ const costStructureSegments = computed(() => {
       key: 'cooling',
       name: '制冷系统成本',
       amount: coolingCapex,
-      color: '#d99a27',
+      color: '#f0b13f',
       includedInTotal: true,
       shortDescription: '制冷方案经济指标中的建设投入',
       summary: '制冷系统投资现已并入总投资口径，用于与供电、绿电系统共同构成完整 CAPEX 视图。',
@@ -1741,7 +1747,7 @@ const normalizeRequirementData = (raw = {}) => {
   const requirement = normalizeRequirementFields(raw.requirement && typeof raw.requirement === 'object' ? raw.requirement : raw)
   return {
     raw: requirement,
-    summary: `${requirement.location || '--'}需求参数已结构化解析`,
+    summary: `${requirement.location || '--'}项目需求已完成结构化解析，可进入方案生成阶段`,
     location: requirement.location || '--',
     load: toNumber(requirement.planned_load_kw, 0),
     greenRatio: toNumber(requirement.green_power_ratio, 0) * 100
@@ -1751,7 +1757,7 @@ const normalizeRequirementData = (raw = {}) => {
 const applyRequirementData = (data, { silent = false } = {}) => {
   nodeResults.requirementParser = normalizeRequirementData(data)
   if (!silent) {
-    addLog(`需求解析完成: ${nodeResults.requirementParser.location}, 负荷${nodeResults.requirementParser.load}kW`, 'success')
+    addLog(`需求解析完成：${nodeResults.requirementParser.location}，总负荷 ${nodeResults.requirementParser.load} kW`, 'success')
   }
 }
 
@@ -1773,11 +1779,11 @@ const applyDraftPlanData = (data, { silent = false } = {}) => {
   if (!silent) {
     const optimization = normalized.green_power_result?.optimization || {}
     if (normalized.green_power_result?.status === 'error') {
-      addLog(`绿电系统计算失败: ${normalized.green_power_result?.error_message || '未返回可用结果'}`, 'warning')
+      addLog(`绿电方案生成失败：${normalized.green_power_result?.error_message || '未返回可用结果'}`, 'warning')
       return
     }
     addLog(
-      `初稿生成完成: 光伏${formatNumber(optimization.pv_capacity_mw, 2)}MW, 风电${formatNumber(optimization.wind_capacity_mw, 2)}MW, 储能${formatNumber(optimization.storage_capacity_mwh, 2)}MWh`,
+      `初稿方案已生成：光伏 ${formatNumber(optimization.pv_capacity_mw, 2)} MW，风电 ${formatNumber(optimization.wind_capacity_mw, 2)} MW，储能 ${formatNumber(optimization.storage_capacity_mwh, 2)} MWh`,
       'success'
     )
   }
@@ -1828,7 +1834,7 @@ const applyCostData = (data, { silent = false } = {}) => {
   }
 
   if (!silent) {
-    addLog(`成本计算完成: 总投资${formatNumber(totalCost, 0)}万元`, nodeResults.costCalculation.isOverBudget ? 'warning' : 'success')
+    addLog(`成本测算完成：项目总投资 ${formatNumber(totalCost, 0)} 万元`, nodeResults.costCalculation.isOverBudget ? 'warning' : 'success')
   }
 
   nextTick(() => {
@@ -1857,7 +1863,7 @@ const applyExpertData = (nodeName, data, { silent = false } = {}) => {
   expert.metrics = data?.metrics || {}
 
   if (!silent) {
-    addLog(`${expert.name}评审完成: 置信度${formatNumber(expert.score, 2)}`, 'success')
+    addLog(`${expert.name}评审完成：置信度 ${formatNumber(expert.score, 2)}`, 'success')
   }
 }
 
@@ -1914,7 +1920,7 @@ const applyDebateData = (data, { silent = false } = {}) => {
   }
 
   if (!silent) {
-    addLog(`辩论阶段更新: 第${debateResults.value.currentRound || 1}轮`, 'success')
+    addLog(`专家辩论进度更新：第 ${debateResults.value.currentRound || 1} 轮`, 'success')
   }
 }
 
@@ -1960,14 +1966,14 @@ const applyArbitratorData = (data, { silent = false } = {}) => {
   }
 
   if (!silent) {
-    addLog(`仲裁决策完成: 综合评分${formatPercent(finalSolution.overallScore, 0)}`, 'success')
+    addLog(`仲裁决策完成：综合评分 ${formatPercent(finalSolution.overallScore, 0)}`, 'success')
   }
 }
 
 const applyFinalReportData = (data, { silent = false } = {}) => {
   const path = data?.path || finalReport.value?.path || '-'
   finalReport.value = {
-    summary: arbitratorResult.summary || finalReport.value?.summary || '报告已生成，详情请进入方案详情页查看。',
+    summary: arbitratorResult.summary || finalReport.value?.summary || '方案报告已生成，可前往方案详情页查看完整内容。',
     path,
     wordCount: typeof data?.word_count === 'number'
       ? data.word_count
@@ -1976,7 +1982,7 @@ const applyFinalReportData = (data, { silent = false } = {}) => {
   }
 
   if (!silent) {
-    addLog(`最终报告生成完成: ${path}`, 'success')
+    addLog(`最终报告已生成：${path}`, 'success')
   }
 }
 
@@ -1989,7 +1995,7 @@ const applyOutputData = (data, { silent = false } = {}) => {
     }
   }
   if (!silent) {
-    addLog('输出节点完成，方案生成成功！', 'success')
+    addLog('结果输出完成，方案已成功生成', 'success')
   }
 }
 
@@ -2033,25 +2039,32 @@ const initCostChart = () => {
         selectedOffset: 6,
         itemStyle: {
           borderRadius: 10,
-          borderColor: '#f4fbf7',
-          borderWidth: 4
+          borderColor: 'rgba(8, 21, 18, 0.92)',
+          borderWidth: 4,
+          shadowBlur: 18,
+          shadowColor: 'rgba(6, 20, 15, 0.28)'
         },
         label: {
-          color: '#17201c',
+          color: 'rgba(230, 244, 235, 0.88)',
           formatter: ({ name, value }) => `${name}\n${value} 万元`,
           fontSize: 12,
-          lineHeight: 18
+          lineHeight: 18,
+          fontWeight: 600
         },
         labelLine: {
           length: 14,
           length2: 10,
           lineStyle: {
-            color: 'rgba(80, 97, 90, 0.36)'
+            color: 'rgba(167, 216, 190, 0.34)'
           }
         },
         emphasis: {
           scale: true,
-          scaleSize: 5
+          scaleSize: 5,
+          itemStyle: {
+            shadowBlur: 24,
+            shadowColor: 'rgba(56, 192, 130, 0.22)'
+          }
         },
         data: costStructureSegments.value.map(segment => ({
           value: segment.amount,
@@ -2070,9 +2083,9 @@ const initCostChart = () => {
             type: 'text',
             style: {
               text: '成本项视图',
-              fill: '#50615a',
+              fill: 'rgba(182, 219, 196, 0.72)',
               fontSize: 12,
-              fontWeight: 500,
+              fontWeight: 600,
               textAlign: 'center'
             },
             left: 'center'
@@ -2082,8 +2095,8 @@ const initCostChart = () => {
             top: 20,
             style: {
               text: formatWithUnit(totalInvestmentWithCooling.value, '万元', 0),
-              fill: '#17201c',
-              fontSize: 22,
+              fill: 'rgba(244, 251, 247, 0.98)',
+              fontSize: 24,
               fontWeight: 700,
               textAlign: 'center'
             },
@@ -2094,8 +2107,9 @@ const initCostChart = () => {
             top: 50,
             style: {
               text: '当前总投资',
-              fill: '#7a8d85',
+              fill: 'rgba(201, 228, 212, 0.82)',
               fontSize: 12,
+              fontWeight: 500,
               textAlign: 'center'
             },
             left: 'center'
@@ -2194,7 +2208,7 @@ const hydrateFromSolutionData = async (solutionData) => {
     const content = data?.content || ''
     if (content || finalReport.value) {
       finalReport.value = {
-        summary: finalReport.value?.summary || arbitratorResult.summary || '报告已生成',
+        summary: finalReport.value?.summary || arbitratorResult.summary || '方案报告已生成，可继续查看完整内容',
         path: finalReport.value?.path || '-',
         wordCount: content.length,
         content
@@ -2213,7 +2227,7 @@ const handleWorkflowCompleted = async (payload) => {
     applyArbitratorData(payload.solution, { silent: true })
   }
   markAllNodesCompleted()
-  addLog('✅ 工作流执行完成', 'success')
+  addLog('工作流已执行完成，正在回填最终方案详情', 'success')
   stopStatusPolling()
   closeStream()
   try {
@@ -2233,8 +2247,8 @@ const handleWorkflowFailed = (errorPayload) => {
   isCompleted.value = false
   stopStatusPolling()
   closeStream()
-  addLog(`工作流执行失败: ${errorPayload?.error || '未知错误'}`, 'error')
-  ElMessage.error(errorPayload?.error || '方案生成失败')
+  addLog(`工作流执行失败：${errorPayload?.error || '未知错误'}`, 'error')
+  ElMessage.error(errorPayload?.error || '方案生成失败，请稍后重试')
 }
 
 const handleStreamMessage = async (message) => {
@@ -2258,7 +2272,7 @@ const handleStreamMessage = async (message) => {
   const index = nodeIndexMap[node]
   currentNodeIndex.value = index
   setCompletedNode(index)
-  addLog(`收到 ${workflowNodes[index].name} 节点输出`, 'info')
+  addLog(`已收到“${workflowNodes[index].name}”节点输出`, 'info')
   processWorkflowNode(node, data)
 }
 
@@ -2273,7 +2287,7 @@ const connectStream = () => {
   closeStream()
   streamSource = workflowApi.connectStream(workflowId.value)
   streamSource.onopen = () => {
-    addLog('已连接后端实时流', 'success')
+    addLog('已建立实时连接，正在同步方案生成进度', 'success')
   }
   streamSource.onmessage = async (event) => {
     try {
@@ -2281,12 +2295,12 @@ const connectStream = () => {
       await handleStreamMessage(message)
     } catch (error) {
       console.error('解析 SSE 消息失败:', error)
-      addLog('收到无法解析的流式消息', 'warning')
+      addLog('收到无法解析的实时消息，已自动忽略', 'warning')
     }
   }
   streamSource.onerror = () => {
     if (!isCompleted.value && !isFailed.value) {
-      addLog('实时流连接异常，继续通过状态接口兜底跟踪', 'warning')
+      addLog('实时连接出现波动，已自动切换为状态轮询跟踪', 'warning')
     }
   }
 }
@@ -2321,17 +2335,17 @@ const initializeWorkflow = async () => {
   workflowId.value = localStorage.getItem('currentWorkflowId') || ''
 
   if (!workflowId.value) {
-    ElMessage.warning('未找到进行中的工作流，请先在参数配置页启动方案生成')
+    ElMessage.warning('未找到进行中的方案生成任务，请先在参数配置页启动')
     router.push('/config')
     return
   }
 
-  addLog(`已读取工作流ID: ${workflowId.value}`, 'info')
+  addLog(`已读取工作流 ID：${workflowId.value}`, 'info')
 
   try {
     const { data } = await workflowApi.getStatus(workflowId.value)
     workflowStatus.value = data?.status || 'unknown'
-    addLog(`当前工作流状态: ${workflowStatus.value}`, 'info')
+    addLog(`当前工作流状态：${workflowStatus.value}`, 'info')
 
     if (workflowStatus.value === 'completed') {
       await handleWorkflowCompleted()
@@ -2344,7 +2358,7 @@ const initializeWorkflow = async () => {
     }
   } catch (error) {
     console.warn('初始化获取工作流状态失败:', error)
-    addLog('获取工作流状态失败，直接尝试连接实时流', 'warning')
+    addLog('获取工作流状态失败，正在尝试直接接入实时进度流', 'warning')
   }
 
   connectStream()
@@ -2379,7 +2393,7 @@ const regenerate = () => {
   router.push('/config')
 }
 
-const viewError = () => { ElMessage.error('请查看下方实时日志中的错误信息') }
+const viewError = () => { ElMessage.error('请查看下方实时日志中的具体报错信息') }
 
 const expertColors = {
   'Economic Analysis Expert-Zhang': { color: '#00b894', bg: '#ecfdf5', class: 'expert-economic' },
@@ -2425,7 +2439,7 @@ const getExpertRole = (speaker = '') => {
 const goToDetail = () => {
   const solutionId = localStorage.getItem('currentSolutionId') || workflowId.value
   if (!solutionId) {
-    ElMessage.error('未找到可用方案ID，请稍后重试')
+    ElMessage.error('未找到可用的方案 ID，请稍后重试')
     return
   }
   router.push(`/detail/${solutionId}`)
@@ -4404,6 +4418,345 @@ onUnmounted(() => {
 
 .preview-value.highlight {
   color: var(--primary-dark);
+}
+
+.draft-process-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(121, 239, 171, 0.18);
+  box-shadow: 0 14px 28px rgba(2, 12, 8, 0.16);
+}
+
+.draft-process-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.32;
+  background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.045) 48%, transparent 72%);
+  transform: translateX(-100%);
+  animation: cockpitSweep 12s ease-in-out infinite;
+}
+
+.draft-process-card.tone-green {
+  border-color: rgba(39, 214, 132, 0.34);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(70, 236, 154, 0.18), transparent 36%),
+    linear-gradient(180deg, rgba(13, 43, 31, 0.98), rgba(10, 26, 20, 0.98));
+  box-shadow:
+    0 16px 32px rgba(4, 24, 15, 0.2),
+    0 0 0 1px rgba(39, 214, 132, 0.08);
+}
+
+.draft-process-card.tone-cooling {
+  border-color: rgba(74, 221, 226, 0.34);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(78, 228, 234, 0.18), transparent 36%),
+    linear-gradient(180deg, rgba(9, 38, 40, 0.98), rgba(8, 24, 25, 0.98));
+  box-shadow:
+    0 16px 32px rgba(3, 20, 23, 0.2),
+    0 0 0 1px rgba(74, 221, 226, 0.08);
+}
+
+.draft-process-card.tone-power {
+  border-color: rgba(246, 188, 92, 0.34);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(247, 198, 109, 0.18), transparent 36%),
+    linear-gradient(180deg, rgba(46, 34, 18, 0.98), rgba(15, 24, 20, 0.98));
+  box-shadow:
+    0 16px 32px rgba(24, 18, 7, 0.18),
+    0 0 0 1px rgba(246, 188, 92, 0.08);
+}
+
+.draft-process-card.tone-green::before,
+.draft-process-card.tone-cooling::before,
+.draft-process-card.tone-power::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 2px;
+  border-radius: 999px;
+  opacity: 0.92;
+}
+
+.draft-process-card.tone-green::before {
+  background: linear-gradient(90deg, rgba(124, 246, 181, 0.96), rgba(62, 207, 124, 0.18));
+  box-shadow: 0 0 20px rgba(82, 228, 150, 0.28);
+}
+
+.draft-process-card.tone-cooling::before {
+  background: linear-gradient(90deg, rgba(130, 241, 244, 0.96), rgba(74, 221, 226, 0.18));
+  box-shadow: 0 0 20px rgba(92, 227, 231, 0.26);
+}
+
+.draft-process-card.tone-power::before {
+  background: linear-gradient(90deg, rgba(252, 214, 132, 0.96), rgba(246, 188, 92, 0.18));
+  box-shadow: 0 0 20px rgba(246, 196, 101, 0.22);
+}
+
+.draft-process-card.tone-green .draft-card-tool,
+.draft-process-card.tone-green .draft-card-order,
+.draft-process-card.tone-green .draft-card-icon,
+.draft-process-card.tone-green .draft-step-index {
+  color: rgba(124, 246, 181, 0.98);
+}
+
+.draft-process-card.tone-cooling .draft-card-tool,
+.draft-process-card.tone-cooling .draft-card-order,
+.draft-process-card.tone-cooling .draft-card-icon,
+.draft-process-card.tone-cooling .draft-step-index {
+  color: rgba(113, 238, 242, 0.98);
+}
+
+.draft-process-card.tone-power .draft-card-tool,
+.draft-process-card.tone-power .draft-card-order,
+.draft-process-card.tone-power .draft-card-icon,
+.draft-process-card.tone-power .draft-step-index {
+  color: rgba(250, 206, 119, 0.98);
+}
+
+.draft-process-card .draft-card-title,
+.draft-process-card .draft-result-value,
+.draft-process-card .draft-fact-value,
+.draft-process-card .draft-summary-value,
+.draft-process-card .draft-weight-value,
+.draft-process-card .draft-ranking-score {
+  color: rgba(246, 252, 248, 0.99);
+}
+
+.draft-process-card .draft-result-item,
+.draft-process-card .draft-fact-item,
+.draft-process-card .draft-summary-item,
+.draft-process-card .draft-weight-item,
+.draft-process-card .draft-ranking-item {
+  box-shadow: inset 0 1px 0 rgba(242, 255, 247, 0.05);
+}
+
+.stage-panel--arbitration,
+.stage-panel--report,
+.stage-panel--output {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(121, 239, 171, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(242, 255, 247, 0.06),
+    0 22px 44px rgba(2, 17, 10, 0.12);
+}
+
+.stage-panel--arbitration {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(121, 239, 171, 0.18), transparent 22%),
+    radial-gradient(circle at 84% 0%, rgba(87, 221, 232, 0.12), transparent 20%),
+    linear-gradient(180deg, rgba(12, 46, 35, 0.9), rgba(8, 28, 23, 0.98));
+}
+
+.stage-panel--report,
+.stage-panel--output {
+  background:
+    radial-gradient(circle at 14% 0%, rgba(121, 239, 171, 0.16), transparent 22%),
+    radial-gradient(circle at 88% 0%, rgba(254, 210, 102, 0.12), transparent 18%),
+    linear-gradient(180deg, rgba(12, 44, 34, 0.9), rgba(8, 28, 23, 0.98));
+}
+
+.stage-panel--arbitration .stage-header,
+.stage-panel--report .stage-header,
+.stage-panel--output .stage-header {
+  position: relative;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(121, 239, 171, 0.12);
+}
+
+.arbitrator-card--highlight {
+  position: relative;
+  overflow: hidden;
+  padding: 20px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(121, 239, 171, 0.16), transparent 30%),
+    linear-gradient(180deg, rgba(8, 36, 28, 0.8), rgba(5, 22, 18, 0.94)) !important;
+  border: 1px solid rgba(121, 239, 171, 0.18) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(235, 255, 242, 0.08),
+    0 18px 36px rgba(2, 20, 12, 0.18) !important;
+}
+
+.arbitrator-card--highlight::before {
+  content: '';
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(130, 246, 184, 0.96), rgba(254, 210, 102, 0.24));
+  box-shadow: 0 0 24px rgba(130, 246, 184, 0.24);
+}
+
+.arbitrator-card--highlight .consensus-indicator {
+  background: linear-gradient(90deg, rgba(18, 92, 62, 0.74), rgba(14, 63, 49, 0.56));
+  border: 1px solid rgba(121, 239, 171, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(236, 255, 243, 0.06),
+    0 10px 20px rgba(8, 42, 28, 0.14);
+}
+
+.arbitrator-card--highlight .score-card,
+.arbitrator-card--highlight .score-card.highlight {
+  background: rgba(9, 40, 31, 0.7);
+}
+
+.arbitrator-card--highlight .score-value,
+.arbitrator-card--highlight .consensus-indicator .value.high {
+  text-shadow: 0 0 18px rgba(121, 239, 171, 0.18);
+}
+
+.report-success-alert,
+.output-success-alert {
+  margin-bottom: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(121, 239, 171, 0.14);
+  box-shadow: 0 10px 24px rgba(19, 83, 52, 0.08);
+}
+
+.report-success-alert :deep(.el-alert__content),
+.output-success-alert :deep(.el-alert__content) {
+  color: rgba(26, 64, 45, 0.96);
+}
+
+.stage-panel--report .report-preview,
+.stage-panel--output .solution-preview {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 18px 16px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(121, 239, 171, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(9, 39, 31, 0.74), rgba(5, 22, 18, 0.92)) !important;
+  border: 1px solid rgba(121, 239, 171, 0.14) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(235, 255, 242, 0.08),
+    0 16px 32px rgba(2, 16, 10, 0.16) !important;
+}
+
+.stage-panel--report .report-preview::before,
+.stage-panel--output .solution-preview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(121, 239, 171, 0.08), transparent 24%),
+    linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.03) 48%, transparent 78%);
+}
+
+.stage-panel--output .preview-item {
+  position: relative;
+  min-height: 104px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(242, 255, 247, 0.05),
+    0 10px 20px rgba(4, 18, 11, 0.08);
+}
+
+.stage-panel--output .preview-item::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.02), rgba(121, 239, 171, 0.28), rgba(255, 255, 255, 0.02));
+}
+
+.stage-panel--output .preview-item:nth-child(2),
+.stage-panel--output .preview-item:nth-child(4),
+.stage-panel--output .preview-item:nth-child(5) {
+  border-color: rgba(121, 239, 171, 0.2);
+}
+
+.stage-panel--output .preview-item:nth-child(2) {
+  background:
+    radial-gradient(circle at top right, rgba(138, 247, 190, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(20, 82, 59, 0.92), rgba(11, 44, 33, 0.82));
+}
+
+.stage-panel--output .preview-item:nth-child(4) {
+  background:
+    radial-gradient(circle at top right, rgba(138, 247, 190, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(18, 72, 52, 0.9), rgba(10, 40, 30, 0.82));
+}
+
+.stage-panel--output .preview-item:nth-child(5) {
+  background:
+    radial-gradient(circle at top right, rgba(252, 214, 132, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(66, 47, 20, 0.88), rgba(22, 30, 20, 0.82));
+}
+
+.stage-panel--output .preview-value.highlight,
+.stage-panel--output .preview-item:nth-child(2) .preview-value,
+.stage-panel--output .preview-item:nth-child(4) .preview-value,
+.stage-panel--output .preview-item:nth-child(5) .preview-value {
+  color: rgba(140, 248, 191, 0.98);
+  text-shadow: 0 0 16px rgba(121, 239, 171, 0.16);
+}
+
+.draft-card-summary,
+.draft-step-desc,
+.draft-evidence-list li,
+.expert-summary,
+.expert-recommendations li,
+.expert-concerns li,
+.message-content,
+.suggestion-item,
+.trade-offs li,
+.report-content,
+.decision-summary p {
+  color: rgba(223, 242, 232, 0.9) !important;
+}
+
+.score-label,
+.preview-label,
+.participant-name,
+.speaker-role,
+.debate-summary-title p,
+.debate-summary-context,
+.debate-round-tab-meta,
+.round-meta,
+.debate-metric-label,
+.metric-key,
+.report-metric .metric-label,
+.draft-card-order,
+.draft-card-tool {
+  color: rgba(214, 238, 223, 0.86) !important;
+}
+
+@keyframes cockpitSweep {
+  0%,
+  18% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+  34%,
+  62% {
+    opacity: 0.72;
+  }
+  78%,
+  100% {
+    transform: translateX(110%);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draft-process-card::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 .logs-section {

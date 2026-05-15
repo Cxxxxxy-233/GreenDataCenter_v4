@@ -1,11 +1,8 @@
 <template>
   <div class="home-page">
-    <!-- 全新Hero区域 - 工作流可视化 -->
     <div class="hero-section">
       <div class="hero-bg">
-        <!-- 粒子背景 -->
         <canvas ref="particleCanvas" class="particle-canvas"></canvas>
-        <!-- 流动线条背景 -->
         <svg class="flow-lines" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid slice">
           <defs>
             <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -21,17 +18,11 @@
       </div>
 
       <div class="hero-content">
-        <!-- 标语区 -->
         <div class="hero-headline">
           <h1 class="main-title">智能规划，绿电未来</h1>
-          <p class="sub-title">基于多智能体协同的数据中心绿电一体化方案智能规划系统</p>
+          <p class="sub-title">面向数据中心建设的多智能体能源规划平台，协同生成绿电、制冷与供配电方案。</p>
         </div>
 
-
-
-
-
-        <!-- 行动引导区 -->
         <div class="hero-actions">
           <el-button class="action-btn primary-action" type="primary" size="large" @click="createProject">
             <el-icon><Plus /></el-icon>
@@ -41,6 +32,12 @@
             <el-icon><Document /></el-icon>
             查看示例方案
           </el-button>
+        </div>
+
+        <div class="hero-signal-strip" aria-label="system capabilities">
+          <span><i></i>GREEN POWER</span>
+          <span><i></i>COOLING LOOP</span>
+          <span><i></i>POWER RELIABILITY</span>
         </div>
       </div>
 
@@ -54,10 +51,11 @@
     </div>
 
     <section class="dc-overview-section">
+      <div class="section-orbit-line"></div>
       <div class="section-header dc-overview-header">
         <div class="section-title">
           <h2>数据中心 3D 构成总览</h2>
-          <span class="section-desc">点击立体模型中的关键系统，快速理解建设数据中心时需要统筹的成本模块与策略维度。</span>
+          <span class="section-desc">点击立体模型中的关键系统，快速理解数据中心建设中的能源、制冷、供配电与成本策略。</span>
         </div>
       </div>
 
@@ -185,19 +183,18 @@
       </div>
     </section>
 
-    <!-- 统计指标区 -->
     <div class="stats-section">
       <div class="stats-header">
         <h2 class="stats-title">平台概览</h2>
-        <span class="stats-subtitle">实时数据统计</span>
+        <span class="stats-subtitle">实时方案数据统计</span>
       </div>
-      <el-row :gutter="16">
-        <el-col :span="6" v-for="(stat, index) in statsData" :key="index">
+      <el-row :gutter="0" class="telemetry-grid">
+        <el-col :span="6" class="telemetry-col" v-for="(stat, index) in statsData" :key="index">
           <div class="stat-card" :style="{ animationDelay: `${index * 120}ms` }">
             <div class="stat-row">
               <div class="stat-icon-wrap" :style="{ background: stat.bgColor, color: stat.color }">
-                  <el-icon><component :is="getIconComponent(stat.icon)" /></el-icon>
-                </div>
+                <el-icon><component :is="getIconComponent(stat.icon)" /></el-icon>
+              </div>
               <div class="stat-content">
                 <div class="stat-value-wrap">
                   <span class="stat-value">{{ stat.value }}</span>
@@ -225,141 +222,108 @@
       </el-row>
     </div>
 
-    <!-- 最近项目区 -->
     <div class="recent-projects animate-fade-in">
       <div class="section-header">
         <div class="section-title">
-          <h2>最近项目</h2>
-          <span class="section-count">{{ recentProjects.length }} 个项目</span>
+          <h2>项目态势舱</h2>
+          <span class="section-count">{{ recentProjects.length }} 个项目在线</span>
         </div>
         <el-button type="primary" link @click="goToHistory">
           查看全部
           <el-icon><Right /></el-icon>
         </el-button>
       </div>
-      <el-table
-        :data="recentProjects"
-        class="project-table"
-        row-class-name="table-row"
-        @row-click="handleRowClick"
-      >
-        <el-table-column prop="name" label="项目名称" min-width="200">
-          <template #default="{ row }">
-            <div class="project-name-cell">
-              <div class="project-icon" :style="{ background: getProjectColor(row.status) }">
-                <el-icon><Document /></el-icon>
-              </div>
-              <span class="project-name">{{ row.name }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="location" label="项目位置" width="120">
-          <template #default="{ row }">
-            <span class="location-text">{{ row.location }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createTime" label="创建时间" width="180" />
-        <el-table-column prop="status" label="状态" width="100">
-          <template #default="scope">
-            <el-tag :type="getStatusType(scope.row.status)" size="small" round>
-              {{ scope.row.status }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="coreMetrics" label="核心指标" min-width="240">
-          <template #default="scope">
-            <div class="metrics-cell">
-              <span class="metric-item">
-                <span class="metric-label">PUE</span>
-                <span class="metric-value">{{ scope.row.coreMetrics.pue }}</span>
-              </span>
-              <el-divider direction="vertical" />
-              <span class="metric-item">
-                <span class="metric-label">绿电率</span>
-                <span class="metric-value primary">{{ scope.row.coreMetrics.greenRate }}%</span>
-              </span>
-              <el-divider direction="vertical" />
-              <span class="metric-item">
-                <span class="metric-label">LCOE</span>
-                <span class="metric-value">{{ scope.row.coreMetrics.lcoe }}元/kWh</span>
-              </span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="actions" label="操作" width="200" fixed="right">
-          <template #default="scope">
-            <div class="actions-cell">
-              <el-button
-                v-if="scope.row.status !== '已完成'"
-                type="primary"
-                link
-                size="small"
-                @click.stop="continueEdit(scope.row)"
-              >
-                继续编辑
-              </el-button>
-              <el-button
-                type="primary"
-                link
-                size="small"
-                @click.stop="viewDetail(scope.row)"
-              >
-                查看详情
-              </el-button>
-              <el-popconfirm
-                title="确定要删除该项目吗？"
-                @confirm="deleteProject(scope.row)"
-              >
-                <template #reference>
-                  <el-button type="danger" link size="small" @click.stop>
-                    删除
-                  </el-button>
-                </template>
-              </el-popconfirm>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="project-command-deck">
+        <button
+          v-for="project in recentProjects.slice(0, 3)"
+          :key="project.id"
+          type="button"
+          class="project-vault-card"
+          @click="viewDetail(project)"
+        >
+          <span class="project-vault-beam"></span>
+          <span class="project-vault-head">
+            <span class="project-icon" :style="{ background: getProjectColor(project.status) }">
+              <el-icon><Document /></el-icon>
+            </span>
+            <span class="project-vault-copy">
+              <span class="project-name">{{ project.name }}</span>
+              <span class="location-text">{{ project.location }} / {{ project.createTime }}</span>
+            </span>
+            <span class="project-status-pill">{{ project.status }}</span>
+          </span>
+          <span class="project-vault-metrics">
+            <span class="metric-item">
+              <span class="metric-label">PUE</span>
+              <span class="metric-value">{{ project.coreMetrics.pue }}</span>
+            </span>
+            <span class="metric-item">
+              <span class="metric-label">Green</span>
+              <span class="metric-value primary">{{ project.coreMetrics.greenRate }}%</span>
+            </span>
+            <span class="metric-item">
+              <span class="metric-label">LCOE</span>
+              <span class="metric-value">{{ project.coreMetrics.lcoe }} yuan/kWh</span>
+            </span>
+          </span>
+          <span class="project-vault-actions">
+            <span @click.stop="continueEdit(project)">Edit</span>
+            <span @click.stop="viewDetail(project)">View</span>
+          </span>
+        </button>
+
+        <div v-if="!recentProjects.length" class="project-empty-console">
+          <span class="project-empty-dot"></span>
+          <div>
+            <strong>暂无最近项目</strong>
+            <p>载入示例项目后，可在这里查看项目状态、关键能效指标和方案入口。</p>
+          </div>
+          <el-button type="primary" @click="loadSample">载入示例</el-button>
+        </div>
+      </div>
     </div>
 
-    <!-- 快速入门区 -->
     <div class="quick-guide animate-fade-in">
       <div class="section-header">
         <div class="section-title">
-          <h2>快速入门指南</h2>
-          <span class="section-desc">简单三步，快速生成最优方案</span>
+          <h2>能源规划跑道</h2>
+          <span class="section-desc">从项目建模到多智能体推演，再到完整方案报告输出。</span>
         </div>
       </div>
-      <el-row :gutter="24">
-        <el-col :span="8" v-for="(guide, index) in guideSteps" :key="index">
-          <div class="guide-card" :style="{ animationDelay: `${index * 150}ms` }">
-            <div class="guide-number">{{ index + 1 }}</div>
-            <div class="guide-icon-wrapper" :style="{ background: guide.bgColor }">
-              <el-icon class="guide-icon" :style="{ color: guide.color }">
-                <component :is="getIconComponent(guide.icon)" />
-              </el-icon>
-            </div>
+      <div class="planning-runway">
+        <div
+          v-for="(guide, index) in guideSteps"
+          :key="index"
+          class="runway-stage"
+          :style="{ animationDelay: `${index * 150}ms` }"
+        >
+          <div class="runway-stage-index">0{{ index + 1 }}</div>
+          <div class="runway-stage-node" :style="{ '--stage-color': guide.color }">
+            <el-icon class="guide-icon">
+              <component :is="getIconComponent(guide.icon)" />
+            </el-icon>
+          </div>
+          <div class="runway-stage-copy">
             <h3 class="guide-title">{{ guide.title }}</h3>
             <p class="guide-desc">{{ guide.desc }}</p>
-            <div class="guide-arrow" v-if="index < guideSteps.length - 1">
-              <el-icon><Right /></el-icon>
-            </div>
           </div>
-        </el-col>
-      </el-row>
+          <div class="runway-connector" v-if="index < guideSteps.length - 1">
+            <span></span>
+          </div>
+        </div>
+      </div>
       <div class="guide-action">
         <el-button size="large" @click="loadSample">
           <template #icon>
             <el-icon><Document /></el-icon>
           </template>
-          加载示例项目
+          载入示例项目
         </el-button>
-        <span class="guide-hint">一键填充乌兰察布30kW/机柜测试参数</span>
+        <span class="guide-hint">推荐示例：乌兰察布 12MW 绿色算力数据中心</span>
       </div>
     </div>
   </div>
 </template>
-
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -580,7 +544,7 @@ const createModelRenderer = () => {
     const fit = Math.min(state.width / 880, state.height / 560)
     return {
       x: state.width * 0.55 + x * scale * fit,
-      y: state.height * 0.46 + y * scale * fit,
+      y: state.height * 0.41 + y * scale * fit,
       z,
       scale
     }
@@ -811,7 +775,7 @@ const createModelRenderer = () => {
     state.dragY += (state.targetY - state.dragY) * 0.05
 
     ctx.clearRect(0, 0, state.width, state.height)
-    const glow = ctx.createRadialGradient(state.width * 0.54, state.height * 0.42, 20, state.width * 0.54, state.height * 0.42, state.width * 0.52)
+    const glow = ctx.createRadialGradient(state.width * 0.54, state.height * 0.36, 20, state.width * 0.54, state.height * 0.36, state.width * 0.52)
     glow.addColorStop(0, 'rgba(39, 224, 169, 0.18)')
     glow.addColorStop(0.48, 'rgba(24, 184, 196, 0.08)')
     glow.addColorStop(1, 'rgba(8, 21, 18, 0)')
@@ -990,7 +954,7 @@ const statsData = ref([
     icon: 'TrendCharts',
     value: '--',
     unit: '',
-    label: '平均PUE优化',
+    label: '平均 PUE 目标',
     trend: 0,
     progress: 0,
     color: '#F59E0B',
@@ -1000,7 +964,7 @@ const statsData = ref([
     icon: 'Wallet',
     value: '--',
     unit: '',
-    label: '平均绿电消纳',
+    label: '平均绿电占比',
     trend: 0,
     progress: 0,
     color: '#059669',
@@ -1013,22 +977,22 @@ const recentProjects = ref([])
 const guideSteps = ref([
   {
     icon: 'Setting',
-    title: '填写项目参数',
-    desc: '设置数据中心的基础信息、算力负荷、地域环境等参数',
+    title: '配置项目边界',
+    desc: '输入城市、负载、机房等级、绿电目标与预算约束，建立项目基线。',
     color: '#10B981',
     bgColor: 'rgba(16, 185, 129, 0.1)'
   },
   {
     icon: 'Refresh',
-    title: '一键生成方案',
-    desc: '多智能体协同优化，自动生成最优绿电消纳方案',
+    title: '多智能体协同推演',
+    desc: '绿电、制冷、供配电与经济性工具同步计算，形成可复核的初稿方案。',
     color: '#F59E0B',
     bgColor: 'rgba(245, 158, 11, 0.1)'
   },
   {
     icon: 'Document',
-    title: '查看报告并导出',
-    desc: '查看详细方案报告，支持PDF和Markdown格式导出',
+    title: '输出可沟通报告',
+    desc: '汇总核心指标、方案详情和权衡建议，支持 Markdown 与 PDF 导出。',
     color: '#06B6D4',
     bgColor: 'rgba(6, 182, 212, 0.1)'
   }
@@ -1037,30 +1001,30 @@ const guideSteps = ref([
 const dataCenterParts = [
   {
     id: 'it-load',
-    name: 'IT 负载核心',
+    name: 'IT 负载中心',
     icon: 'Monitor',
     color: '#20c997',
-    summary: '承载服务器、存储与网络负载，是数据中心投资测算和容量规划的起点。',
-    costFocus: '机柜、服务器、网络设备与算力密度配置',
-    strategyFocus: '负载规模、机柜密度、分期建设节奏',
-    considerations: ['机柜密度', '服务器负载', '网络架构', '扩容节奏'],
+    summary: '承载服务器、网络与存储资源，是数据中心用电规划的核心需求源。',
+    costFocus: '机架功率密度与设备扩容',
+    strategyFocus: '负载分期、算力密度与能效目标',
+    considerations: ['设计负载', '算力密度', '机房等级', '扩容节奏'],
     strategyPoints: [
-      '先确定总负荷与单机柜功率密度，再反推机柜数量与建筑体量。',
-      'IT 负载规模会联动供电、制冷与绿电系统的整体投资边界。'
+      '将 IT 负载作为绿电、制冷和供配电的统一约束输入。',
+      '通过分期建设减少一次性容量冗余，保持投资与需求匹配。'
     ]
   },
   {
     id: 'power',
-    name: '供电系统',
+    name: '供配电系统',
     icon: 'Connection',
     color: '#16b8c4',
-    summary: '负责外部接入、冗余策略、母线与变配电，是高可用数据中心的骨架系统。',
-    costFocus: '变配电 CAPEX、双路接入、冗余等级与母线方案',
-    strategyFocus: '供电可靠性、等级标准、成本与冗余平衡',
-    considerations: ['接入电压', '冗余架构', '母线方案', 'Tier 要求'],
+    summary: '基于 GB 50174 等标准配置外部接入电压、母线形式、变压器冗余与备用电源。',
+    costFocus: '外线接入、变压器与 UPS CAPEX',
+    strategyFocus: '可靠性等级、N+1 冗余与备电时长',
+    considerations: ['接入电压', '母线形式', '冗余架构', '备用电源'],
     strategyPoints: [
-      '供电系统决定项目可靠性上限，也是预算占比较高的基础设施之一。',
-      '需结合机房等级和供电连续性要求确定 N、2N 或其他冗余逻辑。'
+      '根据机房等级和负载规模推荐双路市电、段式母线和变压器冗余。',
+      '将供电可靠性与绿电波动性联合评估，避免单点故障。'
     ]
   },
   {
@@ -1068,13 +1032,13 @@ const dataCenterParts = [
     name: '制冷系统',
     icon: 'SwitchButton',
     color: '#3aa0ff',
-    summary: '覆盖液冷、风冷、蒸发冷却等制冷工艺，是影响 PUE 和长期运维成本的关键部分。',
-    costFocus: '制冷 CAPEX、运维电费、换热与余热回收系统',
-    strategyFocus: 'PUE 控制、制冷技术路线、全年工况适配',
-    considerations: ['制冷技术', 'COP', 'PUE', '运维能耗'],
+    summary: '根据省份气候、水资源紧缺指数和算力密度，对多种制冷架构进行评分排序。',
+    costFocus: '冷源设备、管网和运行电耗',
+    strategyFocus: 'PUE 改善、WUE 约束与余热回收',
+    considerations: ['年平均温度', 'WUE', 'PUE', '余热回收'],
     strategyPoints: [
-      '制冷技术选择直接影响初始投资、年电费和整体能效表现。',
-      '需要结合地域气候、机柜密度与热管理目标进行技术选型。'
+      '高冷源区域优先自然冷却与间接蒸发冷却，平衡能效与用水。',
+      '对高密机架预留液冷或混合冷却升级路径。'
     ]
   },
   {
@@ -1082,41 +1046,41 @@ const dataCenterParts = [
     name: '绿电系统',
     icon: 'Sunny',
     color: '#72d672',
-    summary: '由风电、光伏和储能构成，承担绿电消纳与碳减排目标，是绿色策略的核心抓手。',
-    costFocus: '风光储 CAPEX、装机容量与储能配置',
-    strategyFocus: '绿电比例、容量配比、消纳效率与碳排控制',
-    considerations: ['风电容量', '光伏容量', '储能时长', '消纳率'],
+    summary: '结合当地风电、光伏资源和用电负荷，推荐直连绿电容量、储能配置与外部绿电采购策略。',
+    costFocus: '风电、光伏、储能和绿证采购',
+    strategyFocus: '绿电直连占比与总绿电达标路径',
+    considerations: ['风光资源', '储能时长', '弃电率', '绿证采购'],
     strategyPoints: [
-      '绿电系统是实现低碳目标的关键投资模块，需要风光储协同设计。',
-      '容量配比既影响消纳率，也影响总投资与回收期表现。'
+      '直连绿电承担可见的本地供给，剩余绿电通过绿电交易或绿证补足。',
+      '储能不追求完全离网，重点用于平滑波动和削峰。'
     ]
   },
   {
     id: 'ops',
-    name: '运维与策略',
+    name: '运维与经济性',
     icon: 'DataAnalysis',
     color: '#f5b041',
-    summary: '覆盖能耗监控、运维策略、调度规则和成本优化，是确保方案长期落地的运营层。',
-    costFocus: '运维支出、监控系统、调度优化与策略执行成本',
-    strategyFocus: '能耗调度、投资回报、运维效率与持续优化',
-    considerations: ['运维成本', '监控系统', '调度策略', 'ROI'],
+    summary: '跟踪 CAPEX、OPEX、碳排放和回收期，帮助用户理解方案权衡。',
+    costFocus: '投资分布、电价敏感性与回收期',
+    strategyFocus: '经济性与可持续指标联合判断',
+    considerations: ['CAPEX', 'OPEX', '碳减排', 'ROI'],
     strategyPoints: [
-      '即使硬件规划合理，缺少运维与调度策略也难以达到预期收益。',
-      '需要持续跟踪能效、成本与碳排指标，形成闭环优化。'
+      '将绿电投资、制冷节能和供电可靠性放在同一决策框架内比较。',
+      '用年化成本、单位电量成本和碳排放同步表达方案价值。'
     ]
   },
   {
     id: 'site',
-    name: '建筑与场站',
+    name: '场址与资源',
     icon: 'Van',
     color: '#9b8cff',
-    summary: '包含建筑面积、场地条件与区域约束，是各系统投资和部署方式的空间载体。',
-    costFocus: '建筑面积、土建约束、场地资源与配套设施',
-    strategyFocus: '区域适配、场地规划、扩建余量和施工条件',
-    considerations: ['建筑面积', '地域环境', '场地资源', '扩建余量'],
+    summary: '综合城市区位、气候、电网条件与可再生能源资源，形成方案输入基础。',
+    costFocus: '土地、外线、水资源与并网条件',
+    strategyFocus: '区域资源禀赋与建设约束匹配',
+    considerations: ['城市区位', '气候条件', '风光资源', '电网接入'],
     strategyPoints: [
-      '场站条件会影响风光资源、制冷工况与整体建设成本。',
-      '需要在土建尺度、未来扩展与区域资源之间提前做整体平衡。'
+      '优先识别富集风光资源和外部接入条件较好的区域。',
+      '将场址约束前置，避免后期因供电、用水或并网条件反复调整方案。'
     ]
   }
 ]
@@ -1140,7 +1104,7 @@ const getStatusType = (status) => {
   const types = {
     '已完成': 'success',
     '生成中': 'warning',
-    '待配置': 'info',
+    '草稿': 'info',
     '失败': 'danger'
   }
   return types[status] || 'info'
@@ -1150,10 +1114,10 @@ const getProjectColor = (status) => {
   const colors = {
     '已完成': 'linear-gradient(135deg, #00B42A 0%, #23C343 100%)',
     '生成中': 'linear-gradient(135deg, #FF7D00 0%, #FF9E40 100%)',
-    '待配置': 'linear-gradient(135deg, #8F959E 0%, #A6ABB8 100%)',
+    '草稿': 'linear-gradient(135deg, #8F959E 0%, #A6ABB8 100%)',
     '失败': 'linear-gradient(135deg, #F53F3F 0%, #F76560 100%)'
   }
-  return colors[status] || colors['待配置']
+  return colors[status] || colors['草稿']
 }
 
 const goToHistory = () => {
@@ -1169,24 +1133,25 @@ const viewDetail = (project) => {
 }
 
 const deleteProject = (project) => {
-  ElMessage.success(`项目"${project.name}"已删除`)
+  ElMessage.success(`??"${project.name}"???`)
 }
 
 const loadSample = () => {
   const sampleData = {
-    location: '乌兰察布',
+    location: '内蒙古乌兰察布',
     planned_load_kw: 12000,
     computing_power_density: 30,
     planned_area: 18000,
     machine_room_grade: 'A+',
-    cooling_technology: '浸没式液冷',
+    cooling_technology: '间接蒸发冷却',
     pue_target: 1.18,
     green_power_ratio: 95,
+    direct_green_power_ratio: 55,
     budget_constraint: 35000,
     sim_hours: 168
   }
   localStorage.setItem('projectConfig', JSON.stringify(sampleData))
-  ElMessage.success('示例参数已加载，正在跳转配置页面...')
+  ElMessage.success('示例参数已载入，即将进入参数配置页')
   setTimeout(() => {
     router.push('/config')
   }, 1000)
@@ -1220,7 +1185,7 @@ const loadRecentProjects = async () => {
     }
     isLoading.value = false
   } catch (error) {
-    console.error('加载最近项目失败:', error)
+    console.error('加载最近项目失败', error)
     isLoading.value = false
   }
 }
@@ -1251,23 +1216,46 @@ onUnmounted(() => {
 
 <style scoped>
 .home-page {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding-bottom: var(--spacing-4xl);
+  gap: 0;
+  padding-bottom: 56px;
+}
+
+.home-page::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 486px;
+  bottom: 0;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 16% 8%, rgba(121, 239, 171, 0.08), transparent 22%),
+    radial-gradient(circle at 84% 12%, rgba(87, 221, 232, 0.06), transparent 24%),
+    linear-gradient(180deg, rgba(8, 28, 23, 0.78) 0%, rgba(8, 28, 23, 0.84) 40%, rgba(7, 24, 21, 0.88) 100%);
+  border: 1px solid rgba(121, 239, 171, 0.08);
+  box-shadow: inset 0 1px 0 rgba(225, 255, 236, 0.04);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .hero-section {
   position: relative;
-  min-height: 360px;
+  z-index: 2;
+  isolation: isolate;
+  min-height: 500px;
   background:
-    radial-gradient(circle at 20% 20%, color-mix(in oklab, var(--primary-light) 16%, transparent), transparent 26%),
-    radial-gradient(circle at 80% 30%, color-mix(in oklab, var(--accent-color) 16%, transparent), transparent 24%),
-    linear-gradient(135deg, var(--bg-stage) 0%, color-mix(in oklab, var(--bg-stage-soft) 88%, var(--primary-dark) 12%) 50%, color-mix(in oklab, var(--bg-stage) 82%, var(--primary-color) 18%) 100%);
-  border-radius: 24px;
+    radial-gradient(circle at 18% 22%, color-mix(in oklab, var(--primary-light) 18%, transparent), transparent 26%),
+    radial-gradient(circle at 84% 28%, color-mix(in oklab, var(--accent-color) 18%, transparent), transparent 24%),
+    radial-gradient(circle at 52% 98%, color-mix(in oklab, var(--primary-color) 16%, transparent), transparent 30%),
+    linear-gradient(135deg, color-mix(in oklab, var(--bg-stage) 92%, oklch(0.06 0.018 160) 8%) 0%, color-mix(in oklab, var(--bg-stage-soft) 84%, var(--primary-dark) 16%) 48%, color-mix(in oklab, var(--bg-stage) 78%, var(--primary-color) 22%) 100%);
+  border-radius: 28px 28px 14px 14px;
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
-  border: 1px solid color-mix(in oklab, var(--primary-color) 18%, transparent);
+  box-shadow: 0 18px 44px rgba(2, 12, 8, 0.2);
+  border: 1px solid color-mix(in oklab, var(--primary-color) 16%, transparent);
+  border-bottom-color: rgba(121, 239, 171, 0.04);
 }
 
 .hero-section::before {
@@ -1275,7 +1263,8 @@ onUnmounted(() => {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.03) 45%, transparent 100%);
+    linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.035) 46%, transparent 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 16%, transparent 86%, rgba(255, 255, 255, 0.018));
   pointer-events: none;
 }
 
@@ -1332,33 +1321,33 @@ onUnmounted(() => {
   position: relative;
   z-index: 2;
   display: flex;
-  min-height: 360px;
+  min-height: 500px;
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  padding: 42px 42px 40px;
+  padding: 56px 48px 52px;
   text-align: left;
-  width: min(52%, 680px);
+  width: min(46%, 620px);
 }
 
 .hero-headline {
   max-width: 640px;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
 }
 
 .main-title {
-  font-size: 40px;
+  font-size: 48px;
   font-weight: 700;
   color: rgba(244, 252, 246, 0.98);
-  margin-bottom: 14px;
-  letter-spacing: -0.03em;
-  line-height: 1.08;
+  margin-bottom: 16px;
+  letter-spacing: -0.035em;
+  line-height: 1.04;
   max-width: 20ch;
   white-space: nowrap;
 }
 
 .sub-title {
-  font-size: 15px;
+  font-size: 16px;
   color: rgba(232, 244, 237, 0.76);
   max-width: 62ch;
   line-height: 1.7;
@@ -1370,6 +1359,7 @@ onUnmounted(() => {
   justify-content: flex-start;
   gap: 16px;
   flex-wrap: wrap;
+  margin-top: 4px;
 }
 
 .action-btn {
@@ -1410,37 +1400,35 @@ onUnmounted(() => {
 .hero-model-stage {
   position: absolute;
   z-index: 1;
-  top: 18px;
-  right: 16px;
-  bottom: 14px;
-  width: min(54%, 720px);
-  min-width: 430px;
-  border-radius: 22px;
+  top: -8px;
+  right: -6px;
+  bottom: 44px;
+  width: min(60%, 860px);
+  min-width: 480px;
+  border-radius: 24px;
   overflow: hidden;
   pointer-events: auto;
   background:
-    radial-gradient(circle at 42% 36%, rgba(89, 245, 183, 0.2), transparent 38%),
-    radial-gradient(circle at 76% 26%, rgba(87, 221, 232, 0.18), transparent 34%),
-    linear-gradient(145deg, rgba(11, 31, 27, 0.28), rgba(4, 14, 13, 0.08));
-  box-shadow:
-    inset 0 0 0 1px rgba(121, 239, 171, 0.08),
-    inset 0 -42px 82px rgba(3, 14, 12, 0.44);
-  mask-image: linear-gradient(90deg, transparent 0%, black 12%, black 100%);
+    radial-gradient(circle at 44% 34%, rgba(89, 245, 183, 0.18), transparent 38%),
+    radial-gradient(circle at 78% 24%, rgba(87, 221, 232, 0.14), transparent 34%),
+    linear-gradient(145deg, rgba(11, 31, 27, 0.16), rgba(4, 14, 13, 0.02));
+  box-shadow: inset 0 -24px 56px rgba(3, 14, 12, 0.22);
+  mask-image: none;
 }
 
 .hero-model-stage::before {
   content: '';
   position: absolute;
-  inset: 10% 4% 8% 8%;
-  border: 1px solid rgba(121, 239, 171, 0.14);
+  inset: 9% 5% 7% 8%;
+  border: 1px solid rgba(121, 239, 171, 0.08);
   border-radius: 28px;
   background:
-    linear-gradient(rgba(116, 232, 190, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(116, 232, 190, 0.08) 1px, transparent 1px);
+    linear-gradient(rgba(116, 232, 190, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(116, 232, 190, 0.05) 1px, transparent 1px);
   background-size: 34px 34px;
-  transform: perspective(700px) rotateX(62deg) rotateZ(-8deg) translateY(68px);
+  transform: perspective(700px) rotateX(62deg) rotateZ(-8deg) translateY(58px);
   transform-origin: center;
-  opacity: 0.72;
+  opacity: 0.54;
 }
 
 .hero-model-stage::after {
@@ -1448,9 +1436,9 @@ onUnmounted(() => {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(8, 21, 18, 0.5), transparent 18%, transparent 80%, rgba(8, 21, 18, 0.28)),
-    radial-gradient(circle at 70% 30%, rgba(87, 221, 232, 0.18), transparent 32%),
-    linear-gradient(180deg, rgba(240, 255, 246, 0.08), transparent 18%, rgba(4, 16, 14, 0.32));
+    linear-gradient(90deg, rgba(8, 21, 18, 0.18), transparent 14%, transparent 84%, rgba(8, 21, 18, 0.12)),
+    radial-gradient(circle at 70% 30%, rgba(87, 221, 232, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(240, 255, 246, 0.04), transparent 20%, rgba(4, 16, 14, 0.12));
   pointer-events: none;
 }
 
@@ -1496,15 +1484,23 @@ onUnmounted(() => {
 }
 
 .stats-section {
-  padding: 4px 2px 0;
+  position: relative;
+  z-index: 1;
+  padding: 10px 0 0;
+  margin-top: -10px;
 }
 
 .dc-overview-section {
-  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%) 100%);
-  border-radius: 24px;
-  padding: 24px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-light);
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(8, 28, 23, 0.52) 0%, rgba(9, 31, 26, 0.58) 100%);
+  border-radius: 12px 12px 10px 10px;
+  padding: 24px 24px 18px;
+  margin: -10px 0 0;
+  box-shadow: none;
+  border: 1px solid rgba(121, 239, 171, 0.08);
+  border-top: none;
+  border-bottom-color: rgba(121, 239, 171, 0.04);
 }
 
 .dc-overview-header {
@@ -1513,15 +1509,15 @@ onUnmounted(() => {
 
 .dc-overview-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.9fr);
-  gap: 20px;
+  grid-template-columns: minmax(0, 1.18fr) minmax(340px, 0.82fr);
+  gap: 22px;
   align-items: stretch;
 }
 
 .dc-model-panel,
 .dc-detail-panel {
   border-radius: 22px;
-  border: 1px solid var(--border-light);
+  border: 1px solid rgba(121, 239, 171, 0.1);
   overflow: hidden;
 }
 
@@ -1529,13 +1525,13 @@ onUnmounted(() => {
   background:
     radial-gradient(circle at top right, color-mix(in oklab, var(--primary-color) 12%, transparent), transparent 32%),
     linear-gradient(180deg, color-mix(in oklab, var(--bg-stage) 96%, var(--accent-color) 4%) 0%, color-mix(in oklab, var(--bg-stage-soft) 86%, var(--primary-dark) 14%) 100%);
-  min-height: 520px;
+  min-height: 560px;
 }
 
 .dc-model-stage {
   position: relative;
   height: 100%;
-  min-height: 520px;
+  min-height: 560px;
   overflow: hidden;
 }
 
@@ -1578,7 +1574,7 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 520px;
+  min-height: 560px;
   perspective: 1200px;
   animation: shellFloat 9s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
@@ -1911,7 +1907,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 22px;
+  padding: 24px;
   background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%) 100%);
 }
 
@@ -2463,6 +2459,515 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
+.project-command-deck {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.project-vault-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 178px;
+  padding: 18px;
+  text-align: left;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(121, 239, 171, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(121, 239, 171, 0.11), transparent 34%),
+    linear-gradient(180deg, rgba(8, 31, 26, 0.86), rgba(5, 19, 17, 0.94));
+  box-shadow: inset 0 1px 0 rgba(224, 255, 235, 0.06);
+  transition: transform var(--transition-normal), border-color var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.project-vault-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(121, 239, 171, 0.34);
+  box-shadow: 0 22px 54px rgba(2, 24, 16, 0.26), inset 0 1px 0 rgba(224, 255, 235, 0.08);
+}
+
+.project-vault-card:focus-visible {
+  outline: 2px solid rgba(37, 214, 210, 0.86);
+  outline-offset: 4px;
+}
+
+.project-vault-beam {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(121, 239, 171, 0.58), rgba(37, 214, 210, 0.42), transparent);
+}
+
+.project-vault-head {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.project-vault-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.project-status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(121, 239, 171, 0.18);
+  background: rgba(121, 239, 171, 0.08);
+  color: rgba(121, 239, 171, 0.96);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.project-vault-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.project-vault-metrics .metric-item {
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(3, 16, 13, 0.5);
+  border: 1px solid rgba(121, 239, 171, 0.1);
+}
+
+.project-vault-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  color: rgba(37, 214, 210, 0.92);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.project-vault-actions span {
+  cursor: pointer;
+}
+
+.project-empty-console {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 108px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(121, 239, 171, 0.24);
+  background: rgba(3, 16, 13, 0.46);
+}
+
+.project-empty-console strong {
+  display: block;
+  margin-bottom: 4px;
+  color: rgba(239, 252, 245, 0.96);
+}
+
+.project-empty-console p {
+  margin: 0;
+  color: rgba(211, 235, 224, 0.68);
+  font-size: 13px;
+}
+
+.project-empty-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(121, 239, 171, 0.96);
+  box-shadow: 0 0 18px rgba(121, 239, 171, 0.72);
+}
+
+.planning-runway {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  padding: 8px 2px 4px;
+}
+
+.planning-runway::before {
+  content: '';
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: 54px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(121, 239, 171, 0.16), rgba(37, 214, 210, 0.42), rgba(121, 239, 171, 0.16));
+  box-shadow: 0 0 18px rgba(37, 214, 210, 0.24);
+}
+
+.runway-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 184px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(121, 239, 171, 0.15);
+  background:
+    radial-gradient(circle at 32px 34px, color-mix(in oklab, var(--stage-color, var(--primary-color)) 18%, transparent), transparent 34%),
+    linear-gradient(180deg, rgba(8, 31, 26, 0.82), rgba(5, 19, 17, 0.92));
+  box-shadow: inset 0 1px 0 rgba(224, 255, 235, 0.055);
+}
+
+.runway-stage-index {
+  grid-column: 1 / -1;
+  color: rgba(121, 239, 171, 0.7);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.runway-stage-node {
+  position: relative;
+  z-index: 1;
+  width: 58px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  color: var(--stage-color, rgba(121, 239, 171, 0.96));
+  background: rgba(3, 16, 13, 0.58);
+  border: 1px solid color-mix(in oklab, var(--stage-color, var(--primary-color)) 36%, transparent);
+  box-shadow: 0 0 28px color-mix(in oklab, var(--stage-color, var(--primary-color)) 22%, transparent);
+}
+
+.runway-stage-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.runway-connector {
+  position: absolute;
+  top: 50px;
+  right: -28px;
+  z-index: 2;
+  width: 54px;
+  height: 8px;
+  pointer-events: none;
+}
+
+.runway-connector span {
+  display: block;
+  width: 100%;
+  height: 2px;
+  margin-top: 3px;
+  background: linear-gradient(90deg, rgba(121, 239, 171, 0.1), rgba(37, 214, 210, 0.86), rgba(121, 239, 171, 0.1));
+  box-shadow: 0 0 14px rgba(37, 214, 210, 0.5);
+}
+
+.hero-signal-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+  color: rgba(222, 250, 238, 0.78);
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.hero-signal-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(121, 239, 171, 0.18);
+  border-radius: 999px;
+  background: rgba(4, 18, 15, 0.42);
+  box-shadow: inset 0 1px 0 rgba(221, 255, 235, 0.08);
+}
+
+.hero-signal-strip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #79efab;
+  box-shadow: 0 0 12px rgba(121, 239, 171, 0.86);
+}
+
+.dc-overview-section {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 22%, rgba(121, 239, 171, 0.08), transparent 32%),
+    radial-gradient(circle at 84% 24%, rgba(87, 221, 232, 0.06), transparent 34%),
+    linear-gradient(135deg, rgba(8, 28, 23, 0.72) 0%, rgba(10, 34, 28, 0.68) 46%, rgba(7, 24, 21, 0.74) 100%);
+  border: 1px solid rgba(121, 239, 171, 0.08);
+  box-shadow: none;
+}
+
+.section-orbit-line {
+  position: absolute;
+  left: -8%;
+  right: -8%;
+  top: 116px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(121, 239, 171, 0.28), rgba(87, 221, 232, 0.24), transparent);
+  transform: rotate(-2deg);
+}
+
+.dc-overview-section .section-title h2,
+.dc-overview-section .dc-detail-title-row h3,
+.dc-overview-section .dc-detail-section-title,
+.dc-overview-section .dc-detail-value {
+  color: rgba(239, 252, 245, 0.96);
+}
+
+.dc-overview-section .section-desc,
+.dc-overview-section .dc-detail-title-row p,
+.dc-overview-section .dc-detail-label,
+.dc-overview-section .dc-detail-list li,
+.dc-overview-section .dc-chip,
+.dc-overview-section .dc-mini-item {
+  color: rgba(211, 235, 224, 0.72);
+}
+
+.dc-model-panel,
+.dc-detail-panel {
+  border-color: rgba(121, 239, 171, 0.18);
+  background:
+    linear-gradient(180deg, rgba(9, 31, 27, 0.72), rgba(5, 19, 17, 0.9));
+  box-shadow: inset 0 1px 0 rgba(224, 255, 235, 0.06);
+}
+
+.dc-detail-panel {
+  background:
+    radial-gradient(circle at top left, rgba(121, 239, 171, 0.1), transparent 36%),
+    linear-gradient(180deg, rgba(8, 30, 26, 0.8), rgba(5, 18, 16, 0.92));
+}
+
+.dc-detail-kicker {
+  color: rgba(121, 239, 171, 0.9);
+}
+
+.dc-detail-icon,
+.dc-detail-metric,
+.dc-chip,
+.dc-mini-item {
+  border-color: rgba(121, 239, 171, 0.14);
+  background: rgba(7, 26, 23, 0.66);
+}
+
+.dc-mini-item:hover,
+.dc-mini-item.is-active {
+  border-color: rgba(121, 239, 171, 0.36);
+  background: rgba(25, 72, 58, 0.54);
+  color: rgba(242, 255, 248, 0.96);
+}
+
+.stats-section {
+  position: relative;
+  padding: 12px 0 0;
+  margin-top: -10px;
+}
+
+.stats-header {
+  padding: 0 2px 8px;
+}
+
+.telemetry-grid {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(121, 239, 171, 0.08);
+  border-top: none;
+  border-radius: 10px;
+  background:
+    linear-gradient(90deg, rgba(8, 29, 24, 0.6), rgba(12, 45, 36, 0.56), rgba(8, 29, 24, 0.6));
+  box-shadow: none;
+}
+
+.telemetry-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 0, rgba(121, 239, 171, 0.08) 1px, transparent 1px),
+    radial-gradient(circle at 20% 20%, rgba(121, 239, 171, 0.12), transparent 22%),
+    radial-gradient(circle at 78% 64%, rgba(87, 221, 232, 0.12), transparent 28%);
+  background-size: 64px 100%, auto, auto;
+  pointer-events: none;
+}
+
+.telemetry-col {
+  position: relative;
+}
+
+.telemetry-col + .telemetry-col::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18px;
+  bottom: 18px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(121, 239, 171, 0.22), transparent);
+  z-index: 2;
+}
+
+.stat-card {
+  min-height: 132px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.stat-card::before {
+  display: none;
+}
+
+.stat-card:hover {
+  transform: none;
+  box-shadow: none;
+  background: rgba(121, 239, 171, 0.045);
+}
+
+.stat-icon-wrap {
+  background: rgba(121, 239, 171, 0.1) !important;
+  color: rgba(121, 239, 171, 0.95) !important;
+  box-shadow: inset 0 0 0 1px rgba(121, 239, 171, 0.16), 0 0 20px rgba(121, 239, 171, 0.1);
+}
+
+.stat-value,
+.stats-title,
+.project-name,
+.metric-value,
+.guide-title {
+  color: rgba(239, 252, 245, 0.96);
+}
+
+.stat-label,
+.stats-subtitle,
+.stat-unit,
+.stat-date,
+.location-text,
+.metric-label,
+.guide-desc,
+.guide-hint,
+.section-count {
+  color: rgba(211, 235, 224, 0.68);
+}
+
+.stat-progress-bar {
+  background: rgba(211, 235, 224, 0.1);
+}
+
+.recent-projects,
+.quick-guide {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(121, 239, 171, 0.05), transparent 32%),
+    linear-gradient(135deg, rgba(7, 24, 21, 0.58), rgba(11, 38, 32, 0.54));
+  border: 1px solid rgba(121, 239, 171, 0.08);
+  box-shadow: none;
+}
+
+.recent-projects {
+  z-index: 1;
+  margin: -10px 0 0;
+  border-top: none;
+  border-radius: 10px;
+}
+
+.quick-guide {
+  z-index: 1;
+  margin: -10px 0 0;
+  border-top: none;
+  border-radius: 10px 10px 22px 22px;
+}
+
+.dc-overview-section::before,
+.stats-section::before,
+.recent-projects::before,
+.quick-guide::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: -18px;
+  height: 30px;
+  background: linear-gradient(180deg, rgba(10, 34, 28, 0), rgba(10, 34, 28, 0.38) 55%, rgba(10, 34, 28, 0.72) 100%);
+  filter: blur(10px);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.recent-projects .section-title h2,
+.quick-guide .section-title h2 {
+  color: rgba(239, 252, 245, 0.96);
+}
+
+.project-table {
+  border: 1px solid rgba(121, 239, 171, 0.14);
+  background: rgba(4, 18, 16, 0.44);
+}
+
+.project-table :deep(.el-table),
+.project-table :deep(.el-table__inner-wrapper),
+.project-table :deep(.el-table__body-wrapper),
+.project-table :deep(.el-table__header-wrapper) {
+  background: transparent;
+}
+
+.project-table :deep(.el-table__header th) {
+  background: rgba(17, 58, 47, 0.78) !important;
+  color: rgba(211, 235, 224, 0.78);
+}
+
+.project-table :deep(.el-table__body td) {
+  border-color: rgba(121, 239, 171, 0.1);
+  color: rgba(230, 248, 238, 0.88);
+}
+
+.project-table :deep(.table-row:hover) {
+  background: rgba(121, 239, 171, 0.07);
+}
+
+.guide-card {
+  min-height: 204px;
+  border: 1px solid rgba(121, 239, 171, 0.14);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(9, 32, 28, 0.7), rgba(5, 19, 17, 0.84));
+  box-shadow: none;
+}
+
+.guide-card:hover {
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
+  border-color: rgba(121, 239, 171, 0.28);
+}
+
+.guide-number {
+  background: rgba(121, 239, 171, 0.12);
+  color: rgba(121, 239, 171, 0.94);
+  box-shadow: inset 0 0 0 1px rgba(121, 239, 171, 0.18);
+}
+
+.guide-icon-wrapper {
+  background: rgba(121, 239, 171, 0.1) !important;
+  box-shadow: inset 0 0 0 1px rgba(121, 239, 171, 0.18), 0 0 26px rgba(121, 239, 171, 0.08);
+}
+
 @media (max-width: 992px) {
   .hero-section {
     min-height: auto;
@@ -2486,13 +2991,36 @@ onUnmounted(() => {
     bottom: auto;
     width: calc(100% - 32px);
     min-width: 0;
-    height: 360px;
+    height: 400px;
     margin: -10px 16px 18px;
     mask-image: none;
   }
 
   .stats-section :deep(.el-col) {
     margin-bottom: 16px;
+  }
+
+  .telemetry-grid {
+    flex-wrap: wrap;
+  }
+
+  .telemetry-grid .telemetry-col {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+
+  .telemetry-col:nth-child(odd)::before {
+    display: none;
+  }
+
+  .project-command-deck,
+  .planning-runway {
+    grid-template-columns: 1fr;
+  }
+
+  .planning-runway::before,
+  .runway-connector {
+    display: none;
   }
 
   .recent-projects,
@@ -2516,7 +3044,7 @@ onUnmounted(() => {
   .dc-model-panel,
   .dc-model-stage,
   .dc-model-shell {
-    min-height: 460px;
+    min-height: 500px;
   }
 }
 
@@ -2526,7 +3054,7 @@ onUnmounted(() => {
   }
 
   .hero-model-stage {
-    height: 300px;
+    height: 320px;
     width: calc(100% - 20px);
     margin: -2px 10px 12px;
     border-radius: 18px;
@@ -2566,6 +3094,24 @@ onUnmounted(() => {
     align-items: stretch;
   }
 
+  .project-vault-head,
+  .project-empty-console {
+    grid-template-columns: 1fr;
+  }
+
+  .project-vault-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .project-vault-actions {
+    justify-content: flex-start;
+  }
+
+  .runway-stage {
+    grid-template-columns: 52px minmax(0, 1fr);
+    min-height: auto;
+  }
+
   .guide-hint {
     font-size: 12px;
     text-align: center;
@@ -2579,6 +3125,15 @@ onUnmounted(() => {
   .stats-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .telemetry-grid .telemetry-col {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+
+  .telemetry-col::before {
+    display: none;
   }
 
   .dc-model-panel,

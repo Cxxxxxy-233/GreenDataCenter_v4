@@ -262,7 +262,9 @@ const handleDropdownVisible = (visible) => {
   flex-direction: column;
   height: 100vh;
   background:
-    radial-gradient(circle at top left, color-mix(in oklab, var(--primary-color) 7%, transparent), transparent 24%),
+    radial-gradient(circle at 12% 12%, color-mix(in oklab, var(--primary-color) 12%, transparent), transparent 28%),
+    radial-gradient(circle at 88% 0%, color-mix(in oklab, var(--accent-color) 10%, transparent), transparent 22%),
+    radial-gradient(circle at 50% 100%, color-mix(in oklab, var(--primary-dark) 16%, transparent), transparent 30%),
     linear-gradient(180deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
 }
 
@@ -270,18 +272,20 @@ const handleDropdownVisible = (visible) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: var(--header-height);
+  height: calc(var(--header-height) + 2px);
   padding: 0 28px;
   background:
-    radial-gradient(circle at right center, color-mix(in oklab, var(--primary-light) 14%, transparent), transparent 28%),
-    linear-gradient(180deg, color-mix(in oklab, var(--bg-stage-soft) 90%, var(--primary-color) 10%) 0%, var(--bg-stage) 100%);
-  color: color-mix(in oklab, white 92%, var(--primary-color) 8%);
-  border-bottom: 1px solid color-mix(in oklab, var(--primary-color) 20%, transparent);
-  box-shadow: 0 12px 30px rgba(6, 20, 15, 0.18);
+    radial-gradient(circle at 78% 35%, color-mix(in oklab, var(--primary-light) 18%, transparent), transparent 26%),
+    radial-gradient(circle at 12% 0%, color-mix(in oklab, var(--accent-color) 12%, transparent), transparent 20%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-stage-soft) 82%, var(--primary-color) 18%) 0%, var(--bg-stage) 100%);
+  color: color-mix(in oklab, white 94%, var(--primary-color) 6%);
+  border-bottom: 1px solid color-mix(in oklab, var(--primary-color) 24%, transparent);
+  box-shadow: 0 18px 40px rgba(2, 11, 8, 0.34);
   z-index: var(--z-sticky);
   position: relative;
   overflow: hidden;
   backdrop-filter: blur(10px);
+  isolation: isolate;
 }
 
 .header-decoration {
@@ -295,13 +299,13 @@ const handleDropdownVisible = (visible) => {
 
 .header-glow {
   position: absolute;
-  inset: auto -60px -140px auto;
-  width: 260px;
-  height: 260px;
-  background: radial-gradient(circle, color-mix(in oklab, var(--primary-light) 28%, transparent) 0%, transparent 68%);
+  inset: auto -80px -160px auto;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, color-mix(in oklab, var(--primary-light) 26%, transparent) 0%, transparent 68%);
   border-radius: 50%;
   pointer-events: none;
-  opacity: 0.9;
+  opacity: 0.95;
 }
 
 .header-left {
@@ -323,10 +327,10 @@ const handleDropdownVisible = (visible) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 22%, white) 0%, color-mix(in oklab, var(--primary-dark) 24%, transparent) 100%);
-  border: 1px solid color-mix(in oklab, var(--primary-light) 28%, transparent);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 24%, var(--bg-panel)) 0%, color-mix(in oklab, var(--primary-dark) 32%, transparent) 100%);
+  border: 1px solid color-mix(in oklab, var(--primary-light) 34%, transparent);
   border-radius: 12px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 20px rgba(6, 20, 15, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 26px rgba(2, 12, 8, 0.24);
   transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
   position: relative;
   overflow: hidden;
@@ -334,8 +338,8 @@ const handleDropdownVisible = (visible) => {
 
 .logo-icon:hover {
   transform: translateY(-1px);
-  border-color: color-mix(in oklab, var(--primary-light) 46%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 24px rgba(8, 26, 18, 0.2);
+  border-color: color-mix(in oklab, var(--primary-light) 52%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 30px rgba(8, 26, 18, 0.24);
 }
 
 .logo-icon svg {
@@ -373,7 +377,7 @@ const handleDropdownVisible = (visible) => {
 
 .system-subtitle {
   font-size: 11px;
-  color: rgba(234, 246, 239, 0.68);
+  color: rgba(224, 241, 232, 0.64);
   letter-spacing: 0.36px;
 }
 
@@ -423,7 +427,7 @@ const handleDropdownVisible = (visible) => {
 }
 
 .header-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(121, 239, 171, 0.1);
   color: white;
 }
 
@@ -458,12 +462,12 @@ const handleDropdownVisible = (visible) => {
   border-radius: 12px;
   cursor: pointer;
   transition: all var(--transition-fast);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(8, 28, 22, 0.68);
+  border: 1px solid rgba(121, 239, 171, 0.12);
 }
 
 .user-info:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(14, 45, 35, 0.78);
 }
 
 .user-avatar {
@@ -498,11 +502,11 @@ const handleDropdownVisible = (visible) => {
   top: calc(var(--header-height) + 10px);
   right: 18px;
   width: 360px;
-  background: color-mix(in oklab, var(--bg-card) 96%, var(--primary-color) 4%);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 88%, var(--primary-color) 12%) 0%, color-mix(in oklab, var(--bg-panel) 88%, var(--primary-color) 12%) 100%);
   border-radius: 18px;
   box-shadow: var(--shadow-lg);
   z-index: var(--z-popover);
-  border: 1px solid var(--border-light);
+  border: 1px solid color-mix(in oklab, var(--primary-color) 16%, var(--border-light));
   overflow: hidden;
 }
 
@@ -511,8 +515,8 @@ const handleDropdownVisible = (visible) => {
   justify-content: space-between;
   align-items: center;
   padding: 16px 18px;
-  border-bottom: 1px solid var(--border-light);
-  background: color-mix(in oklab, var(--bg-panel) 90%, var(--primary-color) 10%);
+  border-bottom: 1px solid color-mix(in oklab, var(--primary-color) 12%, var(--border-light));
+  background: color-mix(in oklab, var(--bg-panel) 84%, var(--primary-color) 16%);
 }
 
 .notification-header h3 {
@@ -609,19 +613,22 @@ const handleDropdownVisible = (visible) => {
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative;
 }
 
 .sidebar {
   width: var(--sidebar-width);
   background:
-    linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 93%, var(--primary-color) 7%) 0%, color-mix(in oklab, var(--bg-panel) 97%, var(--primary-color) 3%) 100%);
-  border-right: 1px solid var(--border-light);
+    radial-gradient(circle at top, color-mix(in oklab, var(--primary-color) 8%, transparent), transparent 32%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 86%, var(--primary-color) 14%) 0%, color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%) 100%);
+  border-right: 1px solid color-mix(in oklab, var(--primary-color) 12%, var(--border-light));
   display: flex;
   flex-direction: column;
   transition: width var(--transition-normal);
   overflow: hidden;
-  box-shadow: 10px 0 30px rgba(14, 39, 28, 0.04);
+  box-shadow: 14px 0 34px rgba(1, 8, 6, 0.24);
   position: relative;
+  backdrop-filter: blur(8px);
 }
 
 .sidebar::before {
@@ -640,8 +647,8 @@ const handleDropdownVisible = (visible) => {
 
 .sidebar-header {
   padding: 18px 16px 14px;
-  border-bottom: 1px solid var(--border-light);
-  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border-bottom: 1px solid color-mix(in oklab, var(--primary-color) 10%, var(--border-light));
+  background: color-mix(in oklab, var(--bg-panel) 88%, var(--primary-color) 12%);
 }
 
 .project-selector {
@@ -682,14 +689,14 @@ const handleDropdownVisible = (visible) => {
 }
 
 .sidebar-menu :deep(.el-menu-item:hover) {
-  background: color-mix(in oklab, var(--primary-color) 7%, var(--bg-card));
-  color: var(--primary-dark);
+  background: color-mix(in oklab, var(--primary-color) 10%, var(--bg-card));
+  color: var(--text-primary);
 }
 
 .sidebar-menu :deep(.el-menu-item.is-active) {
-  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 14%, var(--bg-card)) 0%, color-mix(in oklab, var(--primary-color) 10%, var(--bg-panel)) 100%);
-  color: var(--primary-ink);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary-color) 22%, var(--border-default));
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary-color) 18%, var(--bg-card)) 0%, color-mix(in oklab, var(--primary-color) 12%, var(--bg-panel)) 100%);
+  color: rgba(246, 255, 249, 0.98);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary-color) 28%, var(--border-default)), 0 0 0 1px rgba(121, 239, 171, 0.04);
   font-weight: 600;
 }
 
@@ -713,7 +720,7 @@ const handleDropdownVisible = (visible) => {
 
 .sidebar-menu :deep(.el-divider) {
   margin: 16px 14px;
-  border-color: var(--border-light);
+  border-color: color-mix(in oklab, var(--primary-color) 10%, var(--border-light));
   position: relative;
 }
 
@@ -728,8 +735,8 @@ const handleDropdownVisible = (visible) => {
 
 .sidebar-footer {
   padding: 14px 16px;
-  border-top: 1px solid var(--border-light);
-  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border-top: 1px solid color-mix(in oklab, var(--primary-color) 10%, var(--border-light));
+  background: color-mix(in oklab, var(--bg-panel) 88%, var(--primary-color) 12%);
   display: flex;
   justify-content: flex-end;
 }
@@ -752,14 +759,16 @@ const handleDropdownVisible = (visible) => {
   flex: 1;
   overflow-y: auto;
   background:
-    radial-gradient(circle at top, color-mix(in oklab, var(--accent-color) 5%, transparent), transparent 22%),
-    linear-gradient(180deg, color-mix(in oklab, var(--bg-page) 96%, var(--primary-color) 4%) 0%, var(--bg-page) 100%);
+    radial-gradient(circle at top, color-mix(in oklab, var(--accent-color) 8%, transparent), transparent 22%),
+    radial-gradient(circle at 80% 0%, color-mix(in oklab, var(--primary-color) 8%, transparent), transparent 22%),
+    linear-gradient(180deg, color-mix(in oklab, var(--bg-page) 92%, var(--primary-color) 8%) 0%, var(--bg-page) 100%);
+  position: relative;
 }
 
 .content-wrapper {
-  max-width: var(--content-max-width);
+  max-width: min(var(--content-max-width), calc(100vw - var(--sidebar-width)));
   margin: 0 auto;
-  padding: 26px;
+  padding: 28px 28px 36px;
   min-height: 100%;
 }
 
@@ -780,7 +789,7 @@ const handleDropdownVisible = (visible) => {
 
 @media (max-width: 1200px) {
   .top-header {
-    padding: 0 20px;
+    padding: 0 18px;
   }
 
   .content-wrapper {

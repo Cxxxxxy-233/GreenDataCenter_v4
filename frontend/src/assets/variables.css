@@ -23,33 +23,33 @@
   --info-color: oklch(0.72 0.09 205);
   --info-bg: color-mix(in oklab, var(--info-color) 10%, transparent);
 
-  --text-primary: oklch(0.21 0.01 160);
-  --text-secondary: oklch(0.44 0.02 160);
-  --text-placeholder: oklch(0.62 0.01 160);
-  --text-disabled: oklch(0.76 0.01 160);
+  --text-primary: oklch(0.96 0.012 160);
+  --text-secondary: oklch(0.76 0.03 160);
+  --text-placeholder: oklch(0.64 0.02 160);
+  --text-disabled: oklch(0.48 0.02 160);
 
-  --border-light: oklch(0.9 0.01 160);
-  --border-default: oklch(0.86 0.015 160);
-  --border-strong: oklch(0.78 0.02 160);
-  --border-dark: oklch(0.66 0.015 160);
+  --border-light: oklch(0.28 0.03 160);
+  --border-default: oklch(0.33 0.035 160);
+  --border-strong: oklch(0.42 0.04 160);
+  --border-dark: oklch(0.22 0.03 160);
 
-  --bg-page: oklch(0.975 0.008 160);
-  --bg-container: oklch(0.992 0.004 160);
-  --bg-card: oklch(0.998 0.003 160);
-  --bg-panel: oklch(0.964 0.008 160);
-  --bg-hover: oklch(0.954 0.012 160);
-  --bg-active: oklch(0.92 0.02 160);
-  --bg-gradient-start: oklch(0.97 0.008 160);
-  --bg-gradient-end: oklch(0.945 0.012 160);
-  --bg-stage: oklch(0.19 0.015 165);
-  --bg-stage-soft: oklch(0.24 0.02 165);
+  --bg-page: oklch(0.095 0.02 160);
+  --bg-container: oklch(0.12 0.02 160);
+  --bg-card: oklch(0.145 0.02 160);
+  --bg-panel: oklch(0.18 0.025 160);
+  --bg-hover: oklch(0.205 0.025 160);
+  --bg-active: oklch(0.235 0.03 160);
+  --bg-gradient-start: oklch(0.082 0.02 160);
+  --bg-gradient-end: oklch(0.06 0.018 160);
+  --bg-stage: oklch(0.14 0.03 165);
+  --bg-stage-soft: oklch(0.175 0.028 165);
   --bg-stage-glow: color-mix(in oklab, var(--primary-color) 18%, transparent);
 
-  --shadow-sm: 0 1px 2px rgba(9, 20, 15, 0.04), 0 6px 18px rgba(15, 39, 27, 0.04);
-  --shadow-md: 0 10px 28px rgba(10, 27, 19, 0.08), 0 2px 6px rgba(10, 27, 19, 0.04);
-  --shadow-lg: 0 18px 44px rgba(8, 24, 18, 0.12), 0 4px 14px rgba(8, 24, 18, 0.06);
-  --shadow-hover: 0 16px 36px rgba(11, 53, 34, 0.12), 0 4px 12px rgba(11, 53, 34, 0.05);
-  --shadow-glow: 0 0 0 1px color-mix(in oklab, var(--primary-color) 16%, transparent), 0 18px 44px rgba(10, 49, 32, 0.18);
+  --shadow-sm: 0 1px 2px rgba(2, 10, 8, 0.2), 0 10px 22px rgba(1, 9, 7, 0.14);
+  --shadow-md: 0 14px 34px rgba(2, 10, 8, 0.26), 0 4px 10px rgba(2, 10, 8, 0.16);
+  --shadow-lg: 0 22px 56px rgba(1, 8, 6, 0.34), 0 8px 22px rgba(2, 10, 8, 0.18);
+  --shadow-hover: 0 18px 42px rgba(2, 18, 12, 0.3), 0 8px 18px rgba(2, 18, 12, 0.16);
+  --shadow-glow: 0 0 0 1px color-mix(in oklab, var(--primary-color) 18%, transparent), 0 18px 44px rgba(8, 44, 28, 0.28);
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -122,8 +122,9 @@ body {
   line-height: var(--line-height-normal);
   color: var(--text-primary);
   background:
-    radial-gradient(circle at top left, color-mix(in oklab, var(--primary-color) 8%, transparent), transparent 28%),
-    radial-gradient(circle at top right, color-mix(in oklab, var(--accent-color) 9%, transparent), transparent 24%),
+    radial-gradient(circle at top left, color-mix(in oklab, var(--primary-color) 12%, transparent), transparent 26%),
+    radial-gradient(circle at top right, color-mix(in oklab, var(--accent-color) 10%, transparent), transparent 24%),
+    radial-gradient(circle at bottom center, color-mix(in oklab, var(--primary-dark) 16%, transparent), transparent 30%),
     linear-gradient(180deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
   min-height: 100vh;
 }
@@ -274,9 +275,9 @@ button {
 }
 
 .card {
-  background: color-mix(in oklab, var(--bg-card) 94%, var(--primary-color) 6%);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 96%, var(--primary-color) 4%) 0%, color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%) 100%);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-light);
+  border: 1px solid color-mix(in oklab, var(--primary-color) 12%, var(--border-light));
   box-shadow: var(--shadow-sm);
   transition: box-shadow var(--transition-normal), transform var(--transition-normal), border-color var(--transition-normal);
 }
@@ -360,7 +361,7 @@ button {
 .el-select__wrapper {
   border-radius: 12px;
   box-shadow: 0 0 0 1px var(--border-default) inset;
-  background: color-mix(in oklab, var(--bg-card) 96%, var(--primary-color) 4%);
+  background: color-mix(in oklab, var(--bg-card) 88%, var(--primary-color) 12%);
   transition: all var(--transition-fast);
 }
 
@@ -378,10 +379,10 @@ button {
 
 .el-card {
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-light);
+  border: 1px solid color-mix(in oklab, var(--primary-color) 12%, var(--border-light));
   box-shadow: var(--shadow-sm);
   transition: all var(--transition-normal);
-  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%) 0%, color-mix(in oklab, var(--bg-panel) 94%, var(--bg-card) 6%) 100%);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--bg-card) 92%, var(--primary-color) 8%) 0%, color-mix(in oklab, var(--bg-panel) 90%, var(--primary-color) 10%) 100%);
 }
 
 .el-card:hover {
@@ -442,8 +443,8 @@ button {
 
 .el-table {
   --el-table-border-color: var(--border-light);
-  --el-table-header-bg-color: color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%);
-  --el-table-row-hover-bg-color: color-mix(in oklab, var(--primary-color) 7%, var(--bg-card));
+  --el-table-header-bg-color: color-mix(in oklab, var(--bg-panel) 84%, var(--primary-color) 16%);
+  --el-table-row-hover-bg-color: color-mix(in oklab, var(--primary-color) 10%, var(--bg-card));
 }
 
 .el-table th {
