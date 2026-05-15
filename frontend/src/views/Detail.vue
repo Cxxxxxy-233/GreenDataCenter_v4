@@ -260,6 +260,7 @@
             </div>
           </section>
 
+          <div class="green-insight-grid">
           <el-card class="green-summary-card">
             <h4>风光储容量配置表</h4>
             <el-table :data="greenConfig" border>
@@ -272,6 +273,7 @@
             <h4>绿电占比分布图</h4>
             <div ref="powerBalanceChartRef" class="chart-container"></div>
           </el-card>
+          </div>
           <el-card class="artifact-card-panel">
             <div class="artifact-panel-header">
               <div>
@@ -424,6 +426,7 @@
             </section>
 
             <aside class="economic-cost-summary">
+              <div class="economic-summary-shell">
               <div class="economic-kpi-grid">
                 <div class="economic-kpi-card strong">
                   <span class="economic-kpi-label">项目总投资</span>
@@ -469,6 +472,7 @@
                   <span class="economic-summary-label">{{ segment.name }}</span>
                   <span class="economic-summary-value">{{ formatNumber(segment.amount, 0) }} 万元</span>
                 </div>
+              </div>
               </div>
             </aside>
           </div>
@@ -2359,9 +2363,10 @@ watch(
 .artifact-image {
   display: block;
   width: 100%;
-  max-height: 520px;
-  object-fit: contain;
-  background: #fff;
+  height: auto;
+  max-height: none;
+  object-fit: fill;
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .artifact-placeholder {
@@ -3670,7 +3675,7 @@ watch(
 .detail-page {
   position: relative;
   gap: 26px;
-  color: rgba(232, 255, 243, 0.94);
+  color: rgba(236, 242, 239, 0.94);
 }
 
 .detail-page::before {
@@ -3679,11 +3684,11 @@ watch(
   inset: var(--header-height) 0 0 var(--sidebar-width);
   pointer-events: none;
   background:
-    linear-gradient(rgba(121, 239, 171, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(121, 239, 171, 0.028) 1px, transparent 1px),
-    radial-gradient(circle at 14% 10%, rgba(121, 239, 171, 0.12), transparent 28%),
-    radial-gradient(circle at 88% 18%, rgba(37, 214, 210, 0.1), transparent 26%),
-    linear-gradient(180deg, rgba(6, 22, 18, 0.12), transparent 34%);
+    linear-gradient(rgba(110, 255, 172, 0.016) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(110, 255, 172, 0.016) 1px, transparent 1px),
+    radial-gradient(circle at 16% 8%, rgba(63, 201, 121, 0.07), transparent 24%),
+    radial-gradient(circle at 86% 14%, rgba(77, 255, 172, 0.05), transparent 22%),
+    linear-gradient(180deg, rgba(17, 20, 24, 0.96), rgba(11, 13, 17, 0.99));
   background-size: 42px 42px, 42px 42px, auto, auto;
   z-index: 0;
 }
@@ -3698,12 +3703,12 @@ watch(
   overflow: hidden;
   padding: 24px 28px;
   background:
-    radial-gradient(circle at 18% 25%, rgba(121, 239, 171, 0.16), transparent 30%),
-    radial-gradient(circle at 86% 20%, rgba(37, 214, 210, 0.13), transparent 26%),
-    linear-gradient(135deg, rgba(7, 24, 20, 0.98), rgba(12, 41, 33, 0.95));
-  border: 1px solid rgba(121, 239, 171, 0.2);
+    radial-gradient(circle at 20% 18%, rgba(65, 214, 128, 0.08), transparent 28%),
+    linear-gradient(145deg, rgba(33, 37, 44, 0.94), rgba(23, 26, 32, 0.97));
+  border: 1px solid rgba(109, 232, 160, 0.16);
   border-radius: 26px;
-  box-shadow: 0 24px 56px rgba(2, 12, 8, 0.24);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
 }
 
 .detail-header::after {
@@ -3713,18 +3718,18 @@ watch(
   right: 26px;
   bottom: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(121, 239, 171, 0.45), rgba(37, 214, 210, 0.34), transparent);
+  background: linear-gradient(90deg, transparent, rgba(88, 232, 144, 0.34), rgba(88, 232, 144, 0.12), transparent);
 }
 
 .detail-header h1 {
-  color: rgba(239, 252, 245, 0.98);
+  color: rgba(244, 247, 246, 0.98);
   font-size: 28px;
 }
 
 .header-actions :deep(.el-button:not(.el-button--primary)) {
-  background: rgba(7, 28, 23, 0.68);
-  border-color: rgba(121, 239, 171, 0.18);
-  color: rgba(211, 235, 224, 0.86);
+  background: rgba(35, 39, 46, 0.78);
+  border-color: rgba(111, 224, 158, 0.14);
+  color: rgba(224, 232, 229, 0.9);
 }
 
 .detail-tabs {
@@ -3737,29 +3742,29 @@ watch(
   z-index: 4;
   padding: 8px 12px 0;
   background:
-    radial-gradient(circle at top left, rgba(121, 239, 171, 0.09), transparent 32%),
-    linear-gradient(180deg, rgba(8, 30, 25, 0.9), rgba(5, 18, 16, 0.94));
-  border: 1px solid rgba(121, 239, 171, 0.16);
+    radial-gradient(circle at top left, rgba(88, 232, 144, 0.05), transparent 32%),
+    linear-gradient(180deg, rgba(34, 38, 45, 0.92), rgba(23, 26, 32, 0.96));
+  border: 1px solid rgba(111, 224, 158, 0.12);
   border-radius: 20px;
-  box-shadow: 0 16px 38px rgba(2, 12, 8, 0.18);
-  backdrop-filter: blur(8px);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(14px);
 }
 
 .detail-tabs :deep(.el-tabs__item) {
-  color: rgba(211, 235, 224, 0.72);
+  color: rgba(181, 194, 190, 0.76);
 }
 
 .detail-tabs :deep(.el-tabs__item.is-active) {
-  color: rgba(121, 239, 171, 0.98);
+  color: rgba(138, 247, 181, 0.98);
 }
 
 .detail-tabs :deep(.el-tabs__active-bar) {
-  background: linear-gradient(90deg, rgba(25, 195, 125, 0.95), rgba(37, 214, 210, 0.95));
-  box-shadow: 0 0 16px rgba(37, 214, 210, 0.35);
+  background: linear-gradient(90deg, rgba(43, 201, 119, 0.96), rgba(115, 255, 191, 0.96));
+  box-shadow: 0 0 16px rgba(67, 223, 139, 0.28);
 }
 
 .detail-tabs :deep(.el-tabs__item:hover) {
-  color: rgba(189, 245, 210, 0.94);
+  color: rgba(226, 240, 235, 0.94);
 }
 
 .overview-section {
@@ -3779,12 +3784,12 @@ watch(
   gap: 18px;
   padding: 22px 24px;
   border-radius: 24px;
-  border: 1px solid rgba(121, 239, 171, 0.17);
+  border: 1px solid rgba(109, 232, 160, 0.14);
   background:
-    radial-gradient(circle at top left, rgba(121, 239, 171, 0.13), transparent 34%),
-    radial-gradient(circle at 90% 18%, rgba(37, 214, 210, 0.09), transparent 24%),
-    linear-gradient(135deg, rgba(8, 30, 25, 0.92), rgba(9, 34, 28, 0.88));
-  box-shadow: 0 20px 46px rgba(2, 12, 8, 0.16);
+    radial-gradient(circle at top left, rgba(65, 214, 128, 0.07), transparent 34%),
+    linear-gradient(145deg, rgba(34, 38, 45, 0.92), rgba(23, 26, 32, 0.95));
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
 }
 
 .overview-hero-head {
@@ -3801,9 +3806,9 @@ watch(
   min-height: 24px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(121, 239, 171, 0.16);
-  background: rgba(7, 26, 22, 0.66);
-  color: rgba(140, 248, 191, 0.92);
+  border: 1px solid rgba(109, 232, 160, 0.16);
+  background: rgba(28, 34, 40, 0.82);
+  color: rgba(145, 244, 185, 0.94);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -3815,7 +3820,7 @@ watch(
   font-size: 30px;
   line-height: 1.08;
   letter-spacing: -0.03em;
-  color: rgba(244, 252, 247, 0.99);
+  color: rgba(244, 247, 246, 0.99);
 }
 
 .overview-hero-summary {
@@ -3823,7 +3828,7 @@ watch(
   margin: 0;
   font-size: 14px;
   line-height: 1.8;
-  color: rgba(214, 238, 223, 0.84);
+  color: rgba(198, 210, 206, 0.82);
 }
 
 .overview-hero-badge {
@@ -3832,9 +3837,11 @@ watch(
   gap: 6px;
   padding: 18px 16px;
   border-radius: 20px;
-  border: 1px solid rgba(121, 239, 171, 0.18);
-  background: linear-gradient(180deg, rgba(18, 65, 50, 0.82), rgba(7, 28, 23, 0.8));
-  box-shadow: inset 0 1px 0 rgba(221, 255, 234, 0.06);
+  border: 1px solid rgba(109, 232, 160, 0.16);
+  background:
+    radial-gradient(circle at top, rgba(57, 196, 118, 0.1), transparent 60%),
+    linear-gradient(180deg, rgba(36, 40, 47, 0.94), rgba(24, 27, 33, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .overview-hero-badge-label,
@@ -3846,17 +3853,17 @@ watch(
 }
 
 .overview-hero-badge-label {
-  color: rgba(211, 235, 224, 0.72);
+  color: rgba(176, 189, 185, 0.74);
 }
 
 .overview-hero-badge strong {
   font-size: 30px;
   line-height: 1;
-  color: rgba(121, 239, 171, 0.98);
+  color: rgba(137, 245, 179, 0.98);
 }
 
 .overview-hero-badge-note {
-  color: rgba(188, 225, 203, 0.76);
+  color: rgba(162, 178, 172, 0.76);
 }
 
 .overview-section .summary-section {
@@ -3882,9 +3889,9 @@ watch(
   min-height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(121, 239, 171, 0.18);
-  background: rgba(7, 28, 23, 0.7);
-  color: rgba(140, 248, 191, 0.92);
+  border: 1px solid rgba(109, 232, 160, 0.16);
+  background: rgba(28, 34, 40, 0.8);
+  color: rgba(145, 244, 185, 0.92);
   font-weight: 600;
 }
 
@@ -3902,6 +3909,14 @@ watch(
   align-items: start;
 }
 
+.green-insight-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(380px, 0.92fr);
+  gap: 22px;
+  align-items: stretch;
+}
+
 .cooling-section .system-trace-shell,
 .green-section .system-trace-shell,
 .power-section .system-trace-shell,
@@ -3911,8 +3926,32 @@ watch(
 }
 
 .param-cards {
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.cooling-section .table-card,
+.power-section .power-architecture-card,
+.green-section .artifact-card-panel,
+.power-section .power-kpi-card,
+.economic-section .economic-metrics-card {
+  grid-column: 1 / -1;
+}
+
+.table-card,
+.power-architecture-card,
+.artifact-card-panel,
+.power-kpi-card,
+.economic-metrics-card {
+  width: 100%;
+  max-width: none;
+}
+
+.power-section .power-architecture-card,
+.power-section .power-kpi-card {
+  justify-self: stretch;
 }
 
 .metrics-grid,
@@ -3927,6 +3966,7 @@ watch(
 .summary-section,
 .info-section,
 .param-card,
+.green-summary-card,
 .system-trace-shell,
 .green-section :deep(.el-card),
 .power-section :deep(.el-card),
@@ -3944,10 +3984,11 @@ watch(
 .report-header,
 .report-content {
   background:
-    radial-gradient(circle at top left, rgba(121, 239, 171, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(8, 30, 25, 0.8), rgba(5, 18, 16, 0.9));
-  border-color: rgba(121, 239, 171, 0.14);
-  box-shadow: inset 0 1px 0 rgba(224, 255, 235, 0.05), 0 18px 42px rgba(2, 12, 8, 0.14);
+    radial-gradient(circle at top left, rgba(65, 214, 128, 0.04), transparent 34%),
+    linear-gradient(180deg, rgba(36, 40, 47, 0.9), rgba(24, 27, 33, 0.95));
+  border-color: rgba(109, 232, 160, 0.12);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.028);
+  backdrop-filter: blur(14px);
 }
 
 .report-title-section,
@@ -3959,9 +4000,9 @@ watch(
 .debate-round,
 .expert-opinion-card {
   background:
-    radial-gradient(circle at top left, rgba(121, 239, 171, 0.06), transparent 34%),
-    linear-gradient(180deg, rgba(9, 33, 28, 0.72), rgba(6, 22, 18, 0.82));
-  border-color: rgba(121, 239, 171, 0.12);
+    radial-gradient(circle at top left, rgba(65, 214, 128, 0.035), transparent 34%),
+    linear-gradient(180deg, rgba(40, 44, 51, 0.84), rgba(27, 30, 36, 0.9));
+  border-color: rgba(109, 232, 160, 0.1);
 }
 
 .metric-card {
@@ -3999,14 +4040,14 @@ watch(
 .report-header-copy h3,
 .report-chapter h2,
 .executive-value {
-  color: rgba(239, 252, 245, 0.98);
+  color: rgba(242, 246, 245, 0.98);
 }
 
 .metric-value.highlight,
 .trace-ranking-order,
 .system-trace-badge,
 .economic-kpi-value.success {
-  color: rgba(121, 239, 171, 0.98);
+  color: rgba(136, 245, 179, 0.98);
 }
 
 .metric-label,
@@ -4034,7 +4075,7 @@ watch(
 .expert-metrics,
 .debate-message .content,
 .arbitration-summary {
-  color: rgba(211, 235, 224, 0.74);
+  color: rgba(193, 204, 201, 0.82);
 }
 
 .info-value,
@@ -4046,7 +4087,7 @@ watch(
 .economic-summary-label,
 .expert-name,
 .debate-message .speaker {
-  color: rgba(232, 255, 243, 0.9);
+  color: rgba(232, 238, 236, 0.92);
 }
 
 .system-trace-shell {
@@ -4061,9 +4102,9 @@ watch(
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(121, 239, 171, 0.08), transparent 18%, transparent 82%, rgba(37, 214, 210, 0.06)),
-    linear-gradient(rgba(121, 239, 171, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(121, 239, 171, 0.035) 1px, transparent 1px);
+    linear-gradient(90deg, rgba(88, 232, 144, 0.04), transparent 18%, transparent 82%, rgba(88, 232, 144, 0.03)),
+    linear-gradient(rgba(88, 232, 144, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 232, 144, 0.022) 1px, transparent 1px);
   background-size: auto, 36px 36px, 36px 36px;
 }
 
@@ -4076,8 +4117,8 @@ watch(
 
 .trace-chip,
 .artifact-item-actions a {
-  border-color: rgba(121, 239, 171, 0.16);
-  background: rgba(7, 26, 22, 0.72);
+  border-color: rgba(109, 232, 160, 0.14);
+  background: rgba(33, 38, 45, 0.88);
 }
 
 .chart-container,
@@ -4086,55 +4127,215 @@ watch(
 .artifact-placeholder,
 .markdown-rendered,
 .report-preview-shell {
-  background: rgba(4, 18, 15, 0.5);
-  border-color: rgba(121, 239, 171, 0.12);
+  background: rgba(20, 23, 29, 0.74);
+  border-color: rgba(109, 232, 160, 0.1);
+}
+
+.green-chart-card,
+.table-card,
+.report-section-item--table,
+.report-data-table {
+  position: relative;
+  overflow: hidden;
+}
+
+.green-summary-card,
+.green-chart-card {
+  min-height: 100%;
+}
+
+.green-chart-card::before,
+.table-card::before,
+.report-section-item--table::before,
+.report-data-table::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(121, 239, 171, 0.18), transparent);
+  pointer-events: none;
+}
+
+.green-chart-card,
+.economic-cost-main {
+  padding: 20px;
+}
+
+.green-summary-card {
+  padding: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(65, 214, 128, 0.03), transparent 30%),
+    linear-gradient(180deg, rgba(44, 49, 56, 0.88), rgba(31, 35, 41, 0.94));
+}
+
+.green-chart-card h4,
+.table-card h4,
+.economic-cost-header h4 {
+  margin-bottom: 14px;
+}
+
+.green-chart-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(86, 237, 150, 0.07), transparent 42%),
+    linear-gradient(180deg, rgba(39, 44, 51, 0.9), rgba(26, 29, 35, 0.95));
+}
+
+.chart-container,
+.economic-cost-chart {
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top, rgba(88, 232, 144, 0.05), transparent 55%),
+    linear-gradient(180deg, rgba(28, 32, 39, 0.9), rgba(19, 22, 28, 0.94));
+  box-shadow:
+    inset 0 0 0 1px rgba(109, 232, 160, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.chart-container {
+  padding: 10px;
+  min-height: 320px;
+}
+
+.economic-chart-shell {
+  padding: 10px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top left, rgba(65, 214, 128, 0.05), transparent 34%),
+    linear-gradient(180deg, rgba(31, 35, 42, 0.88), rgba(21, 24, 30, 0.94));
+  box-shadow:
+    inset 0 0 0 1px rgba(109, 232, 160, 0.06),
+    0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+.economic-cost-chart {
+  height: 360px;
+}
+
+.economic-chart-note {
+  margin-top: 14px;
+  background: rgba(34, 39, 46, 0.78);
+  border: 1px solid rgba(109, 232, 160, 0.08);
+  color: rgba(199, 208, 206, 0.82);
+}
+
+.economic-cost-summary {
+  padding: 0;
+  background:
+    radial-gradient(circle at top left, rgba(84, 235, 146, 0.05), transparent 38%),
+    linear-gradient(180deg, rgba(34, 38, 45, 0.92), rgba(24, 27, 33, 0.96));
+}
+
+.economic-summary-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 100%;
+  padding: 18px;
+}
+
+.table-card {
+  padding: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(65, 214, 128, 0.025), transparent 32%),
+    linear-gradient(180deg, rgba(40, 44, 51, 0.84), rgba(28, 31, 37, 0.92));
+}
+
+.report-section-item--table,
+.report-data-table {
+  padding: 14px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top left, rgba(65, 214, 128, 0.022), transparent 30%),
+    linear-gradient(180deg, rgba(49, 53, 60, 0.92), rgba(35, 39, 45, 0.96));
+  border: 1px solid rgba(126, 224, 166, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .green-section :deep(.el-table),
 .cooling-section :deep(.el-table),
 .power-section :deep(.el-table),
 .report-section :deep(.el-table) {
-  --el-table-border-color: rgba(121, 239, 171, 0.1);
-  --el-table-header-bg-color: rgba(8, 34, 28, 0.96);
-  --el-table-row-hover-bg-color: rgba(22, 66, 53, 0.72);
-  background: rgba(5, 19, 15, 0.4);
-  color: rgba(221, 240, 229, 0.88);
+  --el-table-border-color: rgba(129, 220, 167, 0.07);
+  --el-table-header-bg-color: rgba(56, 61, 69, 0.98);
+  --el-table-row-hover-bg-color: rgba(70, 78, 89, 0.94);
+  background: rgba(32, 36, 43, 0.9);
+  color: rgba(230, 235, 233, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(109, 232, 160, 0.03);
+}
+
+.green-section :deep(.el-table__inner-wrapper),
+.cooling-section :deep(.el-table__inner-wrapper),
+.power-section :deep(.el-table__inner-wrapper),
+.report-section :deep(.el-table__inner-wrapper) {
+  border-radius: 16px;
+  overflow: hidden;
+  background: transparent;
 }
 
 .green-section :deep(.el-table th),
 .cooling-section :deep(.el-table th),
 .power-section :deep(.el-table th),
 .report-section :deep(.el-table th) {
-  color: rgba(230, 247, 237, 0.9);
+  color: rgba(243, 246, 245, 0.96);
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .green-section :deep(.el-table td),
 .cooling-section :deep(.el-table td),
 .power-section :deep(.el-table td),
 .report-section :deep(.el-table td) {
-  background: rgba(14, 40, 33, 0.82);
-  color: rgba(224, 240, 231, 0.88);
-  border-color: rgba(121, 239, 171, 0.09);
+  background: rgba(52, 57, 65, 0.96);
+  color: rgba(231, 236, 234, 0.94);
+  border-color: rgba(129, 220, 167, 0.045);
+}
+
+.green-section :deep(.el-table__row:nth-child(even) td),
+.cooling-section :deep(.el-table__row:nth-child(even) td),
+.power-section :deep(.el-table__row:nth-child(even) td),
+.report-section :deep(.el-table__row:nth-child(even) td) {
+  background: rgba(58, 63, 72, 0.97);
+}
+
+.green-section :deep(.el-table__row:hover > td),
+.cooling-section :deep(.el-table__row:hover > td),
+.power-section :deep(.el-table__row:hover > td),
+.report-section :deep(.el-table__row:hover > td) {
+  background: rgba(73, 81, 92, 0.98) !important;
+}
+
+.green-section :deep(.el-table::before),
+.cooling-section :deep(.el-table::before),
+.power-section :deep(.el-table::before),
+.report-section :deep(.el-table::before) {
+  background: rgba(109, 232, 160, 0.05);
 }
 
 .report-content :deep(.el-table__inner-wrapper::before),
 .report-content :deep(.el-table--border::before),
 .report-content :deep(.el-table--border::after) {
-  background: rgba(121, 239, 171, 0.12);
+  background: rgba(109, 232, 160, 0.08);
 }
 
 .report-content :deep(.el-table) {
-  --el-table-border-color: rgba(104, 190, 147, 0.12);
-  --el-table-header-bg-color: rgba(8, 34, 28, 0.96);
-  --el-table-row-hover-bg-color: rgba(18, 58, 46, 0.72);
+  --el-table-border-color: rgba(127, 220, 166, 0.075);
+  --el-table-header-bg-color: rgba(58, 63, 71, 0.98);
+  --el-table-row-hover-bg-color: rgba(76, 84, 95, 0.92);
   border-radius: 16px;
   overflow: hidden;
-  background: rgba(5, 19, 15, 0.28);
-  box-shadow: inset 0 0 0 1px rgba(121, 239, 171, 0.08);
+  background: rgba(34, 38, 45, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(109, 232, 160, 0.035);
 }
 
 .report-content :deep(.el-table__inner-wrapper) {
   background: transparent;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .report-content :deep(.el-table__header-wrapper),
@@ -4146,40 +4347,40 @@ watch(
   padding-top: 12px;
   padding-bottom: 12px;
   background:
-    linear-gradient(180deg, rgba(10, 43, 34, 0.98), rgba(6, 28, 22, 0.96));
+    linear-gradient(180deg, rgba(63, 68, 77, 0.98), rgba(50, 55, 63, 0.98));
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: none;
-  color: rgba(234, 248, 239, 0.94);
-  border-bottom-color: rgba(121, 239, 171, 0.12) !important;
+  color: rgba(241, 245, 244, 0.95);
+  border-bottom-color: rgba(118, 217, 160, 0.08) !important;
 }
 
 .report-content :deep(.el-table td) {
   padding-top: 14px;
   padding-bottom: 14px;
-  background: rgba(16, 42, 35, 0.8);
-  color: rgba(228, 241, 234, 0.9);
-  border-color: rgba(121, 239, 171, 0.07);
+  background: rgba(54, 59, 67, 0.97);
+  color: rgba(232, 236, 234, 0.93);
+  border-color: rgba(122, 216, 161, 0.04);
 }
 
 .report-content :deep(.el-table__row:nth-child(even) td) {
-  background: rgba(20, 48, 40, 0.82);
+  background: rgba(59, 65, 74, 0.97);
 }
 
 .report-content :deep(.el-table__row:hover > td) {
-  background: rgba(23, 62, 49, 0.94) !important;
+  background: rgba(74, 82, 93, 0.98) !important;
 }
 
 .report-content :deep(.el-table td:first-child) {
   background:
-    linear-gradient(180deg, rgba(12, 37, 31, 0.9), rgba(9, 30, 25, 0.94));
-  color: rgba(241, 252, 246, 0.96);
+    linear-gradient(180deg, rgba(46, 53, 61, 0.98), rgba(37, 42, 49, 0.98));
+  color: rgba(241, 246, 244, 0.96);
   font-weight: 600;
 }
 
 .report-content :deep(.el-table th:first-child) {
   background:
-    linear-gradient(180deg, rgba(10, 50, 39, 0.98), rgba(7, 34, 27, 0.98));
+    linear-gradient(180deg, rgba(67, 72, 80, 0.98), rgba(53, 58, 66, 0.98));
 }
 
 .report-content :deep(.el-table tr td + td),
@@ -4191,23 +4392,23 @@ watch(
   padding: 18px;
   border-radius: 18px;
   background:
-    linear-gradient(rgba(121, 239, 171, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(121, 239, 171, 0.04) 1px, transparent 1px),
-    rgba(3, 16, 13, 0.5);
+    linear-gradient(rgba(121, 239, 171, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(121, 239, 171, 0.03) 1px, transparent 1px),
+    rgba(20, 24, 29, 0.82);
   background-size: 34px 34px;
   border: 1px solid rgba(121, 239, 171, 0.13);
 }
 
 .arch-item,
 .stat-item {
-  background: rgba(7, 26, 22, 0.72);
+  background: rgba(34, 40, 47, 0.92);
   border-color: rgba(121, 239, 171, 0.14);
-  color: rgba(232, 255, 243, 0.9);
+  color: rgba(236, 243, 240, 0.92);
 }
 
 .arch-arrow {
-  color: rgba(37, 214, 210, 0.88);
-  text-shadow: 0 0 14px rgba(37, 214, 210, 0.32);
+  color: rgba(121, 239, 171, 0.9);
+  text-shadow: 0 0 16px rgba(121, 239, 171, 0.26);
 }
 
 .economic-cost-panel {
@@ -4216,7 +4417,7 @@ watch(
 
 .economic-cost-item:hover {
   border-color: rgba(121, 239, 171, 0.32);
-  background: rgba(15, 54, 42, 0.82);
+  background: rgba(42, 58, 49, 0.86);
 }
 
 .economic-cost-chart {
@@ -4225,6 +4426,7 @@ watch(
 
 @media (max-width: 1200px) {
   .overview-section,
+  .green-insight-grid,
   .cooling-section,
   .green-section,
   .power-section,
@@ -4258,6 +4460,7 @@ watch(
     left: 0;
   }
 
+  .green-insight-grid,
   .param-cards,
   .overview-section .metrics-grid {
     grid-template-columns: 1fr;
