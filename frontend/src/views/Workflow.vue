@@ -366,9 +366,9 @@ const workflowStages = {
     icon: Connection,
     toneClass: 'tone-arbitrator',
     backendRef: 'ArbitratorNode',
-    responsibility: '整合专家意见、分析冲突、生成权衡方案，并输出总分、关键指标、风险、建议和最终置信度。',
-    inputs: ['三位专家观点', '辩论历史', '共识得分'],
-    outputs: ['最终方案 JSON', 'trade_offs', 'risks', 'recommendations', 'confidence'],
+    responsibility: '整合专家意见、分析冲突、生成权衡方案，并输出最终方案、关键指标、风险、建议和修订说明。',
+    inputs: ['三位专家观点', '辩论历史', '初稿方案'],
+    outputs: ['最终方案 JSON', 'trade_offs', 'risks', 'recommendations', 'parameter_changes'],
     logic: ['不简单平均，而是结合冲突与权衡进行裁决', '生成最终综合方案结构'],
     routing: ['进入输出节点']
   },

@@ -71,7 +71,6 @@ class Solution(BaseModel):
 
     # 元数据
     generated_by: str = Field(default="ai_system", description="生成者")
-    confidence: float = Field(default=0.8, ge=0, le=1, description="置信度")
     generation_time: float = Field(default=0.0, description="生成耗时(秒)")
     created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
     updated_at: datetime = Field(default_factory=datetime.now, description="更新时间")

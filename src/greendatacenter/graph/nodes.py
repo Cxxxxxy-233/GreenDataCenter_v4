@@ -686,19 +686,15 @@ class DraftPlanAgentNode:
 
         memory_context = self.memory.get_memory_context()
         budget_feedback = state.get("budget_feedback", "")
-        draft_plan_feedback = state.get("draft_plan_feedback", "")
 
         if budget_feedback:
             sys.stdout.write(f"  - Budget feedback: {budget_feedback}\n")
-        if draft_plan_feedback:
-            sys.stdout.write("  - Debate feedback received\n")
         sys.stdout.write("=" * 60 + "\n")
         sys.stdout.flush()
 
         input_payload = {
             "user_requirement": req_data,
             "budget_feedback": budget_feedback,
-            "debate_feedback": draft_plan_feedback,
             "memory_context": memory_context,
         }
 
@@ -1046,9 +1042,7 @@ Analysis points:
 5. Budget compliance evaluation
 6. Cost optimization recommendations
 
-Scoring standards (0-1 points):
-- cost_efficiency: cost efficiency
-- roi: return on investment
+Do not output any score fields. Focus on factual metrics, recommendations, and concerns.
 
 Output format:
 Output in JSON format with EXACTLY these field names (do NOT translate to Chinese):
@@ -1058,10 +1052,6 @@ Output in JSON format with EXACTLY these field names (do NOT translate to Chines
   "expert_name": "Economic Analysis Expert-Zhang",
   "summary": "Opinion summary",
   "reasoning": "Detailed reasoning process",
-  "scores": {{
-    "cost_efficiency": 0.85,
-    "roi": 0.12
-  }},
   "metrics": {{
     "total_cost": 1800,
     "cost_per_rack": 18,
@@ -1069,8 +1059,7 @@ Output in JSON format with EXACTLY these field names (do NOT translate to Chines
     "payback_period": 8
   }},
   "recommendations": ["Recommendation 1", "Recommendation 2"],
-  "concerns": ["Concern 1"],
-  "confidence": 0.85
+    "concerns": ["Concern 1"]
 }}
 ```
 
@@ -1121,8 +1110,6 @@ IMPORTANT:
 
         sys.stdout.write("\n[OK] Economic analysis completed\n")
         sys.stdout.write(f"  - Estimated cost: {opinion.metrics.get('total_cost', 'N/A')} wan yuan\n")
-        sys.stdout.write(f"  - ROI: {opinion.scores.get('roi', 'N/A')*100:.1f}%\n")
-        sys.stdout.write(f"  - Cost efficiency: {opinion.scores.get('cost_efficiency', 'N/A'):.2f}\n")
         sys.stdout.flush()
 
         # 璁板綍娴佸紡杈撳嚭
@@ -1188,11 +1175,10 @@ IMPORTANT:
             "expert_name": "Economic Analysis Expert-Zhang",
             "summary": "Cost estimation completed",
             "reasoning": content[:500] if len(content) > 500 else content,
-            "scores": {"cost_efficiency": 0.7, "roi": 0.1},
+            "scores": {},
             "metrics": {},
             "recommendations": [],
-            "concerns": [],
-            "confidence": 0.6
+            "concerns": []
         }
 
     def _on_stream_chunk(self, chunk: str):
@@ -1225,9 +1211,7 @@ Analysis points:
 6. Power risk assessment
 7. Green power impact on reliability evaluation
 
-Scoring standards (0-1 points):
-- reliability: reliability score
-- availability: availability score
+Do not output any score fields. Focus on factual metrics, recommendations, concerns.
 
 Output format:
 Output in JSON format with EXACTLY these field names (do NOT translate to Chinese):
@@ -1237,10 +1221,6 @@ Output in JSON format with EXACTLY these field names (do NOT translate to Chines
   "expert_name": "Power Reliability Expert-Li",
   "summary": "Opinion summary",
   "reasoning": "Detailed reasoning process",
-  "scores": {{
-    "reliability": 0.9,
-    "availability": 0.9999
-  }},
   "metrics": {{
     "tier_level": 3,
     "expected_availability": 99.98,
@@ -1250,8 +1230,7 @@ Output in JSON format with EXACTLY these field names (do NOT translate to Chines
     "distribution_reliability": 0.99
   }},
   "recommendations": ["Recommendation 1"],
-  "concerns": ["Concern 1"],
-  "confidence": 0.9
+    "concerns": ["Concern 1"]
 }}
 ```
 
@@ -1302,7 +1281,6 @@ IMPORTANT:
 
         sys.stdout.write("\n[OK] Power reliability analysis completed\n")
         sys.stdout.write(f"  - Expected availability: {opinion.metrics.get('expected_availability', 'N/A')}%\n")
-        sys.stdout.write(f"  - Reliability score: {opinion.scores.get('reliability', 'N/A'):.2f}\n")
         sys.stdout.flush()
 
         # 璁板綍娴佸紡杈撳嚭
@@ -1364,11 +1342,10 @@ IMPORTANT:
             "expert_name": "Power Reliability Expert-Li",
             "summary": "Reliability analysis completed",
             "reasoning": content[:500] if len(content) > 500 else content,
-            "scores": {"reliability": 0.8, "availability": 0.999},
+            "scores": {},
             "metrics": {},
             "recommendations": [],
-            "concerns": [],
-            "confidence": 0.7
+            "concerns": []
         }
 
     def _on_stream_chunk(self, chunk: str):
@@ -1400,11 +1377,7 @@ Analysis points:
 5. Carbon reduction potential analysis
 6. Environmental optimization recommendations
 
-Scoring standards (0-1 points):
-- environmental_score: environmental score
-- pue_score: PUE efficiency score
-- green_power_score: green power usage score
-- carbon_efficiency: carbon efficiency score
+Do not output any score fields. Focus on factual metrics, recommendations, concerns.
 
 Output format:
 Output in JSON format with EXACTLY these field names (do NOT translate to Chinese):
@@ -1414,12 +1387,6 @@ Output in JSON format with EXACTLY these field names (do NOT translate to Chines
   "expert_name": "Environmental Analysis Expert-Wang",
   "summary": "Opinion summary",
   "reasoning": "Detailed reasoning process",
-  "scores": {{
-    "environmental_score": 0.88,
-    "pue_score": 0.95,
-    "green_power_score": 0.9,
-    "carbon_efficiency": 1.0
-  }},
   "metrics": {{
     "pue_target": 1.3,
     "green_power_ratio": 0.7,
@@ -1427,8 +1394,7 @@ Output in JSON format with EXACTLY these field names (do NOT translate to Chines
     "carbon_per_rack": 2.5
   }},
   "recommendations": ["Recommendation 1"],
-  "concerns": ["Concern 1"],
-  "confidence": 0.85
+    "concerns": ["Concern 1"]
 }}
 ```
 
@@ -1479,7 +1445,6 @@ IMPORTANT:
 
         sys.stdout.write("\n[OK] Environmental analysis completed\n")
         sys.stdout.write(f"  - Annual carbon emission: {opinion.metrics.get('annual_carbon_emission', 'N/A')} tons\n")
-        sys.stdout.write(f"  - Environmental score: {opinion.scores.get('environmental_score', 'N/A'):.2f}\n")
         sys.stdout.flush()
 
         # 璁板綍娴佸紡杈撳嚭
@@ -1541,11 +1506,10 @@ IMPORTANT:
             "expert_name": "Environmental Analysis Expert-Wang",
             "summary": "Environmental analysis completed",
             "reasoning": content[:500] if len(content) > 500 else content,
-            "scores": {"environmental_score": 0.8, "pue_score": 0.8, "green_power_score": 0.8, "carbon_efficiency": 0.8},
+            "scores": {},
             "metrics": {"pue_target": 1.5, "green_power_ratio": 0.5, "annual_carbon_emission": 0, "carbon_per_rack": 0},
             "recommendations": [],
-            "concerns": [],
-            "confidence": 0.7
+            "concerns": []
         }
 
     def _on_stream_chunk(self, chunk: str):
@@ -1567,35 +1531,12 @@ class FinalReportNode:
         state_json = json.dumps(state_payload, ensure_ascii=False, indent=2)
 
         system_prompt = (
-            "浣犳槸鈥滅豢鑹叉暟鎹腑蹇冭鍒掑彲琛屾€ф€婚【闂€濄€俓n\n"
-            "宸ヤ綔鏂瑰紡锛堝繀椤婚伒瀹堬級锛歕n"
-            "1. 鍏堥槄璇荤敤鎴锋彁渚涚殑 state_json锛岃瘑鍒凡缁欏嚭鐨勯」鐩弬鏁颁笌缂哄け瀛楁銆俓n"
-            "2. 鍩轰簬 state 鏁版嵁鐩存帴瀹屾暣鍒嗘瀽锛屽苟鐢熸垚鏈€缁堟姤鍛娿€俓n"
-            "3. 杈撳嚭鏈€缁堟姤鍛婃椂锛屽繀椤绘槸 Markdown 涓旀鏂囦笉灏戜簬 1000 瀛椼€俓n\n"
-            "鎶ュ憡纭€ц姹傦細\n"
-            "- 蹇呴』鍖呭惈缁撹锛氬彲琛?/ 鏈夋潯浠跺彲琛?/ 鏆備笉鍙銆俓n"
-            "- 鑻ユ暟鎹己澶憋紝鏄庣‘鍐欏嚭鈥滄暟鎹己澶?寰呰ˉ鍏呪€濆強瀵圭粨璁哄奖鍝嶃€俓n\n"
-            "寤鸿缁撴瀯锛歕n"
-            "- 鏍囬涓庢憳瑕乗n"
-            "- 1. 椤圭洰鑳屾櫙涓庣洰鏍囩害鏉焅n"
-            "- 2. 鍦哄潃涓庣幆澧冨彲琛屾€n"
-            "- 3. 鑳芥簮绯荤粺涓庣豢鐢垫秷绾崇瓥鐣n"
-            "- 4. 鍒跺喎绯荤粺涓庤兘鏁堣矾寰刓n"
-            "- 5. 浠跨湡缁撴灉瑙ｈ涓庤繍琛岀瓥鐣n"
-            "- 6. 璐㈠姟鍙鎬т笌鎶曡祫鍥炴敹\n"
-            "- 7. 椋庨櫓娓呭崟涓庣紦瑙ｆ帾鏂絓n"
-            "- 8. 瀹炴柦璺嚎鍥撅紙杩戞湡/涓湡/杩滄湡锛塡n"
-            "- 9. 缁煎悎缁撹涓庡缓璁甛n"
-            "- 10. 鍏抽敭鎸囨爣姹囨€昏〃\n"
-        )
-
-        system_prompt = (
             "You are a senior data-center consulting partner writing the final Chinese deliverable for an owner/investor.\n"
             "Use the provided state_json as the only source of project facts. Do not invent exact values that are not in the data.\n"
             "Write in professional Chinese Markdown, with clear headings, tables, decision logic, assumptions, risks, and next-step actions.\n"
             "The report should feel like a formal consulting scheme report for a green data center, not a short AI summary.\n\n"
             "Mandatory quality requirements:\n"
-            "1. Start with an executive decision page: recommendation, score, confidence, and key go/no-go conditions.\n"
+            "1. Start with an executive decision page: recommendation and key go/no-go conditions.\n"
             "2. Include project background, user inputs, capacity sizing, IT load, estimated rack count, PUE and green power targets.\n"
             "3. Explain the integrated technical architecture: cooling, power reliability, green power absorption, energy storage/procurement.\n"
             "4. Include economic analysis: CAPEX, OPEX, green-power cost, payback or cost-control logic when available.\n"
@@ -2066,8 +2007,7 @@ class FinalReportNode:
             "scores": {"environmental_score": 0.8, "pue_score": 0.8, "green_power_score": 0.8, "carbon_efficiency": 0.8},
             "metrics": {},
             "recommendations": [],
-            "concerns": [],
-            "confidence": 0.7
+            "concerns": []
         }
 
     def _on_stream_chunk(self, chunk: str):
@@ -2136,18 +2076,14 @@ class DebateRoundNode:
             other_opinions=[economic_opinion, power_opinion]
         )
 
-        consensus_score = self._evaluate_consensus(state)
-
         sys.stdout.write(f"\n[OK] Debate round {state['debate_round']} completed\n")
-        sys.stdout.write(f"  - Consensus score: {consensus_score:.2f}\n")
+        sys.stdout.write(f"  - Collected {len(round_messages)} review messages\n")
         sys.stdout.flush()
 
-        draft_plan_feedback = self.memory.get_memory_context()
         debate_summary = {
             "round": state["debate_round"],
             "messages": round_messages,
-            "consensus_score": consensus_score,
-            "suggestions": [
+            "expert_summaries": [
                 f"Economic view: {economic_opinion.summary}",
                 f"Reliability view: {power_opinion.summary}",
                 f"Environmental view: {environmental_opinion.summary}",
@@ -2157,16 +2093,11 @@ class DebateRoundNode:
         streaming_output.append({
             "node": "debate_round",
             "expert": "Debate Coordinator",
-            "content": f"绗?{state['debate_round']} 杞京璁哄畬鎴愶紝鍏?{len(round_messages)} 鏉″彂瑷€锛屽叡璇嗗害 {consensus_score:.2f}",
+            "content": f"第{state['debate_round']}轮辩论完成，已收集{len(round_messages)}条评审意见，直接进入仲裁。",
             "full_output": debate_summary,
         })
 
         return {
-            "debate_round": state["debate_round"] + 1,
-            "consensus_score": consensus_score,
-            "should_continue_debate": consensus_score < 0.8,
-            "consensus_reached": consensus_score >= 0.8,
-            "draft_plan_feedback": draft_plan_feedback,
             "debate_history": debate_history,
             "streaming_output": streaming_output
         }
@@ -2206,10 +2137,10 @@ Other experts' points:
 Now please express your opinion, focusing on:
 1. Respond to other experts' points
 2. State what you agree or disagree with reasons
-3. Propose possible coordination solutions
-4. Reveal trade-offs between different dimensions
+3. Point out which draft parameters should be adjusted, if any
+4. Explain the expected impact of the adjustment on cost, reliability, or environmental performance
 
-Please respond concisely in Chinese, within 200 characters."""
+Do not give scores or rankings. Please respond concisely in Chinese, within 200 characters."""
 
         # 鍒涘缓LLM
         from greendatacenter.llm.config import get_llm
@@ -2318,109 +2249,136 @@ class ArbitratorNode:
     def __init__(self, memory: ExpertSharedMemory):
         self.memory = memory
 
-    def __call__(self, state: GraphState) -> dict[str, Any]:
-        """Run arbitration and finalize the solution."""
-        sys.stdout.write("\n" + "="*60 + "\n")
-        sys.stdout.write("[Arbitrator] Start comprehensive analysis...\n")
-        sys.stdout.write("="*60 + "\n")
-        sys.stdout.flush()
+        def __call__(self, state: GraphState) -> dict[str, Any]:
+                """Run arbitration and finalize the solution."""
+                sys.stdout.write("\n" + "=" * 60 + "\n")
+                sys.stdout.write("[Arbitrator] Start comprehensive revision...\n")
+                sys.stdout.write("=" * 60 + "\n")
+                sys.stdout.flush()
 
-        economic_opinion = state.get("economic_opinion")
-        power_opinion = state.get("power_reliability_opinion")
-        environmental_opinion = state.get("environmental_opinion")
-        debate_round = state.get("debate_round", 0)
-        
-        # 鑾峰彇鎴愭湰璁＄畻缁撴灉锛堢敤浜庢纭殑鎬绘垚鏈級
-        economic_analysis_result = state.get("economic_analysis_result", {})
-        total_capex_lakh = economic_analysis_result.get("total_capex_lakh", 0)
+                economic_opinion = state.get("economic_opinion")
+                power_opinion = state.get("power_reliability_opinion")
+                environmental_opinion = state.get("environmental_opinion")
+                debate_round = state.get("debate_round", 0)
+                debate_history = state.get("debate_history", [])
+                green_power_result = dict(state.get("green_power_result") or {})
+                cooling_result = dict(state.get("cooling_result") or {})
+                power_supply_plan = dict(state.get("power_supply_plan") or {})
 
-        # 鏋勫缓浠茶prompt
-        opinions_text = f"""
-[Economic Analysis Expert-{economic_opinion.expert_name}]
-Summary: {economic_opinion.summary}
-Reasoning: {economic_opinion.reasoning}
-Scores: {economic_opinion.scores}
-Key metrics: {economic_opinion.metrics}
-Recommendations: {economic_opinion.recommendations}
+                economic_analysis_result = state.get("economic_analysis_result", {})
+                total_capex_lakh = economic_analysis_result.get("total_capex_lakh", 0)
 
-[Power Reliability Expert-{power_opinion.expert_name}]
-Summary: {power_opinion.summary}
-Reasoning: {power_opinion.reasoning}
-Scores: {power_opinion.scores}
-Key metrics: {power_opinion.metrics}
-Recommendations: {power_opinion.recommendations}
+                arbitration_context = {
+                        "draft_plan": {
+                                "green_power_result": green_power_result,
+                                "cooling_result": cooling_result,
+                                "power_supply_plan": power_supply_plan,
+                                "economic_analysis_result": economic_analysis_result,
+                        },
+                        "expert_reviews": {
+                                "economic": {
+                                        "expert_name": economic_opinion.expert_name,
+                                        "summary": economic_opinion.summary,
+                                        "reasoning": economic_opinion.reasoning,
+                                        "metrics": economic_opinion.metrics,
+                                        "recommendations": economic_opinion.recommendations,
+                                        "concerns": economic_opinion.concerns,
+                                },
+                                "power_reliability": {
+                                        "expert_name": power_opinion.expert_name,
+                                        "summary": power_opinion.summary,
+                                        "reasoning": power_opinion.reasoning,
+                                        "metrics": power_opinion.metrics,
+                                        "recommendations": power_opinion.recommendations,
+                                        "concerns": power_opinion.concerns,
+                                },
+                                "environmental": {
+                                        "expert_name": environmental_opinion.expert_name,
+                                        "summary": environmental_opinion.summary,
+                                        "reasoning": environmental_opinion.reasoning,
+                                        "metrics": environmental_opinion.metrics,
+                                        "recommendations": environmental_opinion.recommendations,
+                                        "concerns": environmental_opinion.concerns,
+                                },
+                        },
+                        "debate_history": debate_history,
+                        "debate_round": debate_round,
+                        "total_capex_lakh": total_capex_lakh,
+                }
 
-[Environmental Analysis Expert-{environmental_opinion.expert_name}]
-Summary: {environmental_opinion.summary}
-Reasoning: {environmental_opinion.reasoning}
-Scores: {environmental_opinion.scores}
-Key metrics: {environmental_opinion.metrics}
-Recommendations: {environmental_opinion.recommendations}
+                arbitration_context_json = json.dumps(arbitration_context, ensure_ascii=False, indent=2)
 
-[Debate status]
-Completed {debate_round} rounds of debate
+                prompt = f"""You are a data center construction solution arbitrator.
 
-[Cost Calculation]
-Total CAPEX (project total investment): {total_capex_lakh} 涓囧厓
-"""
+Your task is to review the initial draft plan, the expert review records, and the debate history, then directly revise the draft plan parameters where the evidence supports it.
 
-        prompt = f"""You are a data center construction solution arbitrator.
-
-Your task is to synthesize opinions from economic, power reliability, and environmental analysis experts to generate the final construction solution.
-
-{opinions_text}
+Context JSON:
+{arbitration_context_json}
 
 [Arbitration task]
-1. Analyze consistency and disagreements among expert opinions
-2. Balance conflicts between different dimensions
-3. Generate optimal solution that accommodates multi-party requirements
-4. Clarify final solution's overall scores and key metrics
+1. Read the original draft plan and the expert review suggestions carefully.
+2. Directly revise the draft parameters when needed, for example storage capacity, PV/wind capacity, UPS redundancy, cooling strategy, or power supply configuration.
+3. Keep the revised parameters consistent across cost, reliability, and environmental sections.
+4. For every material change, explain why it was made and what expert comment or debate point triggered it.
+5. Use the review content and debate record to make the revision.
 
 Output format requirements (JSON) with EXACTLY these field names (do NOT translate to Chinese):
 ```json
 {{
-  "name": "Solution name",
-  "summary": "Solution summary",
-  "overall_scores": {{
-    "economic": 0.85,
-    "reliability": 0.9,
-    "environmental": 0.88,
-    "overall": 0.88
-  }},
-  "key_metrics": {{
-    "total_cost": 1800,
-    "pue": 1.3,
-    "green_power_ratio": 0.7,
-    "tier_level": 3,
-    "expected_availability": 99.98,
-    "annual_carbon_emission": 250
-  }},
-  "economic_section": {{
-    "description": "Economic solution description",
-    "content": {{"total_cost": 1800, "roi": 0.12}},
-    "recommendations": ["Recommendation 1"]
-  }},
-  "power_reliability_section": {{
-    "description": "Power reliability solution description",
-    "content": {{"tier_level": 3, "ups_configuration": "2N"}},
-    "recommendations": ["Recommendation 1"]
-  }},
-  "environmental_section": {{
-    "description": "Environmental solution description",
-    "content": {{"pue": 1.3, "green_power_ratio": 0.7}},
-    "recommendations": ["Recommendation 1"]
-  }},
-  "trade_offs": [
-    {{"conflict": "Cost vs Reliability", "resolution": "Prioritize reliability with optimization"}}
-  ],
-  "risks": [
-    {{"type": "Power supply", "description": "Risk description"}}
-  ],
-  "recommendations": [
-    "Final recommendation 1",
-    "Final recommendation 2"
-  ],
-  "confidence": 0.85
+    "name": "Solution name",
+    "summary": "Solution summary",
+    "revised_draft_plan": {{
+        "green_power_result": {{
+            "optimization": {{}},
+            "procurement_plan": {{}}
+        }},
+        "cooling_result": {{}},
+        "power_supply_plan": {{}},
+        "revision_notes": ["Why each major parameter changed"]
+    }},
+    "parameter_changes": [
+        {{"parameter": "storage_capacity_mwh", "before": 10, "after": 12, "reason": "Improve peak-shaving margin"}}
+    ],
+    "key_metrics": {{
+        "total_cost": 1800,
+        "pue": 1.3,
+        "green_power_ratio": 0.7,
+        "tier_level": 3,
+        "expected_availability": 99.98,
+        "annual_carbon_emission": 250
+    }},
+    "economic_section": {{
+        "description": "Economic solution description",
+        "content": {{"total_cost": 1800, "roi": 0.12}},
+        "recommendations": ["Recommendation 1"]
+    }},
+    "power_reliability_section": {{
+        "description": "Power reliability solution description",
+        "content": {{"tier_level": 3, "ups_configuration": "2N"}},
+        "recommendations": ["Recommendation 1"]
+    }},
+    "environmental_section": {{
+        "description": "Environmental solution description",
+        "content": {{"pue": 1.3, "green_power_ratio": 0.7}},
+        "recommendations": ["Recommendation 1"]
+    }},
+    "trade_offs": [
+        {{"conflict": "Cost vs Reliability", "resolution": "Prioritize reliability with optimization"}}
+    ],
+    "risks": [
+        {{"type": "Power supply", "description": "Risk description"}}
+    ],
+    "recommendations": [
+        "Final recommendation 1",
+        "Final recommendation 2"
+    ],
+    "revision_display_items": [
+        {{
+            "label": "储能容量",
+            "change": "45MWh → 48MWh",
+            "reason": "提升对风光波动的缓冲能力"
+        }}
+    ]
 }}
 ```
 
@@ -2428,45 +2386,79 @@ IMPORTANT: Use EXACTLY the field names as shown above. Do not translate field na
 
 Please conduct arbitration decision and generate final solution."""
 
-        # 鍒涘缓LLM
-        llm = create_arbitrator_llm(on_chunk=self._on_stream_chunk)
+                llm = create_arbitrator_llm(on_chunk=self._on_stream_chunk)
 
-        # 璋冪敤LLM
-        from langchain_core.messages import HumanMessage, SystemMessage
-        messages = [
-            SystemMessage(content="You are a data center construction solution design arbitrator."),
-            HumanMessage(content=prompt)
-        ]
+                from langchain_core.messages import HumanMessage, SystemMessage
+                messages = [
+                        SystemMessage(content="You are a data center construction solution design arbitrator."),
+                        HumanMessage(content=prompt),
+                ]
 
-        response = llm.invoke(messages)
+                response = llm.invoke(messages)
 
-        # 瑙ｆ瀽杈撳嚭
-        solution_data = self._parse_json_response(response.content)
-        solution_data = self._align_total_cost(solution_data, total_capex_lakh, state)
+                solution_data = self._parse_json_response(response.content)
+                revised_draft_plan = solution_data.get("revised_draft_plan") if isinstance(solution_data, dict) else None
+                if isinstance(revised_draft_plan, dict):
+                        revised_green_power = dict(revised_draft_plan.get("green_power_result") or {})
+                        revised_cooling = dict(revised_draft_plan.get("cooling_result") or {})
+                        revised_power = dict(revised_draft_plan.get("power_supply_plan") or {})
+                        if revised_green_power:
+                                solution_data["green_power_result"] = revised_green_power
+                        if revised_cooling:
+                                solution_data["cooling_result"] = revised_cooling
+                        if revised_power:
+                                solution_data["power_supply_plan"] = revised_power
+                solution_data = self._align_total_cost(solution_data, total_capex_lakh, state)
+                revision_display_items = self._build_revision_display_items(solution_data, state, limit=8)
+                solution_data["revision_display_items"] = revision_display_items
+                solution_data["revision_display_count"] = len(revision_display_items)
 
-        sys.stdout.write("\n[OK] Arbitration decision completed\n")
-        sys.stdout.write(f"  - Overall score: {solution_data.get('overall_scores', {}).get('overall', 0):.2f}\n")
-        sys.stdout.write(f"  - Confidence: {solution_data.get('confidence', 0.8):.2f}\n")
-        sys.stdout.flush()
+                sys.stdout.write("\n[OK] Arbitration decision completed\n")
+                sys.stdout.write(f"  - Revised draft plan applied: {bool(revised_draft_plan)}\n")
+                sys.stdout.flush()
 
-        # 璁板綍娴佸紡杈撳嚭
-        streaming_output = state.get("streaming_output", [])
-        streaming_output.append({
-            "node": "arbitrator",
-            "expert": "Arbitrator",
-            "content": "Generated final construction solution",
-            "full_output": solution_data
-        })
+                streaming_output = state.get("streaming_output", [])
+                streaming_output.append({
+                        "node": "arbitrator",
+                        "expert": "Arbitrator",
+                        "content": "Generated revised final construction solution",
+                        "full_output": solution_data,
+                })
 
-        return {
-            "solution": solution_data,
-            "streaming_output": streaming_output
-        }
+                return {
+                        "solution": solution_data,
+                        "green_power_result": solution_data.get("green_power_result", green_power_result),
+                        "cooling_result": solution_data.get("cooling_result", cooling_result),
+                        "power_supply_plan": solution_data.get("power_supply_plan", power_supply_plan),
+                        "revision_display_items": revision_display_items,
+                        "revision_display_count": len(revision_display_items),
+                        "streaming_output": streaming_output,
+                }
+
+        ArbitratorNode.__call__ = __call__
 
     def _align_total_cost(self, solution_data: dict, total_capex_lakh: float, state: GraphState) -> dict:
         """Align arbitrator output with workflow metrics."""
         normalized = dict(solution_data or {})
-        total_cost = round(float(total_capex_lakh or 0.0), 2)
+        revised_plan = normalized.get("revised_draft_plan") if isinstance(normalized.get("revised_draft_plan"), dict) else {}
+        green_power_result = dict(
+            (revised_plan.get("green_power_result") if isinstance(revised_plan, dict) else None)
+            or normalized.get("green_power_result")
+            or state.get("green_power_result")
+            or {}
+        )
+        cooling_result = dict(
+            (revised_plan.get("cooling_result") if isinstance(revised_plan, dict) else None)
+            or normalized.get("cooling_result")
+            or state.get("cooling_result")
+            or {}
+        )
+        power_supply_plan = dict(
+            (revised_plan.get("power_supply_plan") if isinstance(revised_plan, dict) else None)
+            or normalized.get("power_supply_plan")
+            or state.get("power_supply_plan")
+            or {}
+        )
         economic_opinion = state.get("economic_opinion")
         economic_metrics = dict(getattr(economic_opinion, "metrics", {}) or {})
         power_opinion = state.get("power_reliability_opinion")
@@ -2475,6 +2467,20 @@ Please conduct arbitration decision and generate final solution."""
         environmental_metrics = dict(getattr(environmental_opinion, "metrics", {}) or {})
         roi = _safe_float(economic_metrics.get("roi"), 0.0)
         payback_period = _safe_float(economic_metrics.get("payback_period"), 0.0)
+
+        cost_factors = dict((state.get("economic_analysis_result") or {}).get("cost_factors") or COST_FACTORS)
+        power_supply_raw = dict(power_supply_plan.get("raw_json") or {})
+        load_mw = _safe_float(power_supply_raw.get("total_load_mw"), _safe_float(power_supply_plan.get("total_load_mw"), 0.0))
+        cost_per_mw = _safe_float(power_supply_raw.get("cost_per_mw"), _safe_float(power_supply_plan.get("cost_per_mw"), 0.0))
+        power_supply_capex = load_mw * cost_per_mw
+
+        optimization = dict(green_power_result.get("optimization") or {})
+        wind_capex = _safe_float(optimization.get("wind_capacity_mw"), 0.0) * _safe_float(cost_factors.get("wind_per_mw"), COST_FACTORS["wind_per_mw"])
+        pv_capex = _safe_float(optimization.get("pv_capacity_mw"), 0.0) * _safe_float(cost_factors.get("pv_per_mw"), COST_FACTORS["pv_per_mw"])
+        storage_capex = _safe_float(optimization.get("storage_capacity_mwh"), 0.0) * _safe_float(cost_factors.get("storage_per_mwh"), COST_FACTORS["storage_per_mwh"])
+        cooling_capex = _safe_float(dict(cooling_result.get("economic_indicators") or {}).get("initial_investment"), 0.0)
+        recalculated_total_capex = power_supply_capex + wind_capex + pv_capex + storage_capex + cooling_capex
+        total_cost = round(recalculated_total_capex if recalculated_total_capex > 0 else float(total_capex_lakh or 0.0), 2)
 
         key_metrics = dict(normalized.get("key_metrics") or {})
         key_metrics["total_cost"] = total_cost
@@ -2531,6 +2537,165 @@ Please conduct arbitration decision and generate final solution."""
 
         return normalized
 
+    def _build_revision_display_items(self, solution_data: dict, state: GraphState, limit: int = 8) -> list[dict[str, str]]:
+        """Build a small Chinese-friendly revision list for UI display."""
+        normalized = dict(solution_data or {})
+        display_items: list[dict[str, str]] = []
+
+        raw_display_items = normalized.get("revision_display_items")
+        if isinstance(raw_display_items, list):
+            for item in raw_display_items:
+                normalized_item = self._coerce_revision_display_item(item)
+                if normalized_item:
+                    display_items.append(normalized_item)
+
+        parameter_changes = normalized.get("parameter_changes")
+        if isinstance(parameter_changes, list):
+            for change in parameter_changes:
+                item = self._normalize_revision_display_item(change)
+                if item:
+                    display_items.append(item)
+
+        if len(display_items) < limit:
+            display_items.extend(self._derive_revision_display_items(normalized, state))
+
+        deduped: list[dict[str, str]] = []
+        seen_labels: set[str] = set()
+        for item in display_items:
+            label = str(item.get("label") or "").strip()
+            change = str(item.get("change") or "").strip()
+            reason = str(item.get("reason") or "").strip()
+            if not label or not change or label in seen_labels:
+                continue
+            seen_labels.add(label)
+            deduped.append({"label": label, "change": change, "reason": reason or "仲裁专家根据评审意见进行了修订。"})
+            if len(deduped) >= limit:
+                break
+
+        return deduped
+
+    def _coerce_revision_display_item(self, item: Any) -> dict[str, str] | None:
+        if not isinstance(item, dict):
+            return None
+        label = str(item.get("label") or "").strip()
+        change = str(item.get("change") or "").strip()
+        reason = str(item.get("reason") or "").strip()
+        if not label or not change:
+            return None
+        return {
+            "label": label,
+            "change": change,
+            "reason": reason or "仲裁专家根据评审意见进行了修订。",
+        }
+
+    def _normalize_revision_display_item(self, change: Any) -> dict[str, str] | None:
+        if not isinstance(change, dict):
+            return None
+        parameter = str(change.get("parameter") or "").strip()
+        label = self._revision_parameter_label(parameter)
+        before = self._format_revision_value(parameter, change.get("before"))
+        after = self._format_revision_value(parameter, change.get("after"))
+        if not label or before == after:
+            return None
+        return {
+            "label": label,
+            "change": f"{before} → {after}",
+            "reason": str(change.get("reason") or "仲裁专家根据评审意见进行了修订。").strip(),
+        }
+
+    def _derive_revision_display_items(self, solution_data: dict, state: GraphState) -> list[dict[str, str]]:
+        base_green = dict(state.get("green_power_result") or {})
+        base_cooling = dict(state.get("cooling_result") or {})
+        base_power = dict(state.get("power_supply_plan") or {})
+        revised_plan = dict(solution_data.get("revised_draft_plan") or {})
+        revised_green = dict(solution_data.get("green_power_result") or revised_plan.get("green_power_result") or {})
+        revised_cooling = dict(solution_data.get("cooling_result") or revised_plan.get("cooling_result") or {})
+        revised_power = dict(solution_data.get("power_supply_plan") or revised_plan.get("power_supply_plan") or {})
+        revised_metrics = dict(solution_data.get("key_metrics") or {})
+
+        candidates = [
+            ("storage_capacity_mwh", base_green.get("optimization", {}).get("storage_capacity_mwh"), revised_green.get("optimization", {}).get("storage_capacity_mwh"), "基于评审意见微调储能容量，增强削峰填谷与波动缓冲能力。"),
+            ("pv_capacity_mw", base_green.get("optimization", {}).get("pv_capacity_mw"), revised_green.get("optimization", {}).get("pv_capacity_mw"), "基于评审意见调整光伏容量，平衡绿电占比和投资成本。"),
+            ("wind_capacity_mw", base_green.get("optimization", {}).get("wind_capacity_mw"), revised_green.get("optimization", {}).get("wind_capacity_mw"), "基于评审意见调整风电容量，提升绿电供给稳定性。"),
+            ("green_power_ratio", base_green.get("procurement_plan", {}).get("total_green_power_ratio"), revised_green.get("procurement_plan", {}).get("total_green_power_ratio"), "基于专家辩论优化整体绿电比例，增强绿色供能效果。"),
+            ("cooling_technology", base_cooling.get("cooling_technology"), revised_cooling.get("cooling_technology"), "基于仲裁意见优化制冷技术路线，改善 PUE 与热管理表现。"),
+            ("pue", base_cooling.get("estimated_pue"), revised_cooling.get("estimated_pue"), "基于仲裁意见修订 PUE 目标/结果，使能效更符合设计边界。"),
+            ("scheme_name", base_power.get("scheme_name"), revised_power.get("scheme_name"), "基于供电可靠性评审调整供电方案，提升系统冗余度。"),
+            ("redundancy_logic", base_power.get("redundancy_logic"), revised_power.get("redundancy_logic"), "基于供电可靠性评审优化冗余逻辑，减少单点风险。"),
+            ("external_voltage", base_power.get("external_voltage"), revised_power.get("external_voltage"), "基于工程边界复核供电电压等级，确保方案可实施。"),
+            ("tier_level", base_power.get("raw_json", {}).get("machine_room_grade"), revised_power.get("raw_json", {}).get("machine_room_grade"), "基于可靠性要求同步校准机房等级和供配电配置。"),
+            ("annual_carbon_emission", state.get("environmental_opinion", {}).metrics.get("annual_carbon_emission") if hasattr(state.get("environmental_opinion"), "metrics") else None, revised_metrics.get("annual_carbon_emission"), "基于环保评审结果降低年碳排放。"),
+            ("total_cost", state.get("economic_analysis_result", {}).get("total_capex_lakh"), revised_metrics.get("total_cost"), "基于经济性评审与仲裁修订控制总投资变化。"),
+        ]
+
+        items: list[dict[str, str]] = []
+        for parameter, before, after, reason in candidates:
+            label = self._revision_parameter_label(parameter)
+            before_text = self._format_revision_value(parameter, before)
+            after_text = self._format_revision_value(parameter, after)
+            if not label or before_text == after_text:
+                continue
+            items.append({
+                "label": label,
+                "change": f"{before_text} → {after_text}",
+                "reason": reason,
+            })
+        return items
+
+    def _revision_parameter_label(self, parameter: str) -> str:
+        labels = {
+            "storage_capacity_mwh": "储能容量",
+            "storage_capacity": "储能容量",
+            "pv_capacity_mw": "光伏容量",
+            "wind_capacity_mw": "风电容量",
+            "green_power_ratio": "绿电比例",
+            "green_supply_ratio": "绿电供给比例",
+            "pue": "PUE",
+            "estimated_pue": "预测PUE",
+            "predicted_wue": "预测WUE",
+            "cooling_technology": "制冷技术",
+            "cooling_initial_investment_lakh": "制冷初始投资",
+            "scheme_name": "供电方案",
+            "redundancy_logic": "冗余逻辑",
+            "distribution_transformers": "配电变压器配置",
+            "tier_level": "机房等级",
+            "expected_availability": "预期可用性",
+            "annual_carbon_emission": "年碳排放",
+            "total_cost": "总投资",
+            "total_capex_lakh": "总投资",
+            "roi": "投资回报率",
+            "payback_period": "投资回收期",
+            "external_voltage": "供电电压",
+        }
+        return labels.get(parameter, parameter)
+
+    def _format_revision_value(self, parameter: str, value: Any) -> str:
+        if value is None or value == "":
+            return "--"
+        if parameter in {"green_power_ratio", "green_supply_ratio", "expected_availability", "roi"}:
+            n = _safe_float(value, float("nan"))
+            if n != n:
+                return str(value)
+            if parameter == "expected_availability":
+                return f"{n * 100:.1f}%" if n <= 1 else f"{n:.1f}%"
+            return f"{n * 100:.1f}%" if n <= 1 else f"{n:.1f}%"
+        if parameter in {"storage_capacity_mwh", "storage_capacity"}:
+            return f"{_safe_float(value, 0.0):.2f} MWh"
+        if parameter in {"pv_capacity_mw", "wind_capacity_mw"}:
+            return f"{_safe_float(value, 0.0):.2f} MW"
+        if parameter in {"estimated_pue", "predicted_wue"}:
+            return f"{_safe_float(value, 0.0):.2f}"
+        if parameter in {"annual_carbon_emission"}:
+            return f"{_safe_float(value, 0.0):.2f} 吨"
+        if parameter in {"total_cost", "total_capex_lakh", "cooling_initial_investment_lakh"}:
+            return f"{_safe_float(value, 0.0):.2f} 万元"
+        if parameter in {"payback_period"}:
+            return f"{_safe_float(value, 0.0):.2f} 年"
+        if parameter in {"tier_level"}:
+            tier = _safe_float(value, float("nan"))
+            return f"Tier {int(tier)}" if tier == tier else str(value)
+        return str(value)
+
     def _parse_json_response(self, content: str) -> dict:
         """Parse JSON response."""
         import re
@@ -2574,7 +2739,13 @@ Please conduct arbitration decision and generate final solution."""
         return {
             "name": "Construction Solution",
             "summary": "Synthesized expert opinions to generate solution",
-            "overall_scores": {"overall": 0.75},
+            "revised_draft_plan": {
+                "green_power_result": {},
+                "cooling_result": {},
+                "power_supply_plan": {},
+                "revision_notes": [],
+            },
+            "parameter_changes": [],
             "key_metrics": {},
             "economic_section": {},
             "power_reliability_section": {},
@@ -2582,7 +2753,6 @@ Please conduct arbitration decision and generate final solution."""
             "trade_offs": [],
             "risks": [],
             "recommendations": [],
-            "confidence": 0.6
         }
 
     def _on_stream_chunk(self, chunk: str):

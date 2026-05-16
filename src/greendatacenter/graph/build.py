@@ -32,7 +32,7 @@ from greendatacenter.graph.nodes import (
     FinalReportNode,
     OutputNode,
 )
-from greendatacenter.graph.edges import check_debate_status, check_budget_status
+from greendatacenter.graph.edges import check_budget_status
 
 
 def build_data_center_graph(memory: ExpertSharedMemory) -> StateGraph:
@@ -98,15 +98,8 @@ def build_data_center_graph(memory: ExpertSharedMemory) -> StateGraph:
     # 4. 所有专家分析完成 -> 辩论
     graph.add_edge(NODE_ENVIRONMENTAL_ANALYSIS, NODE_DEBATE_ROUND)
 
-    # 5. 辩论循环 -> (继续辩论 或 结束辩论)
-    graph.add_conditional_edges(
-        NODE_DEBATE_ROUND,
-        check_debate_status,
-        {
-            "revise": NODE_DRAFT_PLAN_AGENT,
-            "end": NODE_ARBITRATOR
-        }
-    )
+    # 5. 辩论一轮后直接进入仲裁
+    graph.add_edge(NODE_DEBATE_ROUND, NODE_ARBITRATOR)
 
     # 6. 仲裁 -> 最终报告
     graph.add_edge(NODE_ARBITRATOR, NODE_FINAL_REPORT)

@@ -77,7 +77,6 @@ class ExpertOpinion(PydanticBaseModel):
     metrics: dict[str, Any] = Field(default_factory=dict, description="Quantitative metrics")
     recommendations: list[str] = Field(default_factory=list, description="Recommendations")
     concerns: list[str] = Field(default_factory=list, description="Concerns")
-    confidence: float = Field(default=0.8, ge=0, le=1, description="Confidence")
 
 
 class DebateMessage(PydanticBaseModel):
@@ -123,6 +122,8 @@ class GraphState(TypedDict, total=False):
     consensus_score: float
 
     solution: dict[str, Any]
+    revision_display_items: list[dict[str, str]]
+    revision_display_count: int
     streaming_output: list[dict[str, Any]]
 
 

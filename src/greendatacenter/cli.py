@@ -58,7 +58,6 @@ def generate(
             typer.echo(f"\n=== Solution Summary ===")
             typer.echo(f"Name: {solution.get('name', 'N/A')}")
             typer.echo(f"Overall Score: {solution.get('overall_scores', {}).get('overall', 0):.2f}")
-            typer.echo(f"Confidence: {solution.get('confidence', 0.8):.2f}")
 
             # Show key metrics
             if solution.get("key_metrics"):

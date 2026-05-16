@@ -26,9 +26,6 @@
             <span v-else>{{ node.icon }}</span>
           </div>
           <span class="node-name">{{ node.name }}</span>
-          <div v-if="completedNodes.has(index) && node.description" class="node-tooltip">
-            {{ node.description }}
-          </div>
         </div>
       </div>
     </div>
@@ -42,7 +39,6 @@
         <div v-if="nodeResults.requirementParser" class="node-result">
           <el-card class="result-card">
             <div class="result-content">
-              <p>{{ nodeResults.requirementParser.summary }}</p>
               <div class="result-metrics">
                 <div class="metric-item">
                   <span class="metric-label">项目地点</span>
@@ -70,13 +66,8 @@
         <div v-if="nodeResults.draftPlan">
           <div class="draft-overview-panel">
             <div class="draft-overview-copy">
-              <span class="draft-eyebrow">Draft Generation Trace</span>
-              <h4>初稿结果由三个后端 Tool 顺序生成，而不是直接给出结论</h4>
-              <p>
-                后端 `DraftPlanAgent` 会按固定顺序调用 `green_power_allocation`、`cooling-scheme-generator`
-                和 `power_supply_config`。下面每张卡片都对应一个真实 Tool，展示它的输入条件、推导过程、
-                判断依据和最终输出。
-              </p>
+              <span class="draft-eyebrow">方案生成轨迹</span>
+              <h4>初稿生成</h4>
             </div>
             <div class="draft-overview-metrics">
               <div class="draft-overview-metric primary">
@@ -114,7 +105,6 @@
                     <div class="draft-card-tool">{{ card.tool }}</div>
                   </div>
                 </div>
-                <p class="draft-card-summary">{{ card.summary }}</p>
               </div>
 
               <section class="draft-card-section">
@@ -174,7 +164,7 @@
               </section>
 
               <section class="draft-card-section">
-                <div class="draft-section-title">生成过程</div>
+                <div class="draft-section-title">过程</div>
                 <div class="draft-step-list">
                   <div
                     v-for="(step, index) in card.steps"
@@ -184,22 +174,9 @@
                     <span class="draft-step-index">{{ index + 1 }}</span>
                     <div class="draft-step-copy">
                       <div class="draft-step-title">{{ step.title }}</div>
-                      <div class="draft-step-desc">{{ step.description }}</div>
                     </div>
                   </div>
                 </div>
-              </section>
-
-              <section class="draft-card-section">
-                <div class="draft-section-title">判断依据</div>
-                <ul class="draft-evidence-list">
-                  <li
-                    v-for="evidence in card.evidences"
-                    :key="evidence"
-                  >
-                    {{ evidence }}
-                  </li>
-                </ul>
               </section>
 
               <section
@@ -252,7 +229,7 @@
                     <div class="draft-ranking-head">
                       <span class="draft-ranking-order">#{{ candidate.rank }}</span>
                       <span class="draft-ranking-name">{{ candidate.name }}</span>
-                      <span class="draft-ranking-score">综合得分 {{ candidate.score }}</span>
+                      <span class="draft-ranking-score">{{ candidate.score }}</span>
                     </div>
                     <div class="draft-ranking-tags">
                       <span
@@ -277,7 +254,6 @@
                   v-if="card.optimization.traceLines?.length && showCoolingOptimizationTrace"
                   class="draft-trace-panel"
                 >
-                  <div class="draft-trace-title">完整寻优轨迹</div>
                   <div class="draft-trace-list">
                     <div
                       v-for="(line, index) in card.optimization.traceLines"
@@ -307,15 +283,11 @@
                 <div class="cost-block-header">
                   <div>
                     <div class="cost-block-title">成本项视图</div>
-                    <div class="cost-block-subtitle">点击扇区查看该部分的成本细化与测算口径</div>
                   </div>
-                  <el-tag effect="plain" round>总投资与预算口径保留原始计算结果</el-tag>
+                  <el-tag effect="plain" round>总投资口径</el-tag>
                 </div>
                 <div class="cost-chart-shell">
                   <div ref="costChartRef" class="cost-chart"></div>
-                </div>
-                <div class="cost-chart-note">
-                  当前总投资口径已统一为供电系统、绿电系统与制冷系统三部分之和，点击任一扇区可查看该部分的真实成本细化。
                 </div>
                 <div class="cost-legend">
                   <button
@@ -328,7 +300,6 @@
                     <span class="legend-swatch" :style="{ background: segment.color }"></span>
                     <span class="legend-copy">
                       <span class="legend-title">{{ segment.name }}</span>
-                      <span class="legend-desc">{{ segment.shortDescription }}</span>
                     </span>
                     <span class="legend-meta">
                       <span class="legend-value">{{ formatWithUnit(segment.amount, '万元', 0) }}</span>
@@ -345,14 +316,12 @@
                   <div class="cost-kpi-card strong span-wide">
                     <span class="kpi-label">项目总投资</span>
                     <span class="kpi-value">{{ formatWithUnit(nodeResults.costCalculation.totalCost, '万元', 0) }}</span>
-                    <span class="kpi-note">经济分析口径</span>
                   </div>
                   <div class="cost-kpi-card">
                     <span class="kpi-label">预算约束</span>
                     <span class="kpi-value" :class="nodeResults.costCalculation.isOverBudget ? 'over-budget' : 'under-budget'">
                       {{ formatWithUnit(nodeResults.costCalculation.budget, '万元', 0) }}
                     </span>
-                    <span class="kpi-note">配置参数基准</span>
                   </div>
                   <div class="cost-kpi-card">
                     <span class="kpi-label">预算差额</span>
@@ -373,7 +342,6 @@
 
                 <div class="cost-summary-heading">
                   <span class="summary-heading-title">成本清单</span>
-                  <span class="summary-heading-note">与左侧图表使用同一投资口径</span>
                 </div>
                 <div class="cost-summary-strip">
                   <div
@@ -412,34 +380,15 @@
           <h3><el-icon class="stage-icon"><User /></el-icon> 多专家交叉评审</h3>
           <el-tag :type="getExpertStageTagType()">{{ getExpertStageStatus() }}</el-tag>
         </div>
-        <el-row :gutter="20">
+        <el-row :gutter="16" class="expert-stack">
           <el-col :span="8" v-for="(expert, index) in expertResults" :key="index">
             <el-card class="expert-card" :class="getExpertStatusClass(expert)">
               <div class="expert-header">
                 <el-icon class="expert-icon"><User /></el-icon>
-                <span class="expert-name">{{ expert.name }}</span>
+                <span class="expert-name">{{ localizeExpertName(expert.name) }}</span>
               </div>
               <div class="expert-status">
                 <el-tag :type="getExpertTagType(expert.status)">{{ expert.status }}</el-tag>
-              </div>
-              <div v-if="expert.status === '已完成'" class="expert-score">
-                <div class="score-label">置信度</div>
-                <div class="score-value">{{ expert.score.toFixed(2) }}</div>
-              </div>
-              <div v-if="expert.status === '已完成'" class="expert-summary">
-                {{ expert.summary }}
-              </div>
-              <div v-if="expert.status === '已完成' && expert.recommendations.length > 0" class="expert-recommendations">
-                <div class="recommendation-label">建议</div>
-                <ul>
-                  <li v-for="(rec, i) in expert.recommendations" :key="i">{{ rec }}</li>
-                </ul>
-              </div>
-              <div v-if="expert.status === '已完成' && expert.concerns && expert.concerns.length > 0" class="expert-concerns">
-                <div class="concern-label">关注事项</div>
-                <ul>
-                  <li v-for="(concern, i) in expert.concerns" :key="i">{{ concern }}</li>
-                </ul>
               </div>
               <div v-if="expert.status === '已完成' && expert.metrics && Object.keys(expert.metrics).length > 0" class="expert-metrics">
                 <div class="metrics-label">关键指标</div>
@@ -448,6 +397,37 @@
                     <span class="metric-key">{{ formatMetricKey(key) }}</span>
                     <span class="metric-val">{{ formatMetricValue(key, value) }}</span>
                   </div>
+                </div>
+              </div>
+              <button
+                v-if="expert.status === '已完成'"
+                type="button"
+                class="expert-detail-toggle"
+                @click="toggleExpertCardDetail(index)"
+              >
+                <span>{{ isExpertCardExpanded(index) ? '收起评审详情' : '展开评审详情' }}</span>
+                <el-icon class="expert-detail-toggle-icon">
+                  <component :is="isExpertCardExpanded(index) ? ArrowUp : ArrowDown" />
+                </el-icon>
+              </button>
+              <div v-if="expert.status === '已完成' && isExpertCardExpanded(index)" class="expert-detail-panel">
+                <section v-if="expert.summary" class="expert-detail-section expert-detail-section--summary">
+                  <div class="expert-detail-heading">评审摘要</div>
+                  <p class="expert-summary">{{ localizeExpertText(expert.summary) }}</p>
+                </section>
+                <div class="expert-detail-grid">
+                  <section v-if="expert.recommendations.length > 0" class="expert-detail-section expert-recommendations">
+                    <div class="recommendation-label">建议</div>
+                    <ul>
+                      <li v-for="(rec, i) in expert.recommendations" :key="i">{{ localizeExpertText(rec) }}</li>
+                    </ul>
+                  </section>
+                  <section v-if="expert.concerns && expert.concerns.length > 0" class="expert-detail-section expert-concerns">
+                    <div class="concern-label">关注事项</div>
+                    <ul>
+                      <li v-for="(concern, i) in expert.concerns" :key="i">{{ localizeExpertText(concern) }}</li>
+                    </ul>
+                  </section>
                 </div>
               </div>
             </el-card>
@@ -463,11 +443,8 @@
         <div v-if="debateResults" class="debate-panel">
           <section class="debate-overview">
             <div class="debate-overview-copy">
-              <span class="debate-eyebrow">Multi-Agent Debate Review</span>
-              <h4>专家观点在这里完成交叉校验与共识收敛</h4>
-              <p>
-                以轮次为单位展示多位专家的发言、观点冲突与收束结果，让辩论过程从流水记录变成可读的评审面板。
-              </p>
+              <span class="debate-eyebrow">多专家交叉评审</span>
+              <h4>专家辩论</h4>
             </div>
             <div class="debate-metrics">
               <div class="debate-metric primary">
@@ -475,8 +452,8 @@
                 <span class="debate-metric-value">第 {{ debateResults.currentRound }} 轮</span>
               </div>
               <div class="debate-metric">
-                <span class="debate-metric-label">共识度</span>
-                <span class="debate-metric-value consensus">{{ formatPercent(debateResults.consensusScore, 0) }}</span>
+                <span class="debate-metric-label">辩论状态</span>
+                <span class="debate-metric-value consensus">{{ debateResults.currentRound > 0 ? '已进入仲裁' : '评审中' }}</span>
               </div>
               <div class="debate-metric">
                 <span class="debate-metric-label">发言条数</span>
@@ -493,7 +470,7 @@
               :class="participant.className"
             >
               <span class="participant-dot" :style="{ background: participant.color }"></span>
-              <span class="participant-name">{{ participant.name }}</span>
+              <span class="participant-name">{{ localizeExpertName(participant.name) }}</span>
             </div>
           </div>
 
@@ -517,7 +494,7 @@
               <div ref="debateChatRef" class="debate-chat-messages">
                 <article v-if="activeDebateRound" class="debate-round-block">
                   <div class="round-divider">
-                    <div class="round-badge">Round {{ String(activeDebateRound.number).padStart(2, '0') }}</div>
+                    <div class="round-badge">第 {{ String(activeDebateRound.number).padStart(2, '0') }} 轮</div>
                     <div class="round-copy">
                       <span class="round-label">第 {{ activeDebateRound.number }} 轮辩论</span>
                       <span class="round-meta">{{ activeDebateRound.statements.length }} 条发言</span>
@@ -535,12 +512,12 @@
                           <span class="avatar-text">{{ getExpertInitial(statement.speaker) }}</span>
                         </div>
                         <div class="speaker-meta">
-                          <span class="speaker-name">{{ statement.speaker }}</span>
+                          <span class="speaker-name">{{ localizeExpertName(statement.speaker) }}</span>
                           <span class="speaker-role">{{ getExpertRole(statement.speaker) }}</span>
                         </div>
                       </div>
                       <div class="message-bubble">
-                        <span class="message-content">{{ statement.content }}</span>
+                        <span class="message-content">{{ localizeExpertText(statement.content) }}</span>
                       </div>
                     </div>
                   </div>
@@ -558,17 +535,13 @@
               <div class="debate-summary-header">
                 <div class="debate-summary-title">
                   <h4><el-icon><Warning /></el-icon> 辩论纪要</h4>
-                  <p>汇总仲裁前保留下来的关键建议，用于快速查看辩论输出。</p>
                 </div>
                 <div class="debate-summary-badge">共 {{ debateResults.summary.suggestions.length }} 条</div>
-              </div>
-              <div v-if="activeDebateRound" class="debate-summary-context">
-                当前查看：第 {{ activeDebateRound.number }} 轮，共 {{ activeDebateRound.statements.length }} 条发言
               </div>
               <div class="suggestions-list">
                 <div v-for="(suggestion, i) in debateResults.summary.suggestions" :key="i" class="suggestion-item">
                   <el-icon class="suggestion-icon"><Check /></el-icon>
-                  <span>{{ suggestion }}</span>
+                  <span>{{ localizeExpertText(suggestion) }}</span>
                 </div>
               </div>
             </aside>
@@ -585,40 +558,54 @@
           <el-card class="arbitrator-card arbitrator-card--highlight">
             <div class="arbitrator-header">
               <span class="arbitrator-title">仲裁决策结果</span>
-              <span class="confidence-badge">置信度: {{ formatPercent(arbitratorResult.confidence, 0) }}</span>
             </div>
             <div class="arbitrator-content">
               <div class="consensus-indicator">
-                <span class="label">最终共识度</span>
-                <span class="value" :class="Number.isFinite(Number(arbitratorResult.consensusScore)) && Number(arbitratorResult.consensusScore) >= 0.8 ? 'high' : 'medium'">
-                  {{ formatPercent(arbitratorResult.consensusScore, 0) }}
+                <span class="label">修订条目</span>
+                <span class="value high">
+                  {{ revisionComparison.changeCount }}
                 </span>
               </div>
               <div class="decision-summary">
                 <p>{{ arbitratorResult.summary }}</p>
               </div>
-              <div class="overall-scores">
-                <h4>综合评分</h4>
-                <el-row :gutter="20">
-                  <el-col :span="8">
-                    <div class="score-card">
-                      <span class="score-label">经济性</span>
-                      <span class="score-value">{{ formatPercent(arbitratorResult.scores.economic, 0) }}</span>
+              <div v-if="revisionComparison.changes.length" class="revision-comparison">
+                <h4>初稿与仲裁修订对比</h4>
+                <div class="revision-comparison-grid">
+                  <div class="revision-comparison-column revision-comparison-column--draft">
+                    <div class="revision-column-title">初稿方案</div>
+                    <div class="revision-summary-list">
+                      <div v-for="(change, index) in revisionComparison.changes" :key="`draft-${index}`" class="revision-summary-item">
+                        <span class="revision-summary-label">{{ change.label }}</span>
+                        <span class="revision-summary-value">{{ change.before }}</span>
+                      </div>
                     </div>
-                  </el-col>
-                  <el-col :span="8">
-                    <div class="score-card">
-                      <span class="score-label">可靠性</span>
-                      <span class="score-value">{{ formatPercent(arbitratorResult.scores.reliability, 0) }}</span>
+                  </div>
+                  <div class="revision-comparison-column revision-comparison-column--revised">
+                    <div class="revision-column-title">仲裁修订后</div>
+                    <div class="revision-summary-list">
+                      <div v-for="(change, index) in revisionComparison.changes" :key="`revised-${index}`" class="revision-summary-item">
+                        <span class="revision-summary-label">{{ change.label }}</span>
+                        <span class="revision-summary-value highlight">{{ change.after }}</span>
+                      </div>
                     </div>
-                  </el-col>
-                  <el-col :span="8">
-                    <div class="score-card highlight">
-                      <span class="score-label">环保性</span>
-                      <span class="score-value">{{ formatPercent(arbitratorResult.scores.environmental, 0) }}</span>
+                  </div>
+                </div>
+                <div class="revision-change-list">
+                  <div v-for="(change, index) in revisionComparison.changes" :key="index" class="revision-change-item">
+                    <div class="revision-change-head">
+                      <strong>{{ change.label }}</strong>
+                      <span>{{ change.before }} → {{ change.after }}</span>
                     </div>
-                  </el-col>
-                </el-row>
+                    <div class="revision-change-reason">修改原因：{{ change.reason }}</div>
+                  </div>
+                </div>
+              </div>
+              <div v-if="revisionComparison.revisionNotes.length" class="revision-notes">
+                <h4>仲裁补充说明</h4>
+                <ul>
+                  <li v-for="(note, index) in revisionComparison.revisionNotes" :key="index">{{ note }}</li>
+                </ul>
               </div>
               <div v-if="arbitratorResult.tradeOffs && arbitratorResult.tradeOffs.length > 0" class="trade-offs">
                 <h4>权衡方案</h4>
@@ -642,7 +629,6 @@
           <el-alert class="report-success-alert"
             title="报告生成完成"
             type="success"
-            description="方案报告已整理完成，包含可行性分析、关键指标与实施建议"
             :closable="false"
             show-icon
           />
@@ -666,7 +652,7 @@
               </div>
               <div class="report-metric">
                 <span class="metric-label">报告格式</span>
-                <span class="metric-value">Markdown</span>
+                <span class="metric-value">文本文档</span>
               </div>
               <div class="report-metric">
                 <span class="metric-label">字数统计</span>
@@ -689,7 +675,6 @@
         <el-alert class="output-success-alert"
           title="方案生成成功！"
           type="success"
-          description="可继续查看完整方案详情与各阶段输出结果"
           :closable="false"
           show-icon
         />
@@ -702,8 +687,8 @@
               <span class="preview-value">{{ finalSolution.name || '--' }}</span>
             </div>
             <div class="preview-item">
-              <span class="preview-label">总体评分</span>
-              <span class="preview-value highlight">{{ formatPercent(finalSolution.overallScore, 0) }}</span>
+              <span class="preview-label">仲裁修订条目</span>
+              <span class="preview-value highlight">{{ revisionComparison.changeCount }}</span>
             </div>
             <div class="preview-item">
               <span class="preview-label">PUE</span>
@@ -730,8 +715,8 @@
               <span class="preview-value">{{ formatWithUnit(finalSolution.annualCarbonEmission, '吨', 0) }}</span>
             </div>
             <div class="preview-item">
-              <span class="preview-label">投资回报率</span>
-              <span class="preview-value">{{ formatPercent(finalSolution.roi, 1) }}</span>
+              <span class="preview-label">修订原因数</span>
+              <span class="preview-value">{{ revisionComparison.revisionNotes.length }}</span>
             </div>
             <div class="preview-item">
               <span class="preview-label">投资回收期</span>
@@ -872,6 +857,7 @@ const completedNodes = ref(new Set())
 const logs = ref([])
 const showCoolingOptimizationTrace = ref(false)
 const expandedDraftCards = ref({})
+const expandedExpertCards = ref({})
 
 const isDraftCardExpanded = (cardId) => Boolean(expandedDraftCards.value[cardId])
 
@@ -879,6 +865,15 @@ const toggleDraftCardDetail = (cardId) => {
   expandedDraftCards.value = {
     ...expandedDraftCards.value,
     [cardId]: !expandedDraftCards.value[cardId]
+  }
+}
+
+const isExpertCardExpanded = (index) => Boolean(expandedExpertCards.value[index])
+
+const toggleExpertCardDetail = (index) => {
+  expandedExpertCards.value = {
+    ...expandedExpertCards.value,
+    [index]: !expandedExpertCards.value[index]
   }
 }
 
@@ -918,9 +913,9 @@ const nodeResults = reactive({
 })
 
 const expertResults = reactive([
-  { name: '经济性专家', expertType: 'economic', status: '等待中', score: 0, summary: '', recommendations: [], concerns: [], metrics: {} },
-  { name: '供电可靠性专家', expertType: 'reliability', status: '等待中', score: 0, summary: '', recommendations: [], concerns: [], metrics: {} },
-  { name: '环保性专家', expertType: 'environmental', status: '等待中', score: 0, summary: '', recommendations: [], concerns: [], metrics: {} }
+  { name: '经济性专家', expertType: 'economic', status: '等待中', summary: '', recommendations: [], concerns: [], metrics: {} },
+  { name: '供电可靠性专家', expertType: 'reliability', status: '等待中', summary: '', recommendations: [], concerns: [], metrics: {} },
+  { name: '环保性专家', expertType: 'environmental', status: '等待中', summary: '', recommendations: [], concerns: [], metrics: {} }
 ])
 
 const createEmptyDebateState = () => ({
@@ -935,11 +930,13 @@ const selectedDebateRoundNumber = ref(null)
 const hasManualDebateRoundSelection = ref(false)
 
 const arbitratorResult = reactive({
-  consensusScore: 0,
   summary: '',
-  confidence: 0,
-  scores: { economic: 0, reliability: 0, environmental: 0 },
-  tradeOffs: []
+  tradeOffs: [],
+  revisedDraftPlan: {},
+  parameterChanges: [],
+  revisionDisplayItems: [],
+  revisionDisplayCount: 0,
+  revisionNotes: []
 })
 
 const finalReport = ref(null)
@@ -1135,6 +1132,95 @@ const formatWithUnit = (v, unit, digits = 2) => {
   return `${n.toFixed(digits)} ${unit}`
 }
 
+const revisionParameterLabels = {
+  storage_capacity_mwh: '储能容量',
+  storage_capacity: '储能容量',
+  pv_capacity_mw: '光伏容量',
+  wind_capacity_mw: '风电容量',
+  green_power_ratio: '绿电比例',
+  green_supply_ratio: '绿电供给比例',
+  pue: 'PUE',
+  estimated_pue: '预测PUE',
+  predicted_wue: '预测WUE',
+  cooling_technology: '制冷技术',
+  cooling_initial_investment_lakh: '制冷初始投资',
+  scheme_name: '供电方案',
+  redundancy_logic: '冗余逻辑',
+  distribution_transformers: '配电变压器配置',
+  tier_level: 'Tier 等级',
+  expected_availability: '预期可用性',
+  annual_carbon_emission: '年碳排放',
+  total_cost: '总投资',
+  total_capex_lakh: '总投资',
+  roi: '投资回报率',
+  payback_period: '投资回收期'
+}
+
+const revisionValueFormatters = {
+  storage_capacity_mwh: value => formatWithUnit(value, 'MWh', 2),
+  storage_capacity: value => formatWithUnit(value, 'MWh', 2),
+  pv_capacity_mw: value => formatWithUnit(value, 'MW', 2),
+  wind_capacity_mw: value => formatWithUnit(value, 'MW', 2),
+  green_power_ratio: value => formatPercentAuto(value, 0),
+  green_supply_ratio: value => formatPercentAuto(value, 0),
+  pue: value => formatNumber(value, 2),
+  estimated_pue: value => formatNumber(value, 2),
+  predicted_wue: value => formatNumber(value, 2),
+  tier_level: value => (Number.isFinite(Number(value)) ? `Tier ${value}` : String(value ?? '--')),
+  expected_availability: value => formatPercentAuto(value, 3),
+  annual_carbon_emission: value => formatWithUnit(value, '吨', 0),
+  total_cost: value => formatWithUnit(value, '万元', 2),
+  total_capex_lakh: value => formatWithUnit(value, '万元', 2),
+  cooling_initial_investment_lakh: value => formatWithUnit(value, '万元', 2),
+  roi: value => formatPercentAuto(value, 1),
+  payback_period: value => formatWithUnit(value, '年', 1)
+}
+
+const formatRevisionValue = (parameter, value) => {
+  if (value === null || value === undefined || value === '') return '--'
+  const formatter = revisionValueFormatters[parameter]
+  if (formatter) return formatter(value)
+  if (typeof value === 'number') return formatNumber(value, 2)
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+const normalizeRevisionChanges = (changes = []) => {
+  if (!Array.isArray(changes)) return []
+  return changes
+    .map((item) => {
+      const parameter = String(item?.parameter || '').trim()
+      if (!parameter) return null
+      return {
+        parameter,
+        label: revisionParameterLabels[parameter] || parameter,
+        before: formatRevisionValue(parameter, item?.before),
+        after: formatRevisionValue(parameter, item?.after),
+        reason: String(item?.reason || '').trim() || '仲裁专家根据评审意见进行了修订。'
+      }
+    })
+    .filter(Boolean)
+}
+
+const normalizeRevisionDisplayItems = (items = []) => {
+  if (!Array.isArray(items)) return []
+  return items
+    .map((item) => {
+      const label = String(item?.label || '').trim()
+      const change = String(item?.change || '').trim()
+      if (!label || !change) return null
+      const parts = change.split('→').map(part => part.trim()).filter(Boolean)
+      return {
+        label,
+        change,
+        before: parts[0] || '--',
+        after: parts[1] || parts[0] || '--',
+        reason: String(item?.reason || '').trim() || '仲裁专家根据评审意见进行了修订。'
+      }
+    })
+    .filter(Boolean)
+}
+
 const escapeHtml = (value = '') => String(value)
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -1242,12 +1328,12 @@ const resetRuntimeState = () => {
   completedNodes.value = new Set()
   showCoolingOptimizationTrace.value = false
   expandedDraftCards.value = {}
+  expandedExpertCards.value = {}
   nodeResults.requirementParser = null
   nodeResults.draftPlan = null
   nodeResults.costCalculation = null
   expertResults.forEach(expert => {
     expert.status = '等待中'
-    expert.score = 0
     expert.summary = ''
     expert.recommendations = []
     expert.concerns = []
@@ -1258,9 +1344,12 @@ const resetRuntimeState = () => {
   hasManualDebateRoundSelection.value = false
   arbitratorResult.consensusScore = 0
   arbitratorResult.summary = ''
-  arbitratorResult.confidence = 0
-  arbitratorResult.scores = { economic: 0, reliability: 0, environmental: 0 }
   arbitratorResult.tradeOffs = []
+  arbitratorResult.revisedDraftPlan = {}
+  arbitratorResult.parameterChanges = []
+  arbitratorResult.revisionDisplayItems = []
+  arbitratorResult.revisionDisplayCount = 0
+  arbitratorResult.revisionNotes = []
   finalReport.value = null
   activeCostDetailKey.value = 'green_power'
   costDetailDialogVisible.value = false
@@ -1408,6 +1497,45 @@ const reportRequirementFacts = computed(() => {
 })
 
 const draftSource = computed(() => nodeResults.draftPlan || {})
+
+const revisionComparison = computed(() => {
+  const revisedDraftPlan = arbitratorResult.revisedDraftPlan || {}
+  const displayItems = normalizeRevisionDisplayItems(arbitratorResult.revisionDisplayItems)
+    .map((item) => {
+      if (item.before && item.before !== '--' && item.after && item.after !== '--') {
+        return item
+      }
+      const matched = String(item.change || '').match(/^(.*?)\s*(?:→|->|=>|⇒|➜|➡)\s*(.*?)$/)
+      if (!matched) {
+        return {
+          ...item,
+          before: item.before || '--',
+          after: item.after || item.before || '--'
+        }
+      }
+      const before = String(matched[1] || '').trim()
+      const after = String(matched[2] || '').trim()
+      return {
+        ...item,
+        before: before || item.before || '--',
+        after: after || item.after || before || '--'
+      }
+    })
+  const changes = displayItems.length ? displayItems : normalizeRevisionChanges(arbitratorResult.parameterChanges)
+  const revisionNotes = Array.isArray(arbitratorResult.revisionNotes)
+    ? arbitratorResult.revisionNotes.map(item => String(item || '').trim()).filter(Boolean)
+    : []
+
+  return {
+    revisedDraftPlan,
+    displayItems,
+    changes,
+    revisionNotes,
+    changeCount: Number.isFinite(Number(arbitratorResult.revisionDisplayCount)) && Number(arbitratorResult.revisionDisplayCount) > 0
+      ? Number(arbitratorResult.revisionDisplayCount)
+      : changes.length
+  }
+})
 
 const coolingCostSnapshot = computed(() => {
   const coolingEco = draftSource.value.cooling_result?.economic_indicators || {}
@@ -1812,6 +1940,85 @@ const debateStatementCount = computed(() => {
   return debateResults.value?.rounds?.reduce((sum, round) => sum + round.statements.length, 0) ?? 0
 })
 
+const expertNameMap = {
+  'Economic Analysis Expert-Zhang': '经济性专家',
+  'Power Reliability Expert-Li': '供电可靠性专家',
+  'Environmental Analysis Expert-Wang': '环保性专家',
+  'Economic Analysis Expert': '经济性专家',
+  'Power Reliability Expert': '供电可靠性专家',
+  'Environmental Analysis Expert': '环保性专家',
+  'Expert-Zhang': '经济性专家',
+  'Expert-Li': '供电可靠性专家',
+  'Expert-Wang': '环保性专家'
+}
+
+const expertTextReplacements = [
+  [/Economic Analysis Expert-Zhang/g, '经济性专家'],
+  [/Power Reliability Expert-Li/g, '供电可靠性专家'],
+  [/Environmental Analysis Expert-Wang/g, '环保性专家'],
+  [/Economic Analysis Expert/g, '经济性专家'],
+  [/Power Reliability Expert/g, '供电可靠性专家'],
+  [/Environmental Analysis Expert/g, '环保性专家'],
+  [/budget_delta/g, '预算差额'],
+  [/ups_configuration/g, 'UPS配置'],
+  [/ups_capacity/g, 'UPS容量'],
+  [/distribution_reliability/g, '配电可靠性'],
+  [/direct_connection_ratio/g, '绿电直连占比'],
+  [/procured_green_ratio/g, '采购绿电占比'],
+  [/Recommended reliability target/g, '建议可靠性目标'],
+  [/Expected PUE is/g, '预计 PUE 为'],
+  [/total green power ratio is about/g, '绿电总占比约为'],
+  [/annual carbon emission is about/g, '年碳排放约为'],
+  [/UPS \/ redundancy strategy/g, 'UPS / 冗余策略'],
+  [/external voltage level/g, '外部电压等级'],
+  [/expected availability(?: is| about)?/g, '预计可用性约为'],
+  [/annual downtime/g, '年停机时间'],
+  [/carbon emission/gi, '碳排放'],
+  [/green power ratio/gi, '绿电占比'],
+  [/payback period/gi, '回收期'],
+  [/total cost/gi, '总成本'],
+  [/cost per rack/gi, '单柜成本'],
+  [/ROI/gi, '投资回报率'],
+  [/Tier\s*3/gi, 'Tier 3'],
+  [/Tier level/gi, 'Tier等级'],
+  [/primary substation/gi, '主变'],
+  [/redundancy/gi, '冗余'],
+  [/availability/gi, '可用性'],
+  [/tons/gi, '吨'],
+  [/about/gi, '约'],
+  [/Recommended/gi, '建议'],
+  [/expected/gi, '预计'],
+  [/strategy/gi, '策略'],
+  [/target/gi, '目标']
+]
+
+const localizeExpertName = (value = '') => {
+  const name = String(value || '').trim()
+  if (!name) return ''
+  if (expertNameMap[name]) return expertNameMap[name]
+  if (name.includes('Economic') || name.includes('Zhang') || name.includes('经济')) return '经济性专家'
+  if (name.includes('Reliability') || name.includes('Li') || name.includes('可靠')) return '供电可靠性专家'
+  if (name.includes('Environmental') || name.includes('Wang') || name.includes('环保')) return '环保性专家'
+  return name
+}
+
+const localizeExpertText = (value = '') => {
+  let text = String(value ?? '').trim()
+  if (!text) return ''
+  text = text.replace(/\s+/g, ' ')
+  expertTextReplacements.forEach(([pattern, replacement]) => {
+    text = text.replace(pattern, replacement)
+  })
+  text = text
+    .replace(/;\s*/g, '；')
+    .replace(/:\s*/g, '：')
+    .replace(/,(?=\s|$)/g, '，')
+    .replace(/\.(?=\s|$)/g, '。')
+    .replace(/\(\s*/g, '（')
+    .replace(/\s*\)/g, '）')
+  return text
+}
+
 const debateParticipants = computed(() => {
   const speakers = debateResults.value?.rounds?.flatMap(round => round.statements.map(statement => statement.speaker)) ?? []
   return Array.from(new Set(speakers)).map((name) => ({
@@ -1876,13 +2083,16 @@ const formatMetricKey = (key) => {
     tier_level: 'Tier等级', expected_availability: '预期可用性',
     cost_efficiency: '成本效率', reliability: '可靠性',
     environmental_score: '环保评分', pue_score: 'PUE评分',
-    green_power_score: '绿电评分', carbon_efficiency: '碳效率'
+    green_power_score: '绿电评分', carbon_efficiency: '碳效率',
+    budget_delta: '预算差额', ups_configuration: 'UPS配置',
+    ups_capacity: 'UPS容量', distribution_reliability: '配电可靠性',
+    direct_connection_ratio: '绿电直连占比', procured_green_ratio: '采购绿电占比'
   }
-  return keyMap[key] || key
+  return keyMap[key] || localizeExpertText(key)
 }
 
 const formatMetricValue = (key, value) => {
-  if (typeof value !== 'number') return value
+  if (typeof value !== 'number') return localizeExpertText(value)
   if (key.includes('availability') || key.includes('reliability')) return formatPercentAuto(value, 1)
   if (key.includes('ratio') || key.includes('score') || key.includes('efficiency') || key === 'roi') return `${(value * 100).toFixed(1)}%`
   if (key.includes('cost') || key.includes('carbon_per_rack')) return `${value.toFixed(2)}万元`
@@ -2005,14 +2215,13 @@ const applyExpertData = (nodeName, data, { silent = false } = {}) => {
   expert.name = data?.expert_name || expert.name
   expert.expertType = data?.expert_type || expert.expertType
   expert.status = '已完成'
-  expert.score = toNumber(data?.confidence, 0)
   expert.summary = data?.summary || ''
   expert.recommendations = Array.isArray(data?.recommendations) ? data.recommendations : []
   expert.concerns = Array.isArray(data?.concerns) ? data.concerns : []
   expert.metrics = data?.metrics || {}
 
   if (!silent) {
-    addLog(`${expert.name}评审完成：置信度 ${formatNumber(expert.score, 2)}`, 'success')
+    addLog(`${expert.name}评审完成`, 'success')
   }
 }
 
@@ -2075,26 +2284,21 @@ const applyDebateData = (data, { silent = false } = {}) => {
 
 const applyArbitratorData = (data, { silent = false } = {}) => {
   if (!data || typeof data !== 'object') return
-  const overallScores = data.overall_scores || data.scores || {}
   const keyMetrics = data.key_metrics || {}
   const economicContent = data.economic_section?.content || {}
   const economicMetrics = expertResults[0]?.metrics || {}
 
   arbitratorResult.summary = data.summary || arbitratorResult.summary
-  arbitratorResult.confidence = toNumber(data.confidence, arbitratorResult.confidence)
-  arbitratorResult.scores = {
-    economic: toNumber(overallScores.economic, arbitratorResult.scores.economic),
-    reliability: toNumber(overallScores.reliability, arbitratorResult.scores.reliability),
-    environmental: toNumber(overallScores.environmental, arbitratorResult.scores.environmental)
-  }
-  arbitratorResult.consensusScore = toNumber(
-    data.consensus_score ?? data.consensusScore ?? overallScores.overall,
-    arbitratorResult.consensusScore
-  )
   arbitratorResult.tradeOffs = Array.isArray(data.trade_offs) ? data.trade_offs : arbitratorResult.tradeOffs
+  arbitratorResult.revisedDraftPlan = data.revised_draft_plan && typeof data.revised_draft_plan === 'object' ? data.revised_draft_plan : arbitratorResult.revisedDraftPlan
+  arbitratorResult.parameterChanges = Array.isArray(data.parameter_changes) ? data.parameter_changes : arbitratorResult.parameterChanges
+  arbitratorResult.revisionDisplayItems = Array.isArray(data.revision_display_items) ? data.revision_display_items : arbitratorResult.revisionDisplayItems
+  arbitratorResult.revisionDisplayCount = toNumber(data.revision_display_count, arbitratorResult.revisionDisplayCount)
+  arbitratorResult.revisionNotes = Array.isArray(arbitratorResult.revisedDraftPlan?.revision_notes)
+    ? arbitratorResult.revisedDraftPlan.revision_notes
+    : arbitratorResult.revisionNotes
 
   finalSolution.name = data.name || finalSolution.name
-  finalSolution.overallScore = toNumber(overallScores.overall, finalSolution.overallScore)
   finalSolution.pue = toNumber(keyMetrics.pue, finalSolution.pue)
   finalSolution.greenPowerRatio = toNumber(keyMetrics.green_power_ratio, finalSolution.greenPowerRatio)
   finalSolution.totalCost = toNumber(nodeResults.costCalculation?.totalCost, toNumber(keyMetrics.total_cost, finalSolution.totalCost))
@@ -2115,7 +2319,7 @@ const applyArbitratorData = (data, { silent = false } = {}) => {
   }
 
   if (!silent) {
-    addLog(`仲裁决策完成：综合评分 ${formatPercent(finalSolution.overallScore, 0)}`, 'success')
+    addLog(`仲裁决策完成：已修订 ${revisionComparison.value.changeCount} 项参数`, 'success')
   }
 }
 
@@ -3900,9 +4104,15 @@ onUnmounted(() => {
 }
 
 .expert-card {
-  height: 100%;
+  height: auto;
   transition: all var(--transition-normal);
   border-radius: 18px;
+}
+
+.expert-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  height: auto;
 }
 
 .expert-card.waiting {
@@ -3926,57 +4136,44 @@ onUnmounted(() => {
 }
 
 .expert-icon {
-  color: var(--primary-dark);
+  color: rgba(120, 237, 172, 0.92);
 }
 
 .expert-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 17px;
+  line-height: 1.35;
+  color: rgba(239, 251, 244, 0.96);
 }
 
 .expert-status {
   margin-bottom: 12px;
 }
 
-.expert-score {
-  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
-  padding: 12px;
-  border-radius: 14px;
-  text-align: center;
-  margin-bottom: 12px;
-}
-
-.score-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 4px;
-}
-
-.score-value {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--primary-dark);
+.expert-status :deep(.el-tag) {
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .expert-summary {
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  margin-bottom: 12px;
+  font-size: 14px;
+  color: rgba(226, 243, 233, 0.94);
+  line-height: 1.75;
+  margin: 0;
 }
 
 .expert-recommendations,
 .expert-concerns {
-  margin-bottom: 12px;
+  margin: 0;
 }
 
 .recommendation-label,
 .concern-label,
 .metrics-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(238, 249, 243, 0.96);
+  margin-bottom: 10px;
 }
 
 .expert-recommendations ul,
@@ -3987,10 +4184,19 @@ onUnmounted(() => {
 
 .expert-recommendations li,
 .expert-concerns li {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 4px;
-  line-height: 1.6;
+  font-size: 14px;
+  color: rgba(220, 241, 229, 0.92);
+  margin-bottom: 6px;
+  line-height: 1.7;
+}
+
+.expert-recommendations li:last-child,
+.expert-concerns li:last-child {
+  margin-bottom: 0;
+}
+
+.expert-metrics {
+  margin-bottom: 12px;
 }
 
 .metrics-grid {
@@ -4002,19 +4208,93 @@ onUnmounted(() => {
 .metrics-grid .metric-item {
   display: flex;
   justify-content: space-between;
-  padding: 6px 10px;
-  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 12px;
+  background:
+    linear-gradient(180deg, rgba(12, 39, 31, 0.9), rgba(11, 35, 28, 0.84));
   border-radius: 10px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .metric-key {
-  color: var(--text-secondary);
+  color: rgba(214, 238, 223, 0.88);
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 .metric-val {
-  color: var(--text-primary);
-  font-weight: 500;
+  color: rgba(245, 251, 247, 0.98);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.expert-detail-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 36px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in oklab, var(--primary-color) 16%, var(--border-light));
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--bg-panel) 96%, var(--primary-color) 4%);
+  color: rgba(141, 241, 190, 0.94);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.expert-detail-toggle:hover {
+  background: color-mix(in oklab, var(--bg-panel) 91%, var(--primary-color) 9%);
+  border-color: color-mix(in oklab, var(--primary-color) 34%, var(--border-light));
+  transform: translateY(-1px);
+}
+
+.expert-detail-toggle-icon {
+  font-size: 15px;
+}
+
+.expert-detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--primary-color) 12%, var(--border-light));
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--bg-page) 70%, var(--bg-panel) 30%);
+}
+
+.expert-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.expert-detail-section {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--primary-color) 12%, var(--border-light));
+  background:
+    linear-gradient(180deg, rgba(10, 33, 27, 0.92), rgba(8, 27, 22, 0.84));
+}
+
+.expert-detail-section--summary {
+  padding: 15px 16px;
+}
+
+.expert-detail-heading {
+  margin-bottom: 10px;
+  color: rgba(238, 249, 243, 0.96);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .debate-panel {
@@ -4476,15 +4756,6 @@ onUnmounted(() => {
   color: var(--text-primary);
 }
 
-.confidence-badge {
-  background: color-mix(in oklab, var(--success-color) 10%, var(--bg-card));
-  color: var(--success-color);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
 .consensus-indicator {
   display: flex;
   justify-content: space-between;
@@ -4518,6 +4789,125 @@ onUnmounted(() => {
   font-size: 14px;
   color: var(--text-secondary);
   line-height: 1.7;
+}
+
+.revision-comparison {
+  margin-bottom: 22px;
+  padding: 18px;
+  border-radius: 18px;
+  background: color-mix(in oklab, var(--bg-panel) 94%, var(--primary-color) 6%);
+  border: 1px solid var(--border-light);
+}
+
+.revision-comparison h4,
+.revision-notes h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+.revision-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.revision-comparison-column {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border-light);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.revision-comparison-column--draft {
+  background: linear-gradient(180deg, rgba(12, 33, 23, 0.96), rgba(9, 24, 18, 0.96));
+}
+
+.revision-comparison-column--revised {
+  background: linear-gradient(180deg, rgba(12, 28, 33, 0.96), rgba(8, 22, 26, 0.96));
+}
+
+.revision-column-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.revision-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.revision-summary-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.revision-summary-label {
+  flex: 0 0 auto;
+}
+
+.revision-summary-value {
+  flex: 1;
+  text-align: right;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.revision-summary-value.highlight {
+  color: var(--primary-dark);
+}
+
+.revision-change-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.revision-change-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--bg-card) 96%, var(--primary-color) 4%);
+  border: 1px solid var(--border-light);
+}
+
+.revision-change-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.revision-change-reason {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.revision-notes {
+  margin-top: 16px;
+}
+
+.revision-notes ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+}
+
+.revision-notes li {
+  font-size: 12px;
+  line-height: 1.7;
+  margin-bottom: 6px;
 }
 
 .overall-scores h4 {
@@ -4993,7 +5383,7 @@ onUnmounted(() => {
 .trade-offs li,
 .report-content,
 .decision-summary p {
-  color: rgba(223, 242, 232, 0.9) !important;
+  color: rgba(229, 244, 236, 0.94) !important;
 }
 
 .score-label,
@@ -5009,7 +5399,7 @@ onUnmounted(() => {
 .report-metric .metric-label,
 .draft-card-order,
 .draft-card-tool {
-  color: rgba(214, 238, 223, 0.86) !important;
+  color: rgba(221, 241, 230, 0.92) !important;
 }
 
 @keyframes cockpitSweep {
@@ -5134,6 +5524,10 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 
+  .expert-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
   .preview-grid {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -5168,7 +5562,8 @@ onUnmounted(() => {
   .cost-kpi-grid,
   .cost-detail-kpi,
   .draft-result-grid,
-  .draft-fact-grid {
+  .draft-fact-grid,
+  .metrics-grid {
     grid-template-columns: 1fr;
   }
 

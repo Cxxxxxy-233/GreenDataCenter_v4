@@ -278,7 +278,6 @@ class AISystemCoordinator:
 - 方案名称: {solution.get('name', '未命名')}
 - 版本: {solution.get('version', '1.0')}
 - 总体评分: {solution.get('overall_scores', {}).get('overall', 0):.2f}
-- 置信度: {solution.get('confidence', 0.8):.2f}
 
 ## 方案概述
 {solution.get('summary', '无概述')}

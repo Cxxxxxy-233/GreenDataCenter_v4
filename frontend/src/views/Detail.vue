@@ -25,9 +25,9 @@
                 <p class="overview-hero-summary">{{ arbitrator.summary || '暂无后端仲裁摘要' }}</p>
               </div>
               <div class="overview-hero-badge">
-                <span class="overview-hero-badge-label">综合评分</span>
-                <strong>{{ formatPercent(overallScores.overall) }}</strong>
-                <span class="overview-hero-badge-note">多专家仲裁输出</span>
+                <span class="overview-hero-badge-label">修订条目</span>
+                <strong>{{ revisionComparison.changeCount }}</strong>
+                <span class="overview-hero-badge-note">仲裁后参数调整</span>
               </div>
             </div>
 
@@ -50,6 +50,29 @@
               <span v-if="costResult.is_over_budget">当前方案超预算 {{ formatNumber(Math.abs(costResult.budget_delta_lakh), 2) }} 万元</span>
               <span v-else-if="toNumber(costResult.budget_delta_lakh, 0) === 0">预算校验通过，当前方案与预算上限持平</span>
               <span v-else>预算校验通过，预算结余 {{ formatNumber(costResult.budget_delta_lakh, 2) }} 万元</span>
+            </div>
+            <div v-if="revisionComparison.changes.length" class="revision-overview">
+              <h5>初稿与仲裁修订</h5>
+              <div class="revision-overview-grid">
+                <div class="revision-overview-column revision-overview-column--draft">
+                  <div class="revision-overview-title">初稿方案</div>
+                  <div class="revision-overview-list">
+                    <div v-for="(change, index) in revisionComparison.changes" :key="`overview-draft-${index}`" class="revision-overview-item">
+                      <span>{{ change.label }}</span>
+                      <strong>{{ change.before }}</strong>
+                    </div>
+                  </div>
+                </div>
+                <div class="revision-overview-column revision-overview-column--revised">
+                  <div class="revision-overview-title">修订后方案</div>
+                  <div class="revision-overview-list">
+                    <div v-for="(change, index) in revisionComparison.changes" :key="`overview-revised-${index}`" class="revision-overview-item">
+                      <span>{{ change.label }}</span>
+                      <strong>{{ change.after }}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="risk-warning" v-if="arbitrator.risks && arbitrator.risks.length">
               <el-icon><CircleCloseFilled /></el-icon>
@@ -82,10 +105,6 @@
               <el-col :span="6">
                 <div class="info-item">生成时间</div>
                 <div class="info-value">{{ solutionData.created_at || '-' }}</div>
-              </el-col>
-              <el-col :span="6">
-                <div class="info-item">置信度</div>
-                <div class="info-value">{{ formatPercent(solutionData.confidence) }}</div>
               </el-col>
               <el-col :span="6">
                 <div class="info-item">报告路径</div>
@@ -495,7 +514,7 @@
             <div class="reliability-stats">
               <div class="stat-card">可用性：{{ formatPercentAuto(reliabilityOpinion.metrics?.expected_availability ?? keyMetrics.expected_availability) }}</div>
               <div class="stat-card">Tier等级：{{ keyMetrics.tier_level || powerRaw.machine_room_grade || '-' }}</div>
-              <div class="stat-card">可靠性评分：{{ formatPercent(overallScores.reliability) }}</div>
+              <div class="stat-card">仲裁修订项：{{ revisionComparison.changeCount }}</div>
             </div>
           </el-card>
         </div>
@@ -508,7 +527,7 @@
             <div class="carbon-stats">
               <div class="stat-card">年度碳排放：{{ keyMetrics.annual_carbon_emission || environmentalOpinion.metrics?.annual_carbon_emission || '-' }}</div>
               <div class="stat-card">绿电比例：{{ formatPercent(keyMetrics.green_power_ratio || environmentalOpinion.metrics?.green_power_ratio) }}</div>
-              <div class="stat-card">环保评分：{{ formatPercent(overallScores.environmental) }}</div>
+              <div class="stat-card">修订说明数：{{ revisionComparison.revisionNotes.length }}</div>
             </div>
           </el-card>
         </div>
@@ -561,8 +580,17 @@
           <el-card>
             <h4>仲裁决策</h4>
             <div class="arbitration-result">
-              <div class="consensus-score">综合评分：{{ formatPercent(overallScores.overall) }}</div>
+              <div class="consensus-score">修订条目：{{ revisionComparison.changeCount }}</div>
               <div class="arbitration-summary">{{ arbitrator.summary || '-' }}</div>
+              <div v-if="revisionComparison.changes.length" class="arbitration-revision-list">
+                <div v-for="(change, index) in revisionComparison.changes" :key="index" class="arbitration-revision-item">
+                  <div class="arbitration-revision-head">
+                    <strong>{{ change.label }}</strong>
+                    <span>{{ change.before }} → {{ change.after }}</span>
+                  </div>
+                  <div class="arbitration-revision-reason">{{ change.reason }}</div>
+                </div>
+              </div>
             </div>
           </el-card>
         </div>
@@ -574,7 +602,6 @@
             <div class="report-header-copy">
               <span class="report-header-kicker">Solution Report</span>
               <h3>完整方案报告</h3>
-              <p>按“结论、指标、论证、建议”的顺序组织，便于项目汇报、归档与导出。</p>
             </div>
             <div class="report-header-tools">
               <el-input v-model="searchKeyword" placeholder="搜索报告内容" />
@@ -587,11 +614,9 @@
               <div class="report-cover-grid">
                 <div class="report-cover-main">
                   <h1 class="report-title">{{ finalReportData.name || '数据中心绿电消纳方案报告' }}</h1>
-                  <p class="report-cover-subtitle">Final delivery pack for presentation, including key metrics, arbitration conclusion, and three domain schemes.</p>
                   <div class="report-meta">
                     <span>方案编号：{{ solutionId }}</span>
                     <span>生成时间：{{ solutionData.created_at || '-' }}</span>
-                    <span>置信度：{{ formatPercent(finalReportData.confidence) }}</span>
                   </div>
                   <div class="report-decision-banner" :class="reportDecision.toneClass">
                     <div class="report-decision-copy">
@@ -600,22 +625,20 @@
                       <p>{{ reportDecision.description }}</p>
                     </div>
                     <div class="report-decision-meta">
-                      <span>综合评分 {{ formatPercent(overallScores.overall) }}</span>
-                      <span>结论用于汇报首页与立项判断</span>
+                          <span>修订条目 {{ revisionComparison.changeCount }}</span>
                     </div>
                   </div>
                 </div>
-                <div class="report-cover-score">
-                  <span class="report-cover-score-label">Overall Score</span>
-                  <strong>{{ formatPercent(overallScores.overall) }}</strong>
-                  <small>Multi-agent arbitration</small>
+                    <div class="report-cover-score">
+                      <span class="report-cover-score-label">Revision Notes</span>
+                      <strong>{{ revisionComparison.revisionNotes.length }}</strong>
+                      <small>Multi-agent arbitration</small>
                 </div>
               </div>
             </div>
             <div v-if="reportPrimaryFacts.length || reportSecondaryFacts.length" class="report-input-summary">
               <div class="report-chapter-head">
                 <h2>项目关键输入</h2>
-                <p>以下内容来自方案生成前的参数配置，用于说明本报告对应的数据中心建设画像与约束边界。</p>
               </div>
               <div v-if="reportPrimaryFacts.length" class="report-input-primary">
                 <div
@@ -672,31 +695,39 @@
             <div class="report-chapter report-chapter--document">
               <div class="report-chapter-head">
                 <h2>顾问报告正文</h2>
-                <p>以下为系统生成并补齐后的完整方案正文，包含设计边界、容量测算、技术路线、成本、能耗碳排、实施路线与验收口径。</p>
               </div>
               <div class="report-section-item report-section-item--document">
                 <div class="markdown-rendered markdown-rendered--document" v-html="reportDocumentHtml"></div>
               </div>
             </div>
             <div class="report-chapter">
-              <h2>综合评分</h2>
+              <h2>仲裁修订</h2>
               <div class="report-section-item">
                 <div class="executive-grid">
                   <div class="executive-item">
-                    <div class="executive-label">经济性</div>
-                    <div class="executive-value">{{ formatPercent(overallScores.economic) }}</div>
+                    <div class="executive-label">修订条目</div>
+                    <div class="executive-value">{{ revisionComparison.changeCount }}</div>
                   </div>
                   <div class="executive-item">
-                    <div class="executive-label">可靠性</div>
-                    <div class="executive-value">{{ formatPercent(overallScores.reliability) }}</div>
+                    <div class="executive-label">修订说明</div>
+                    <div class="executive-value">{{ revisionComparison.revisionNotes.length }}</div>
                   </div>
                   <div class="executive-item">
-                    <div class="executive-label">环保性</div>
-                    <div class="executive-value">{{ formatPercent(overallScores.environmental) }}</div>
+                    <div class="executive-label">方案状态</div>
+                    <div class="executive-value">已完成仲裁</div>
                   </div>
                   <div class="executive-item">
-                    <div class="executive-label">总体</div>
-                    <div class="executive-value">{{ formatPercent(overallScores.overall) }}</div>
+                    <div class="executive-label">仲裁摘要</div>
+                    <div class="executive-value">{{ arbitrator.summary ? '已生成' : '暂无' }}</div>
+                  </div>
+                </div>
+                <div v-if="revisionComparison.changes.length" class="revision-report-list">
+                  <div v-for="(change, index) in revisionComparison.changes" :key="index" class="revision-report-item">
+                    <div class="revision-report-head">
+                      <strong>{{ change.label }}</strong>
+                      <span>{{ change.before }} → {{ change.after }}</span>
+                    </div>
+                    <div class="revision-report-reason">{{ change.reason }}</div>
                   </div>
                 </div>
               </div>
@@ -1008,9 +1039,118 @@ const normalizeGreenPowerResult = (rawValue, metrics = {}) => {
 const intermediate = computed(() => solutionData.value.intermediate_results || {})
 const draftOutput = computed(() => intermediate.value.draft_plan_agent?.full_output || {})
 const arbitrator = computed(() => intermediate.value.arbitrator?.full_output || solutionData.value || {})
-const overallScores = computed(() => solutionData.value.overall_scores || arbitrator.value.overall_scores || {})
 const keyMetrics = computed(() => solutionData.value.key_metrics || arbitrator.value.key_metrics || {})
 const finalReportPath = computed(() => intermediate.value.final_report?.full_output?.path || solutionData.value.final_report_path || '')
+
+const revisionParameterLabels = {
+  storage_capacity_mwh: '储能容量',
+  storage_capacity: '储能容量',
+  pv_capacity_mw: '光伏容量',
+  wind_capacity_mw: '风电容量',
+  green_power_ratio: '绿电比例',
+  green_supply_ratio: '绿电供给比例',
+  pue: 'PUE',
+  estimated_pue: '预测PUE',
+  predicted_wue: '预测WUE',
+  cooling_technology: '制冷技术',
+  cooling_initial_investment_lakh: '制冷初始投资',
+  scheme_name: '供电方案',
+  redundancy_logic: '冗余逻辑',
+  distribution_transformers: '配电变压器配置',
+  tier_level: 'Tier 等级',
+  expected_availability: '预期可用性',
+  annual_carbon_emission: '年碳排放',
+  total_cost: '总投资',
+  total_capex_lakh: '总投资',
+  roi: '投资回报率',
+  payback_period: '投资回收期'
+}
+
+const revisionValueFormatters = {
+  storage_capacity_mwh: value => formatWithUnit(value, 'MWh', 2),
+  storage_capacity: value => formatWithUnit(value, 'MWh', 2),
+  pv_capacity_mw: value => formatWithUnit(value, 'MW', 2),
+  wind_capacity_mw: value => formatWithUnit(value, 'MW', 2),
+  green_power_ratio: value => formatPercentAuto(value, 0),
+  green_supply_ratio: value => formatPercentAuto(value, 0),
+  pue: value => formatNumber(value, 2),
+  estimated_pue: value => formatNumber(value, 2),
+  predicted_wue: value => formatNumber(value, 2),
+  tier_level: value => (Number.isFinite(Number(value)) ? `Tier ${value}` : String(value ?? '--')),
+  expected_availability: value => formatPercentAuto(value, 3),
+  annual_carbon_emission: value => formatWithUnit(value, '吨', 0),
+  total_cost: value => formatWithUnit(value, '万元', 2),
+  total_capex_lakh: value => formatWithUnit(value, '万元', 2),
+  cooling_initial_investment_lakh: value => formatWithUnit(value, '万元', 2),
+  roi: value => formatPercentAuto(value, 1),
+  payback_period: value => formatWithUnit(value, '年', 1)
+}
+
+const formatRevisionValue = (parameter, value) => {
+  if (value === null || value === undefined || value === '') return '--'
+  const formatter = revisionValueFormatters[parameter]
+  if (formatter) return formatter(value)
+  if (typeof value === 'number') return formatNumber(value, 2)
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+const normalizeRevisionChanges = (changes = []) => {
+  if (!Array.isArray(changes)) return []
+  return changes
+    .map((item) => {
+      const parameter = String(item?.parameter || '').trim()
+      if (!parameter) return null
+      return {
+        parameter,
+        label: revisionParameterLabels[parameter] || parameter,
+        before: formatRevisionValue(parameter, item?.before),
+        after: formatRevisionValue(parameter, item?.after),
+        reason: String(item?.reason || '').trim() || '仲裁专家根据评审意见进行了修订。'
+      }
+    })
+    .filter(Boolean)
+}
+
+const normalizeRevisionDisplayItems = (items = []) => {
+  if (!Array.isArray(items)) return []
+  return items
+    .map((item) => {
+      const label = String(item?.label || '').trim()
+      const change = String(item?.change || '').trim()
+      if (!label || !change) return null
+      const parts = change.split('→').map(part => part.trim()).filter(Boolean)
+      return {
+        label,
+        change,
+        before: parts[0] || '--',
+        after: parts[1] || parts[0] || '--',
+        reason: String(item?.reason || '').trim() || '仲裁专家根据评审意见进行了修订。'
+      }
+    })
+    .filter(Boolean)
+}
+
+const revisionComparison = computed(() => {
+  const revisedDraftPlan = arbitrator.value.revised_draft_plan && typeof arbitrator.value.revised_draft_plan === 'object'
+    ? arbitrator.value.revised_draft_plan
+    : {}
+  const displayItems = normalizeRevisionDisplayItems(arbitrator.value.revision_display_items || [])
+  const changes = displayItems.length ? displayItems : normalizeRevisionChanges(arbitrator.value.parameter_changes || [])
+  const revisionNotes = Array.isArray(revisedDraftPlan.revision_notes)
+    ? revisedDraftPlan.revision_notes.map(item => String(item || '').trim()).filter(Boolean)
+    : []
+
+  return {
+    revisedDraftPlan,
+    displayItems,
+    changes,
+    revisionNotes,
+    changeCount: Number.isFinite(Number(arbitrator.value.revision_display_count)) && Number(arbitrator.value.revision_display_count) > 0
+      ? Number(arbitrator.value.revision_display_count)
+      : changes.length
+  }
+})
 
 const economicSection = computed(() => solutionData.value.economic_section || arbitrator.value.economic_section || {})
 const powerSection = computed(() => solutionData.value.power_reliability_section || arbitrator.value.power_reliability_section || {})
@@ -1211,26 +1351,27 @@ const reportSummaryPoints = computed(() => {
   return points.map(item => String(item || '').trim()).filter(Boolean).slice(0, 3)
 })
 const reportDecision = computed(() => {
-  const score = toNumber(overallScores.value.overall, 0)
+  const revisionCount = revisionComparison.value.changeCount
+  const noteCount = revisionComparison.value.revisionNotes.length
   const hasRisks = Array.isArray(finalReportData.value.risks) && finalReportData.value.risks.length > 0
-  if (score >= 0.85) {
+  if (revisionCount === 0) {
     return {
-      label: '建议推进，附带优化条件',
+      label: '方案已完成仲裁',
       toneClass: hasRisks ? 'is-caution' : 'is-positive',
-      description: '整体方案已具备较强可行性，建议在预算、冗余和绿电边界校准后进入下一阶段。'
+      description: '仲裁输出已整理为最终方案，可直接用于归档、导出和后续评审。'
     }
   }
-  if (score >= 0.7) {
+  if (revisionCount <= 3 || noteCount > 0) {
     return {
-      label: '有条件推进',
+      label: '已完成修订，可推进',
       toneClass: 'is-caution',
-      description: '当前方案具备基础可行性，但仍需围绕关键风险、成本结构或系统边界补充验证。'
+      description: '仲裁者已根据评审意见调整关键参数，建议结合修订原因继续核对落地边界。'
     }
   }
   return {
-    label: '建议暂缓推进',
+    label: '建议复核修订项',
     toneClass: 'is-warning',
-    description: '当前方案关键信息或关键指标不足以支撑落地决策，建议优先补齐约束条件与验证结果。'
+    description: '修订条目较多，建议在定稿前再次核对参数边界、取值来源与依赖条件。'
   }
 })
 const keyMetricsRows = computed(() => {
@@ -1277,19 +1418,25 @@ const generatedReportMarkdown = computed(() => {
     '## \u57fa\u672c\u4fe1\u606f',
     '- \u65b9\u6848\u7f16\u53f7\uff1a' + (solutionId.value || '-'),
     '- \u751f\u6210\u65f6\u95f4\uff1a' + (solutionData.value.created_at || '-'),
-    '- \u7f6e\u4fe1\u5ea6\uff1a' + formatPercent(report.confidence),
     finalReportPath.value ? ('- \u62a5\u544a\u8def\u5f84\uff1a' + finalReportPath.value) : null,
     '',
     '## \u6267\u884c\u6458\u8981',
     report.summary || '\u6682\u65e0\u6458\u8981',
     '',
-    '## \u7efc\u5408\u8bc4\u5206',
+    '## \u4ee3\u7406\u4fee\u8ba2',
     buildMarkdownTable([
-      { label: '\u7ecf\u6d4e\u6027', value: formatPercent(overallScores.value.economic) },
-      { label: '\u53ef\u9760\u6027', value: formatPercent(overallScores.value.reliability) },
-      { label: '\u73af\u4fdd\u6027', value: formatPercent(overallScores.value.environmental) },
-      { label: '\u603b\u4f53', value: formatPercent(overallScores.value.overall) }
+      { label: '\u4fee\u8ba2\u6761\u76ee', value: String(revisionComparison.value.changeCount) },
+      { label: '\u4fee\u8ba2\u8bf4\u660e', value: String(revisionComparison.value.revisionNotes.length) },
+      { label: '\u4e0b\u4e00\u6b65\u5efa\u8bae', value: reportDecision.value.label }
     ]),
+    '',
+    '## \u4fee\u8ba2\u6e05\u5355',
+    buildMarkdownTable(
+      revisionComparison.value.changes.map(change => ({
+        label: change.label,
+        value: `${change.before} -> ${change.after}\n${change.reason}`
+      }))
+    ),
     '',
     '## \u5173\u952e\u6307\u6807',
     buildMarkdownTable(keyMetricsRows.value),
@@ -1753,7 +1900,7 @@ const overviewMetrics = computed(() => [
   { label: '预测WUE', value: `${formatNumber(coolingResult.value.predicted_wue, 3)}`, unit: 'L/kWh', highlight: false },
   { label: '绿电消纳率', value: formatPercent(keyMetrics.value.green_power_ratio), highlight: true },
   { label: '总初始投资', value: formatNumber(costResult.value.total_capex_lakh || keyMetrics.value.total_cost, 2), unit: '万元', highlight: false },
-  { label: '综合评分', value: formatPercent(overallScores.value.overall), highlight: false }
+  { label: '修订条目', value: revisionComparison.value.changeCount, highlight: false }
 ])
 
 const filteredMarkdown = computed(() => {
@@ -3884,6 +4031,39 @@ watch(
   line-height: 1.6;
 }
 
+.arbitration-revision-list,
+.revision-report-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.arbitration-revision-item,
+.revision-report-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--bg-card) 96%, var(--primary-color) 4%);
+  border: 1px solid var(--border-light);
+}
+
+.arbitration-revision-head,
+.revision-report-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.arbitration-revision-reason,
+.revision-report-reason {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
 .markdown-rendered {
   font-size: 14px;
   line-height: 1.8;
@@ -4313,6 +4493,66 @@ watch(
 
 .overview-hero-badge-note {
   color: rgba(162, 178, 172, 0.76);
+}
+
+.revision-overview {
+  margin-top: 18px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 176, 163, 0.14);
+  background: linear-gradient(180deg, rgba(33, 37, 37, 0.94), rgba(24, 28, 29, 0.98));
+}
+
+.revision-overview h5 {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: rgba(240, 244, 241, 0.96);
+}
+
+.revision-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.revision-overview-column {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 176, 163, 0.12);
+}
+
+.revision-overview-column--draft {
+  background: rgba(18, 30, 23, 0.96);
+}
+
+.revision-overview-column--revised {
+  background: rgba(17, 28, 31, 0.96);
+}
+
+.revision-overview-title {
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(240, 244, 241, 0.96);
+}
+
+.revision-overview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.revision-overview-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(192, 203, 199, 0.8);
+}
+
+.revision-overview-item strong {
+  color: rgba(240, 244, 241, 0.96);
 }
 
 .overview-section .summary-section {
@@ -5059,6 +5299,10 @@ watch(
   .green-insight-grid,
   .param-cards,
   .overview-section .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .revision-overview-grid {
     grid-template-columns: 1fr;
   }
 

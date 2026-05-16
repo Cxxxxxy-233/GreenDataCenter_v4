@@ -5,10 +5,6 @@
         <div class="rail-head">
           <span class="rail-kicker">Planning Console</span>
           <h1>参数配置控制舱</h1>
-          <p>
-            在送入多智能体协同推演前，先完成项目画像、约束边界与绿电偏好设置。
-            页面会同步反馈达标状态、派生指标与推荐口径。
-          </p>
         </div>
 
         <div class="rail-track" aria-label="参数配置流程">
@@ -43,14 +39,6 @@
             贵阳均衡能效口径
           </button>
         </div>
-
-        <div class="rail-tip">
-          <span class="rail-section-title">录屏建议</span>
-          <p>
-            如需展示高比例绿电方案，推荐选择乌兰察布预设，再根据答辩重点微调
-            PUE、预算与直连占比。
-          </p>
-        </div>
       </aside>
 
       <main class="workbench-stage">
@@ -63,7 +51,6 @@
               </span>
               <div>
                 <h2>{{ activeModuleMeta.title }}</h2>
-                <p>{{ activeModuleMeta.note }}</p>
               </div>
             </div>
           </div>
@@ -99,7 +86,6 @@
               <span class="plane-label">模块目标</span>
               <h3>{{ activeModuleMeta.goal }}</h3>
             </div>
-            <p>{{ activeModuleMeta.guidance }}</p>
           </div>
 
           <div class="form-river">
@@ -108,24 +94,19 @@
                 <div class="block-head">
                   <span class="block-kicker">项目规模</span>
                   <h4>建立基础建设画像</h4>
-                  <p>这里决定后续绿电容量、供配电冗余和制冷规模的基准值。</p>
                 </div>
                 <el-form :model="formData" label-position="top" class="module-form two-columns">
                   <el-form-item label="数据中心总负荷（kW）" required>
                     <el-input-number v-model="formData.planned_load_kw" :min="100" :max="100000" :step="100" />
-                    <span class="field-hint">展示建议采用 12000、30000、50000 这类工程上常见的量级。</span>
                   </el-form-item>
                   <el-form-item label="单机柜算力功率密度（kW/柜）" required>
                     <el-input-number v-model="formData.computing_power_density" :min="5" :max="80" :step="1" />
-                    <span class="field-hint">通用云场景可取 8 至 12，高密算力展示可取 15 至 20。</span>
                   </el-form-item>
                   <el-form-item label="机柜总数">
                     <el-input :value="`${cabinetCount} 柜`" disabled class="disabled-input" />
-                    <span class="field-hint">由总负荷和单柜功率密度自动估算。</span>
                   </el-form-item>
                   <el-form-item label="规划建筑面积（m²）" required>
                     <el-input-number v-model="formData.planned_area" :min="100" :max="100000" :step="100" />
-                    <span class="field-hint">用于评估建设强度和空间容纳能力。</span>
                   </el-form-item>
                 </el-form>
               </div>
@@ -136,7 +117,6 @@
                 <div class="block-head">
                   <span class="block-kicker">区位条件</span>
                   <h4>确定环境与标准边界</h4>
-                  <p>所在地区会影响风光资源、碳排放因子、电价水平和制冷适配性。</p>
                 </div>
                 <el-form :model="formData" label-position="top" class="module-form two-columns">
                   <el-form-item label="项目所在地" required>
@@ -150,7 +130,6 @@
                       <el-option label="成都" value="成都" />
                       <el-option label="贵阳" value="贵阳" />
                     </el-select>
-                    <span class="field-hint">答辩展示建议优先使用资源禀赋鲜明的地区。</span>
                   </el-form-item>
                   <el-form-item label="机房等级">
                     <el-select v-model="formData.machine_room_grade">
@@ -159,7 +138,6 @@
                       <el-option label="B" value="B" />
                       <el-option label="C" value="C" />
                     </el-select>
-                    <span class="field-hint">与 GB 50174-2017 供配电可靠性要求联动。</span>
                   </el-form-item>
                 </el-form>
               </div>
@@ -170,24 +148,19 @@
                 <div class="block-head">
                   <span class="block-kicker">目标与边界</span>
                   <h4>锁定能效、绿电与预算目标</h4>
-                  <p>建议将总绿电占比和绿电直连占比分开设置，剩余部分由购绿电或绿证补足。</p>
                 </div>
                 <el-form :model="formData" label-position="top" class="module-form two-columns">
                   <el-form-item label="PUE 目标" required>
                     <el-input-number v-model="formData.pue_target" :min="1.05" :max="3" :step="0.01" />
-                    <span class="field-hint">新建绿色数据中心展示通常取 1.20 至 1.25。</span>
                   </el-form-item>
                   <el-form-item label="绿电总占比目标（%）" required>
                     <el-input-number v-model="formData.green_power_ratio" :min="0" :max="100" :step="1" />
-                    <span class="field-hint">乌兰察布示例建议设置在 90% 以上，更符合展示口径。</span>
                   </el-form-item>
                   <el-form-item label="绿电直连占比（%）">
                     <el-input-number v-model="formData.direct_connection_ratio" :min="0" :max="100" :step="1" />
-                    <span class="field-hint">留空时，系统将结合区位条件给出建议直连占比。</span>
                   </el-form-item>
                   <el-form-item label="预算约束（万元）" required>
                     <el-input-number v-model="formData.budget_constraint" :min="100" :max="100000" :step="100" />
-                    <span class="field-hint">30MW 级项目展示可先采用 32000 万元口径，再按答辩重点微调。</span>
                   </el-form-item>
                   <el-form-item label="制冷技术路线">
                     <el-select v-model="formData.cooling_technology">
@@ -197,7 +170,6 @@
                       <el-option label="风冷" value="风冷" />
                       <el-option label="混合制冷" value="混合制冷" />
                     </el-select>
-                    <span class="field-hint">参数页先确定偏好，具体择优由制冷工具完成。</span>
                   </el-form-item>
                 </el-form>
               </div>
@@ -208,16 +180,13 @@
                 <div class="block-head">
                   <span class="block-kicker">绿电规划</span>
                   <h4>补全风光储与碳排放假设</h4>
-                  <p>这里输入的是建模边界，不是最终结论，系统会据此推演直连容量与购电补足路径。</p>
                 </div>
                 <el-form :model="formData" label-position="top" class="module-form two-columns">
                   <el-form-item label="光伏倾角（度）">
                     <el-input-number v-model="formData.pv_tilt" :min="0" :max="90" :step="1" />
-                    <span class="field-hint">展示可直接采用当地纬度附近取值。</span>
                   </el-form-item>
                   <el-form-item label="光伏方位角（度）">
                     <el-input-number v-model="formData.pv_azimuth" :min="0" :max="360" :step="5" />
-                    <span class="field-hint">180 度代表正南布置。</span>
                   </el-form-item>
                   <el-form-item label="风机切入风速（m/s）">
                     <el-input-number v-model="formData.wind_cut_in_ms" :min="1" :max="10" :step="0.5" />
@@ -230,7 +199,6 @@
                   </el-form-item>
                   <el-form-item label="电网碳排放因子（kgCO2/kWh）">
                     <el-input-number v-model="formData.carbon_emission_factor" :min="0" :max="2" :step="0.01" />
-                    <span class="field-hint">乌兰察布等华北地区展示建议取 0.55 至 0.60。</span>
                   </el-form-item>
                 </el-form>
               </div>
@@ -241,19 +209,16 @@
                 <div class="block-head">
                   <span class="block-kicker">仿真与求解</span>
                   <h4>控制推演精度与时效</h4>
-                  <p>录屏展示更适合中等仿真时长和稳定的优化参数组合，兼顾速度与结果观感。</p>
                 </div>
                 <el-form :model="formData" label-position="top" class="module-form two-columns">
                   <el-form-item label="仿真时长（小时）">
                     <el-input-number v-model="formData.sim_hours" :min="24" :max="8760" :step="24" />
-                    <span class="field-hint">展示推荐 168 小时，全年仿真更适合最终论证。</span>
                   </el-form-item>
                   <el-form-item label="气象数据年份">
                     <el-input-number v-model="formData.year" :min="2010" :max="2025" />
                   </el-form-item>
                   <el-form-item label="仿真日期">
                     <el-date-picker v-model="formData.date" type="date" placeholder="选择日期" />
-                    <span class="field-hint">仅在 24 小时仿真时建议指定单日工况。</span>
                   </el-form-item>
                   <div class="block-subgrid full-span">
                     <div class="subgrid-title">电价参数（元/kWh）</div>
@@ -299,7 +264,6 @@
           <div class="stage-actions-copy">
             <span class="actions-label">当前状态</span>
             <strong>{{ canProceed ? '核心参数已满足生成条件' : '仍有关键参数待完善' }}</strong>
-            <p>{{ actionHint }}</p>
           </div>
           <div class="stage-actions-buttons">
             <el-button @click="saveParams">保存参数</el-button>
@@ -346,20 +310,6 @@
             <div v-for="metric in derivedMetrics" :key="metric.label" class="impact-metric">
               <span class="impact-metric-label">{{ metric.label }}</span>
               <strong>{{ metric.value }}</strong>
-              <p>{{ metric.note }}</p>
-            </div>
-          </div>
-        </section>
-
-        <section class="impact-surface insight-surface">
-          <div class="impact-head">
-            <span class="impact-kicker">推荐口径</span>
-            <h3>当前模块提示</h3>
-          </div>
-          <div class="insight-list">
-            <div v-for="tip in activeInsights" :key="tip.title" class="insight-item">
-              <strong>{{ tip.title }}</strong>
-              <p>{{ tip.body }}</p>
             </div>
           </div>
         </section>
@@ -439,7 +389,7 @@ const activeModuleMeta = computed(() => {
 const formData = reactive({
   location: '乌兰察布',
   planned_load_kw: 30000,
-  green_power_ratio: 92,
+  green_power_ratio: 60,
   direct_connection_ratio: null,
   planned_area: 15000,
   budget_constraint: 32000,
@@ -478,7 +428,7 @@ const presets = {
     cooling_technology: '浸没式液冷',
     machine_room_grade: 'A',
     pue_target: 1.22,
-    green_power_ratio: 92,
+    green_power_ratio: 30,
     budget_constraint: 32000,
     pv_tilt: 41,
     pv_azimuth: 180,
@@ -891,8 +841,8 @@ function formatWan(value) {
 .rail-tip p {
   margin: 0;
   color: color-mix(in oklab, var(--text-secondary) 72%, white);
-  font-size: 12px;
-  line-height: 1.7;
+  font-size: 13px;
+  line-height: 1.75;
 }
 
 .rail-kicker,
@@ -908,7 +858,7 @@ function formatWan(value) {
   color: color-mix(in oklab, var(--primary-light) 72%, var(--text-secondary));
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -985,7 +935,7 @@ function formatWan(value) {
 }
 
 .rail-step-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 650;
   color: var(--text-primary);
 }
@@ -993,7 +943,7 @@ function formatWan(value) {
 .rail-step-percent,
 .rail-step-note {
   color: color-mix(in oklab, var(--text-secondary) 70%, white);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .rail-step-note {
@@ -1013,6 +963,8 @@ function formatWan(value) {
   border-radius: 14px;
   background: color-mix(in oklab, var(--bg-panel) 66%, transparent);
   color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.45;
   text-align: left;
   cursor: pointer;
   transition: background var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast);
@@ -1095,8 +1047,8 @@ function formatWan(value) {
 .stage-actions-copy p {
   margin: 8px 0 0;
   color: color-mix(in oklab, var(--text-secondary) 74%, white);
-  font-size: 12px;
-  line-height: 1.7;
+  font-size: 13px;
+  line-height: 1.75;
 }
 
 .stage-progress-board {
@@ -1120,7 +1072,7 @@ function formatWan(value) {
   justify-content: space-between;
   gap: 12px;
   color: color-mix(in oklab, var(--text-secondary) 72%, white);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .stage-progress-meta strong {
@@ -1158,7 +1110,7 @@ function formatWan(value) {
   border-radius: 999px;
   background: color-mix(in oklab, var(--bg-panel) 64%, transparent);
   color: color-mix(in oklab, var(--text-primary) 94%, white);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .meta-pill i {
@@ -1200,7 +1152,7 @@ function formatWan(value) {
 .plane-intro h3 {
   margin: 10px 0 0;
   color: var(--text-primary);
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1.12;
 }
 
@@ -1255,7 +1207,7 @@ function formatWan(value) {
 .block-head h4 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.12;
 }
 
@@ -1300,7 +1252,7 @@ function formatWan(value) {
 
 .subgrid-title {
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 650;
   letter-spacing: 0.02em;
 }
@@ -1319,8 +1271,8 @@ function formatWan(value) {
   display: block;
   margin-top: 8px;
   color: color-mix(in oklab, var(--text-secondary) 68%, white);
-  font-size: 11px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .stage-actions {
@@ -1339,7 +1291,7 @@ function formatWan(value) {
   display: block;
   margin-top: 8px;
   color: var(--text-primary);
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .stage-actions-buttons {
@@ -1375,7 +1327,7 @@ function formatWan(value) {
 .impact-head h3 {
   margin: 8px 0 0;
   color: var(--text-primary);
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1.12;
 }
 
@@ -1411,7 +1363,7 @@ function formatWan(value) {
 .readiness-ring-core span {
   margin-top: 8px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .check-list {
@@ -1425,7 +1377,7 @@ function formatWan(value) {
   align-items: center;
   gap: 10px;
   color: color-mix(in oklab, var(--text-secondary) 72%, white);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .check-item.is-ok {
@@ -1461,14 +1413,14 @@ function formatWan(value) {
 .impact-metric-label {
   display: block;
   color: color-mix(in oklab, var(--text-secondary) 72%, white);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .impact-metric strong {
   display: block;
   margin-top: 6px;
   color: var(--text-primary);
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.15;
 }
 
@@ -1488,7 +1440,7 @@ function formatWan(value) {
 
 .insight-item strong {
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .disabled-input :deep(.el-input__wrapper) {
@@ -1533,7 +1485,7 @@ function formatWan(value) {
   z-index: 1;
   padding: 0 0 8px;
   color: color-mix(in oklab, var(--text-primary) 96%, white);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 650;
   line-height: 1.45;
 }
@@ -1567,7 +1519,7 @@ function formatWan(value) {
 :deep(.el-input-number__wrapper),
 :deep(.el-select__wrapper),
 :deep(.el-textarea__inner) {
-  min-height: 38px;
+  min-height: 42px;
   border-radius: 11px !important;
   background:
     linear-gradient(180deg, color-mix(in oklab, var(--bg-stage-soft) 76%, var(--primary-color) 24%) 0%, color-mix(in oklab, var(--bg-panel) 92%, var(--primary-color) 8%) 100%) !important;
@@ -1593,6 +1545,7 @@ function formatWan(value) {
 :deep(.el-date-editor input),
 :deep(.el-input-number .el-input__inner) {
   color: color-mix(in oklab, var(--text-primary) 96%, white) !important;
+  font-size: 15px !important;
   font-variant-numeric: tabular-nums;
 }
 

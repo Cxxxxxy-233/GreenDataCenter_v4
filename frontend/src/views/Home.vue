@@ -184,9 +184,11 @@
     </section>
 
     <div class="stats-section">
-      <div class="stats-header">
-        <h2 class="stats-title">平台概览</h2>
-        <span class="stats-subtitle">实时方案数据统计</span>
+      <div class="section-header stats-header">
+        <div class="section-title">
+          <h2>平台概览</h2>
+          <span class="stats-subtitle">实时方案数据统计</span>
+        </div>
       </div>
       <el-row :gutter="0" class="telemetry-grid">
         <el-col :span="6" class="telemetry-col" v-for="(stat, index) in statsData" :key="index">
@@ -2075,6 +2077,7 @@ onUnmounted(() => {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  padding: 0 24px;
   margin-bottom: 18px;
 }
 
@@ -2782,7 +2785,7 @@ onUnmounted(() => {
 }
 
 .stats-header {
-  padding: 0 2px 8px;
+  padding: 0 24px 8px;
 }
 
 .telemetry-grid {

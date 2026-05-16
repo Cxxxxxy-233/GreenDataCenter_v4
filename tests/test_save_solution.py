@@ -50,6 +50,5 @@ if result.get("success"):
     print(f"\n[OK] Solution saved to: {output_file}")
     print(f"Solution name: {solution.get('name', 'N/A')}")
     print(f"Overall score: {solution.get('overall_scores', {}).get('overall', 0):.2f}")
-    print(f"Confidence: {solution.get('confidence', 0):.2f}")
 else:
     print(f"[ERROR] Failed to generate solution: {result.get('error', 'Unknown error')}")

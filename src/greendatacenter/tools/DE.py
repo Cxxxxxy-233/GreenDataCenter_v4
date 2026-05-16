@@ -521,7 +521,7 @@ def plot_weekly_balance(
     balance: Dict[str, np.ndarray],
     output_path: str | Path,
     week_start_hour: int = 0,
-    title: str = "Weekly Power Balance",
+    title: str = "每周电力平衡",
 ) -> None:
     """Plot the weekly power balance chart."""
     hours_per_week = 24 * 7
@@ -544,18 +544,18 @@ def plot_weekly_balance(
         wind,
         discharge,
         grid,
-        labels=["PV to Load (MW)", "Wind to Load (MW)", "Storage Discharge (MW)", "Grid Purchase (MW)"],
+        labels=["光伏直供 (MW)", "风电直供 (MW)", "储能放电 (MW)", "电网购电 (MW)"],
         colors=["#f4b400", "#5b9bd5", "#66a63a", "#e7b6b6"],
         alpha=0.95,
     )
-    plt.fill_between(x_values, 0, charge, color="#98df8a", alpha=0.75, label="Storage Charge (MW)")
-    plt.plot(x_values, load, color="#7b6000", linewidth=2.2, label="Load (MW)")
+    plt.fill_between(x_values, 0, charge, color="#98df8a", alpha=0.75, label="储能充电 (MW)")
+    plt.plot(x_values, load, color="#7b6000", linewidth=2.2, label="负荷 (MW)")
 
     tick_step = max(1, min(24, len(x_values) // 12 if len(x_values) > 0 else 1))
     ticks = x_values[::tick_step] if len(x_values) > 0 else []
-    plt.xticks(ticks, [f"H{int(value)}" for value in ticks], rotation=90)
-    plt.xlabel("Time")
-    plt.ylabel("Power (MW)")
+    plt.xticks(ticks, [f"{int(value)}时" for value in ticks], rotation=0)
+    plt.xlabel("时间")
+    plt.ylabel("功率（MW）")
     plt.title(title)
     plt.legend(ncol=3, loc="upper center", frameon=False)
     plt.grid(axis="y", linestyle="--", alpha=0.35)

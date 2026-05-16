@@ -46,8 +46,6 @@ class ExpertOpinion(BaseModel):
     recommendations: list[str] = Field(default_factory=list, description="改进建议")
     concerns: list[str] = Field(default_factory=list, description="关注点")
 
-    # 元数据
-    confidence: float = Field(default=0.8, ge=0, le=1, description="置信度")
     created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
 
     class Config:
@@ -61,8 +59,7 @@ class ExpertOpinion(BaseModel):
                 "scores": {"cost_efficiency": 0.85, "roi": 0.78},
                 "metrics": {"total_cost": 1800, "payback_period": 5},
                 "recommendations": ["建议增加备用电源冗余以降低风险"],
-                "concerns": ["部分设备价格波动风险"],
-                "confidence": 0.85
+                "concerns": ["部分设备价格波动风险"]
             }
         }
 

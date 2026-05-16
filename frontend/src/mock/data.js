@@ -21,13 +21,6 @@ export const mockSolutionData = {
   id: 'mock-solution-001',
   created_at: new Date().toISOString(),
   name: '乌兰察布数据中心绿电消纳方案',
-  confidence: 0.92,
-  overall_scores: {
-    overall: 0.85,
-    economic: 0.82,
-    reliability: 0.88,
-    environmental: 0.89
-  },
   key_metrics: {
     total_cost: totalCapexLakh,
     pue: 1.23,
@@ -51,11 +44,19 @@ export const mockSolutionData = {
 - **绿电消纳率**: 72%
 - **总投资**: ${totalCapexLakh}万元
 
-## 综合评分
-- **经济性**: 82%
-- **可靠性**: 88%
-- **环保性**: 89%
-- **总体**: 85%
+## 仲裁修订
+
+仲裁专家在查看初稿方案与多专家评审意见后，对储能容量、供电方案与绿电比例进行了修订，确保方案在预算约束下更贴近落地条件。
+
+### 修订条目
+- **储能容量**: 45MWh → 48MWh
+- **绿电比例**: 72% → 75%
+- **供电方案**: 主变N+1，配变2N（互为备用） → 主变N+1，配变2N（互为备用），并提高关键路径冗余
+
+### 修订原因
+1. 提升储能容量可以增强对风光波动的缓冲能力
+2. 适度提高绿电比例，有助于进一步降低碳排放
+3. 针对可靠性意见补强关键供电路径冗余，减少单点风险
 
 ## 关键指标
 
@@ -347,8 +348,7 @@ export const mockSolutionData = {
         concerns: [
           '电价波动可能影响投资回报',
           '运维成本需要严格控制'
-        ],
-        confidence: 0.88
+        ]
       }
     },
     power_reliability_analysis: {
@@ -373,8 +373,7 @@ export const mockSolutionData = {
         concerns: [
           '外部电网稳定性需要持续关注',
           '备用发电机需定期演练'
-        ],
-        confidence: 0.90
+        ]
       }
     },
     environmental_analysis: {
@@ -402,8 +401,7 @@ export const mockSolutionData = {
         concerns: [
           '风光资源存在年度波动',
           '储能电池回收需提前规划'
-        ],
-        confidence: 0.87
+        ]
       }
     },
     debate_round: [
@@ -435,14 +433,38 @@ export const mockSolutionData = {
     ],
     arbitrator: {
       full_output: {
-        summary: `综合三位专家的意见，当前方案在经济性、可靠性和环保性方面保持均衡，绿电消纳率72%，PUE1.23，总投资${totalCapexLakh}万元，当前已与预算上限持平，建议在控制实施节奏的前提下采用此方案。`,
-        consensus_score: 0.85,
-        scores: {
-          overall: 0.85,
-          economic: 0.82,
-          reliability: 0.88,
-          environmental: 0.89
+        summary: `综合三位专家的意见，仲裁者在初稿基础上提高了储能容量并补强关键路径冗余，以提升方案对风光波动和可靠性要求的适配性。`,
+        revised_draft_plan: {
+          green_power_result: {
+            optimization: {
+              wind_capacity_mw: 10,
+              pv_capacity_mw: 15,
+              storage_capacity_mwh: 48,
+              achieved_green_ratio: 0.75,
+              total_cost: 8780
+            }
+          },
+          cooling_result: {
+            cooling_technology: '传统房间级CRAC(上送风)+热通道封闭',
+            estimated_pue: 1.22,
+            predicted_wue: 1.62
+          },
+          power_supply_plan: {
+            scheme_name: '主变N+1，配变2N（互为备用），并提高关键路径冗余',
+            external_voltage: '35kV',
+            redundancy_logic: '主变N+1，配变2N（互为备用），并提高关键路径冗余'
+          },
+          revision_notes: [
+            '提高储能容量以增强风光波动缓冲能力',
+            '适度提高绿电比例，进一步降低碳排放',
+            '补强关键供电路径冗余，减少单点风险'
+          ]
         },
+        parameter_changes: [
+          { parameter: 'storage_capacity_mwh', before: 45, after: 48, reason: '提升储能容量可以增强对风光波动的缓冲能力。' },
+          { parameter: 'green_power_ratio', before: 0.72, after: 0.75, reason: '适度提高绿电比例，有助于进一步降低碳排放。' },
+          { parameter: 'scheme_name', before: '主变N+1，配变2N（互为备用）', after: '主变N+1，配变2N（互为备用），并提高关键路径冗余', reason: '针对可靠性意见补强关键供电路径冗余，减少单点风险。' }
+        ],
         trade_offs: [
           { conflict: '绿电比例 vs 投资成本', resolution: '通过优化风光储配置比例，在72%绿电目标下实现最优投资' },
           { conflict: 'PUE优化 vs 制冷投资', resolution: '采用传统CRAC+热通道封闭方案，在PUE和投资间取得平衡' },
