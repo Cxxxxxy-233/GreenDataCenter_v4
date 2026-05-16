@@ -3,7 +3,6 @@
     <div class="config-shell">
       <aside class="workflow-rail">
         <div class="rail-head">
-          <span class="rail-kicker">Planning Console</span>
           <h1>参数配置控制舱</h1>
         </div>
 
@@ -25,7 +24,6 @@
                 <span class="rail-step-title">{{ module.title }}</span>
                 <span class="rail-step-percent">{{ Math.round(moduleCompletion[module.key] * 100) }}%</span>
               </span>
-              <span class="rail-step-note">{{ module.note }}</span>
             </span>
           </button>
         </div>
@@ -44,7 +42,6 @@
       <main class="workbench-stage">
         <header class="stage-head">
           <div class="stage-head-main">
-            <span class="stage-kicker">当前工作段</span>
             <div class="stage-title-row">
               <span class="stage-icon">
                 <el-icon><component :is="activeModuleMeta.icon" /></el-icon>
@@ -92,7 +89,6 @@
             <section v-show="activeModule === 'basic'" class="module-surface">
               <div class="surface-block">
                 <div class="block-head">
-                  <span class="block-kicker">项目规模</span>
                   <h4>建立基础建设画像</h4>
                 </div>
                 <el-form :model="formData" label-position="top" class="module-form two-columns">
@@ -115,7 +111,6 @@
             <section v-show="activeModule === 'environment'" class="module-surface">
               <div class="surface-block">
                 <div class="block-head">
-                  <span class="block-kicker">区位条件</span>
                   <h4>确定环境与标准边界</h4>
                 </div>
                 <el-form :model="formData" label-position="top" class="module-form two-columns">
@@ -146,7 +141,6 @@
             <section v-show="activeModule === 'target'" class="module-surface">
               <div class="surface-block">
                 <div class="block-head">
-                  <span class="block-kicker">目标与边界</span>
                   <h4>锁定能效、绿电与预算目标</h4>
                 </div>
                 <el-form :model="formData" label-position="top" class="module-form two-columns">
@@ -157,7 +151,13 @@
                     <el-input-number v-model="formData.green_power_ratio" :min="0" :max="100" :step="1" />
                   </el-form-item>
                   <el-form-item label="绿电直连占比（%）">
-                    <el-input-number v-model="formData.direct_connection_ratio" :min="0" :max="100" :step="1" />
+                    <el-input-number
+                      v-model="formData.direct_connection_ratio"
+                      :min="0"
+                      :max="100"
+                      :step="1"
+                      :placeholder="directConnectionPlaceholder"
+                    />
                   </el-form-item>
                   <el-form-item label="预算约束（万元）" required>
                     <el-input-number v-model="formData.budget_constraint" :min="100" :max="100000" :step="100" />
@@ -178,7 +178,6 @@
             <section v-show="activeModule === 'green'" class="module-surface">
               <div class="surface-block">
                 <div class="block-head">
-                  <span class="block-kicker">绿电规划</span>
                   <h4>补全风光储与碳排放假设</h4>
                 </div>
                 <el-form :model="formData" label-position="top" class="module-form two-columns">
@@ -207,7 +206,6 @@
             <section v-show="activeModule === 'advanced'" class="module-surface">
               <div class="surface-block">
                 <div class="block-head">
-                  <span class="block-kicker">仿真与求解</span>
                   <h4>控制推演精度与时效</h4>
                 </div>
                 <el-form :model="formData" label-position="top" class="module-form two-columns">
@@ -279,7 +277,6 @@
       <aside class="impact-panel">
         <section class="impact-surface readiness-surface">
           <div class="impact-head">
-            <span class="impact-kicker">状态回声</span>
             <h3>推演前检查</h3>
           </div>
           <div class="readiness-ring">
@@ -303,7 +300,6 @@
 
         <section class="impact-surface metric-surface">
           <div class="impact-head">
-            <span class="impact-kicker">参数影响</span>
             <h3>派生指标预览</h3>
           </div>
           <div class="impact-metric-grid">
@@ -389,7 +385,7 @@ const activeModuleMeta = computed(() => {
 const formData = reactive({
   location: '乌兰察布',
   planned_load_kw: 30000,
-  green_power_ratio: 60,
+  green_power_ratio: 92,
   direct_connection_ratio: null,
   planned_area: 15000,
   budget_constraint: 32000,
@@ -428,7 +424,7 @@ const presets = {
     cooling_technology: '浸没式液冷',
     machine_room_grade: 'A',
     pue_target: 1.22,
-    green_power_ratio: 30,
+    green_power_ratio: 92,
     budget_constraint: 32000,
     pv_tilt: 41,
     pv_azimuth: 180,
@@ -531,6 +527,8 @@ const resolvedDirectRatio = computed(() => {
   }
   return Math.min(Number(formData.direct_connection_ratio) || 0, Number(formData.green_power_ratio) || 0)
 })
+
+const directConnectionPlaceholder = computed(() => `留空则自动建议 ${resolvedDirectRatio.value}%`)
 
 const greenPurchaseRatio = computed(() => {
   return Math.max((Number(formData.green_power_ratio) || 0) - resolvedDirectRatio.value, 0)
@@ -1142,7 +1140,8 @@ function formatWan(value) {
 }
 
 .plane-intro > div {
-  flex: 0 1 240px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .plane-intro > p {
@@ -1154,6 +1153,9 @@ function formatWan(value) {
   color: var(--text-primary);
   font-size: 24px;
   line-height: 1.12;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .form-river {
@@ -1172,9 +1174,9 @@ function formatWan(value) {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 22px;
   min-height: auto;
-  padding: 18px 18px 16px;
+  padding: 22px 22px 20px;
   border: 1px solid color-mix(in oklab, var(--primary-color) 14%, var(--border-default));
   border-radius: 20px;
   background:
@@ -1230,7 +1232,7 @@ function formatWan(value) {
 .two-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 18px;
 }
 
 .full-span {
@@ -1451,7 +1453,7 @@ function formatWan(value) {
   margin-bottom: 0;
   position: relative;
   overflow: hidden;
-  padding: 12px 12px 10px;
+  padding: 16px 16px 14px;
   border-radius: 16px;
   border: 1px solid color-mix(in oklab, var(--primary-color) 11%, var(--border-default));
   background:
@@ -1483,7 +1485,7 @@ function formatWan(value) {
 :deep(.el-form-item__label) {
   position: relative;
   z-index: 1;
-  padding: 0 0 8px;
+  padding: 0 0 12px;
   color: color-mix(in oklab, var(--text-primary) 96%, white);
   font-size: 14px;
   font-weight: 650;
@@ -1496,7 +1498,7 @@ function formatWan(value) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 10px;
+  gap: 12px 14px;
 }
 
 :deep(.el-input-number),

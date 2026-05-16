@@ -1809,9 +1809,9 @@ class FinalReportNode:
         opex_breakdown = self._as_dict(economic.get("opex_breakdown"))
         procurement = self._as_dict(green.get("procurement_plan"))
         total_capex = (
-            economic.get("total_capex_lakh")
+            key_metrics.get("total_cost")
+            or economic.get("total_capex_lakh")
             or solution.get("total_capex_lakh")
-            or key_metrics.get("total_cost")
             or cost_breakdown.get("total")
         )
         rows = [
@@ -1945,19 +1945,108 @@ class FinalReportNode:
                 return value.model_dump()
             return value
 
+        solution = self._as_dict(state.get("solution"))
+        revised_plan = self._as_dict(solution.get("revised_draft_plan"))
+        green_power_result = self._as_dict(
+            revised_plan.get("green_power_result")
+            or solution.get("green_power_result")
+            or state.get("green_power_result")
+        )
+        cooling_result = self._as_dict(
+            revised_plan.get("cooling_result")
+            or solution.get("cooling_result")
+            or state.get("cooling_result")
+        )
+        power_supply_plan = self._as_dict(
+            revised_plan.get("power_supply_plan")
+            or solution.get("power_supply_plan")
+            or state.get("power_supply_plan")
+        )
+        economic_analysis_result = self._build_effective_economic_analysis_result(
+            state=state,
+            solution=solution,
+            green_power_result=green_power_result,
+            cooling_result=cooling_result,
+            power_supply_plan=power_supply_plan,
+        )
+
         return {
             "user_requirement": _dump(state.get("user_requirement")),
-            "solution": state.get("solution"),
-            "power_supply_plan": state.get("power_supply_plan"),
-            "green_power_result": state.get("green_power_result"),
-            "cooling_result": state.get("cooling_result"),
-            "economic_analysis_result": state.get("economic_analysis_result"),
+            "solution": solution,
+            "power_supply_plan": power_supply_plan,
+            "green_power_result": green_power_result,
+            "cooling_result": cooling_result,
+            "economic_analysis_result": economic_analysis_result,
             "economic_opinion": _dump(state.get("economic_opinion")),
             "power_reliability_opinion": _dump(state.get("power_reliability_opinion")),
             "environmental_opinion": _dump(state.get("environmental_opinion")),
             "consensus_score": state.get("consensus_score"),
             "debate_round": state.get("debate_round"),
         }
+
+    def _build_effective_economic_analysis_result(
+        self,
+        state: GraphState,
+        solution: dict[str, Any],
+        green_power_result: dict[str, Any],
+        cooling_result: dict[str, Any],
+        power_supply_plan: dict[str, Any],
+    ) -> dict[str, Any]:
+        economic = self._as_dict(state.get("economic_analysis_result"))
+        cost_factors = dict(economic.get("cost_factors") or COST_FACTORS)
+        optimization = self._as_dict(green_power_result.get("optimization"))
+        power_supply_raw = self._as_dict(power_supply_plan.get("raw_json"))
+        key_metrics = self._as_dict(solution.get("key_metrics"))
+
+        load_mw = _safe_float(power_supply_raw.get("total_load_mw"), _safe_float(power_supply_plan.get("total_load_mw"), 0.0))
+        cost_per_mw = _safe_float(power_supply_raw.get("cost_per_mw"), _safe_float(power_supply_plan.get("cost_per_mw"), 0.0))
+        power_supply_capex = round(load_mw * cost_per_mw, 2)
+
+        wind_capex = round(
+            _safe_float(optimization.get("wind_capacity_mw"), 0.0) * _safe_float(cost_factors.get("wind_per_mw"), COST_FACTORS["wind_per_mw"]),
+            2,
+        )
+        pv_capex = round(
+            _safe_float(optimization.get("pv_capacity_mw"), 0.0) * _safe_float(cost_factors.get("pv_per_mw"), COST_FACTORS["pv_per_mw"]),
+            2,
+        )
+        storage_capex = round(
+            _safe_float(optimization.get("storage_capacity_mwh"), 0.0) * _safe_float(cost_factors.get("storage_per_mwh"), COST_FACTORS["storage_per_mwh"]),
+            2,
+        )
+        green_power_capex = round(wind_capex + pv_capex + storage_capex, 2)
+        cooling_capex = round(_safe_float(self._as_dict(cooling_result.get("economic_indicators")).get("initial_investment"), 0.0), 2)
+        recalculated_total_capex = round(power_supply_capex + green_power_capex + cooling_capex, 2)
+
+        total_capex = round(
+            _safe_float(
+                key_metrics.get("total_cost"),
+                _safe_float(
+                    solution.get("total_capex_lakh"),
+                    _safe_float(economic.get("total_capex_lakh"), recalculated_total_capex),
+                ),
+            ),
+            2,
+        )
+
+        capex_breakdown = dict(economic.get("capex_breakdown") or {})
+        if recalculated_total_capex > 0:
+            capex_breakdown.update({
+                "power_supply_system_lakh": power_supply_capex,
+                "green_power_system_lakh": green_power_capex,
+                "cooling_system_lakh": cooling_capex,
+                "details": {
+                    **dict(capex_breakdown.get("details") or {}),
+                    "wind_capex_lakh": wind_capex,
+                    "pv_capex_lakh": pv_capex,
+                    "storage_capex_lakh": storage_capex,
+                },
+            })
+
+        effective_economic = dict(economic)
+        effective_economic["total_capex_lakh"] = total_capex
+        effective_economic["capex_breakdown"] = capex_breakdown
+        return effective_economic
 
     def _parse_json_response(self, content: str) -> dict:
         """Parse JSON response."""
@@ -2482,20 +2571,42 @@ Please conduct arbitration decision and generate final solution."""
         recalculated_total_capex = power_supply_capex + wind_capex + pv_capex + storage_capex + cooling_capex
         total_cost = round(recalculated_total_capex if recalculated_total_capex > 0 else float(total_capex_lakh or 0.0), 2)
 
+        revised_procurement_plan = dict(green_power_result.get("procurement_plan") or {})
+        revised_power_raw = dict(power_supply_plan.get("raw_json") or {})
+        revised_cooling_metrics = dict(cooling_result.get("cooling_kpis") or {})
         key_metrics = dict(normalized.get("key_metrics") or {})
         key_metrics["total_cost"] = total_cost
         key_metrics["pue"] = round(
             _safe_float(
-                environmental_metrics.get("pue"),
-                _safe_float(environmental_metrics.get("pue_target"), key_metrics.get("pue", 0.0)),
+                cooling_result.get("estimated_pue"),
+                _safe_float(
+                    environmental_metrics.get("pue"),
+                    _safe_float(environmental_metrics.get("pue_target"), key_metrics.get("pue", 0.0)),
+                ),
             ),
             3,
         )
         key_metrics["green_power_ratio"] = round(
-            _safe_float(environmental_metrics.get("green_power_ratio"), key_metrics.get("green_power_ratio", 0.0)),
+            _safe_float(
+                revised_procurement_plan.get("total_green_power_ratio"),
+                _safe_float(
+                    optimization.get("achieved_green_ratio"),
+                    _safe_float(
+                        optimization.get("green_supply_ratio"),
+                        _safe_float(environmental_metrics.get("green_power_ratio"), key_metrics.get("green_power_ratio", 0.0)),
+                    ),
+                ),
+            ),
             4,
         )
-        key_metrics["tier_level"] = int(_safe_float(power_metrics.get("tier_level"), key_metrics.get("tier_level", 3)))
+        key_metrics["tier_level"] = int(
+            _machine_grade_to_tier(
+                str(revised_power_raw.get("machine_room_grade") or "")
+            ) if revised_power_raw.get("machine_room_grade") else _safe_float(
+                power_metrics.get("tier_level"),
+                key_metrics.get("tier_level", 3),
+            )
+        )
         key_metrics["expected_availability"] = round(
             _safe_float(power_metrics.get("expected_availability"), key_metrics.get("expected_availability", 0.0)),
             3,
@@ -2525,6 +2636,11 @@ Please conduct arbitration decision and generate final solution."""
         environmental_content["pue"] = key_metrics["pue"]
         environmental_content["green_power_ratio"] = key_metrics["green_power_ratio"]
         environmental_content["annual_carbon_emission"] = key_metrics["annual_carbon_emission"]
+        if revised_cooling_metrics:
+            environmental_content["cooling_power_kw"] = _safe_float(
+                revised_cooling_metrics.get("cooling_power_kw"),
+                environmental_content.get("cooling_power_kw", 0.0),
+            )
         environmental_section["content"] = environmental_content
         normalized["environmental_section"] = environmental_section
 
@@ -2532,6 +2648,10 @@ Please conduct arbitration decision and generate final solution."""
         power_content = dict(power_section.get("content") or {})
         power_content["tier_level"] = key_metrics["tier_level"]
         power_content["expected_availability"] = key_metrics["expected_availability"]
+        if power_supply_plan.get("scheme_name"):
+            power_content["scheme_name"] = power_supply_plan.get("scheme_name")
+        if power_supply_plan.get("redundancy_logic"):
+            power_content["redundancy_logic"] = power_supply_plan.get("redundancy_logic")
         power_section["content"] = power_content
         normalized["power_reliability_section"] = power_section
 
@@ -2568,7 +2688,13 @@ Please conduct arbitration decision and generate final solution."""
             if not label or not change or label in seen_labels:
                 continue
             seen_labels.add(label)
-            deduped.append({"label": label, "change": change, "reason": reason or "仲裁专家根据评审意见进行了修订。"})
+            deduped.append({
+                "label": label,
+                "change": change,
+                "before": str(item.get("before") or "").strip(),
+                "after": str(item.get("after") or "").strip(),
+                "reason": reason or "仲裁专家根据评审意见进行了修订。",
+            })
             if len(deduped) >= limit:
                 break
 
@@ -2582,9 +2708,13 @@ Please conduct arbitration decision and generate final solution."""
         reason = str(item.get("reason") or "").strip()
         if not label or not change:
             return None
+        before = str(item.get("before") or "").strip()
+        after = str(item.get("after") or "").strip()
         return {
             "label": label,
             "change": change,
+            "before": before,
+            "after": after,
             "reason": reason or "仲裁专家根据评审意见进行了修订。",
         }
 
@@ -2600,6 +2730,8 @@ Please conduct arbitration decision and generate final solution."""
         return {
             "label": label,
             "change": f"{before} → {after}",
+            "before": before,
+            "after": after,
             "reason": str(change.get("reason") or "仲裁专家根据评审意见进行了修订。").strip(),
         }
 
@@ -2638,6 +2770,8 @@ Please conduct arbitration decision and generate final solution."""
             items.append({
                 "label": label,
                 "change": f"{before_text} → {after_text}",
+                "before": before_text,
+                "after": after_text,
                 "reason": reason,
             })
         return items

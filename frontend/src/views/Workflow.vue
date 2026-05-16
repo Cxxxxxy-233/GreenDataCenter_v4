@@ -4,7 +4,6 @@
       <div class="header-content">
         <div class="header-left">
           <h1 class="page-title">方案工作流</h1>
-          <p class="page-subtitle">按后端真实编排展示多智能体协同生成方案的完整运行逻辑</p>
         </div>
         <div class="header-right">
           <el-button type="primary" @click="startWorkflow">
@@ -19,7 +18,6 @@
       <div class="workflow-card-header">
         <div>
           <h3 class="workflow-card-title">工作流运行全景</h3>
-          <p class="workflow-card-desc">从输入、解析、顺序专家分析，到辩论收敛、仲裁决策和报告输出，完整展示整个工作流的执行路径。</p>
         </div>
         <div class="workflow-badges">
           <span class="workflow-badge">7 个核心阶段</span>
@@ -32,11 +30,9 @@
         <div class="focus-copy">
           <span class="focus-label">当前聚焦阶段</span>
           <span class="focus-title">{{ activeStage.title }}</span>
-          <span class="focus-desc">{{ activeStage.subtitle }}</span>
         </div>
         <div class="focus-meta">
           <span class="focus-code">{{ activeStage.backendRef }}</span>
-          <span class="focus-hint">点击节点可展开该阶段的输入、输出与路由关系</span>
         </div>
       </div>
 
@@ -53,7 +49,6 @@
             <div class="stage-main">
               <div class="stage-eyebrow">Input</div>
               <div class="stage-title">用户输入需求</div>
-              <div class="stage-text">项目参数、约束条件、优先级与目标进入工作流。</div>
             </div>
           </button>
           <div class="flow-arrow vertical">↓</div>
@@ -67,7 +62,6 @@
             <div class="stage-main">
               <div class="stage-eyebrow">Parser</div>
               <div class="stage-title">需求解析器节点</div>
-              <div class="stage-text">补全缺失参数，生成结构化需求对象，作为后续所有节点的统一输入。</div>
             </div>
           </button>
         </section>
@@ -89,13 +83,11 @@
                 <div class="stage-main">
                   <div class="stage-eyebrow">{{ stage.eyebrow }}</div>
                   <div class="stage-title">{{ stage.title }}</div>
-                  <div class="stage-text">{{ stage.description }}</div>
                   <div class="stage-meta">{{ stage.meta }}</div>
                 </div>
               </button>
             </div>
           </div>
-          <div class="lane-note">说明：后端为避免流式输出互相干扰，三个专家节点采用顺序执行，而不是并行执行。</div>
         </section>
 
         <section class="flow-lane flow-lane-debate">
@@ -111,7 +103,6 @@
               <div class="stage-main">
                 <div class="stage-eyebrow">Debate</div>
                 <div class="stage-title">多轮辩论节点</div>
-                <div class="stage-text">经济、供电、环境专家轮流发言，比较评分分歧并尝试收敛意见。</div>
               </div>
             </button>
 
@@ -148,7 +139,6 @@
               <div class="stage-main">
                 <div class="stage-eyebrow">Arbitrator</div>
                 <div class="stage-title">仲裁者节点</div>
-                <div class="stage-text">汇总专家意见、冲突分析与权衡项，生成最终综合方案。</div>
               </div>
             </button>
             <div class="flow-arrow horizontal">→</div>
@@ -162,7 +152,6 @@
               <div class="stage-main">
                 <div class="stage-eyebrow">Output</div>
                 <div class="stage-title">输出节点</div>
-                <div class="stage-text">产出最终方案、关键指标和可行性研究报告，工作流结束。</div>
               </div>
             </button>
           </div>
@@ -173,7 +162,6 @@
         <section class="support-card support-card-wide">
           <div class="support-header">
             <h4 class="support-title">后端 LangGraph 映射说明</h4>
-            <p class="support-desc">前端展示节点与后端 `graph/nodes.py`、`graph/edges.py`、`graph/build.py` 的对应关系。</p>
           </div>
           <div class="mapping-list">
             <div v-for="item in graphMappings" :key="item.stage" class="mapping-row">
@@ -199,7 +187,6 @@
           </div>
           <div class="detail-title-area">
             <h3 class="detail-title">{{ activeStage.title }}</h3>
-            <p class="detail-subtitle">{{ activeStage.subtitle }}</p>
           </div>
           <button class="close-btn" @click="closeDetail">
             <el-icon><Close /></el-icon>

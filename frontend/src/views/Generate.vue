@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="generate-page">
     <div class="progress-section">
       <div class="progress-header">
@@ -66,7 +66,6 @@
         <div v-if="nodeResults.draftPlan">
           <div class="draft-overview-panel">
             <div class="draft-overview-copy">
-              <span class="draft-eyebrow">方案生成轨迹</span>
               <h4>初稿生成</h4>
             </div>
             <div class="draft-overview-metrics">
@@ -102,7 +101,6 @@
                       <span class="draft-card-title">{{ card.title }}</span>
                       <span class="draft-card-order">{{ card.order }}</span>
                     </div>
-                    <div class="draft-card-tool">{{ card.tool }}</div>
                   </div>
                 </div>
               </div>
@@ -328,15 +326,6 @@
                     <span class="kpi-value" :class="nodeResults.costCalculation.isOverBudget ? 'over-budget' : 'under-budget'">
                       {{ formatWithUnit(Math.abs(nodeResults.costCalculation.budgetDelta), '万元', 0) }}
                     </span>
-                    <span class="kpi-note">
-                      {{
-                        nodeResults.costCalculation.isOverBudget
-                          ? '超预算'
-                          : Number(nodeResults.costCalculation.budgetDelta) === 0
-                            ? '预算持平'
-                            : '预算结余'
-                      }}
-                    </span>
                   </div>
                 </div>
 
@@ -443,7 +432,6 @@
         <div v-if="debateResults" class="debate-panel">
           <section class="debate-overview">
             <div class="debate-overview-copy">
-              <span class="debate-eyebrow">多专家交叉评审</span>
               <h4>专家辩论</h4>
             </div>
             <div class="debate-metrics">
@@ -691,7 +679,7 @@
               <span class="preview-value highlight">{{ revisionComparison.changeCount }}</span>
             </div>
             <div class="preview-item">
-              <span class="preview-label">PUE</span>
+              <span class="preview-label">能效指标</span>
               <span class="preview-value">{{ formatNumber(finalSolution.pue, 2) }}</span>
             </div>
             <div class="preview-item">
@@ -703,8 +691,8 @@
               <span class="preview-value">{{ formatWithUnit(finalSolution.totalCost, '万元', 0) }}</span>
             </div>
             <div class="preview-item">
-              <span class="preview-label">Tier等级</span>
-              <span class="preview-value">{{ finalSolution.tierLevel ? `Tier ${finalSolution.tierLevel}` : '--' }}</span>
+              <span class="preview-label">机房等级</span>
+              <span class="preview-value">{{ finalSolution.tierLevel ? `第${finalSolution.tierLevel}级` : '--' }}</span>
             </div>
             <div class="preview-item">
               <span class="preview-label">可用性</span>
@@ -1138,16 +1126,18 @@ const revisionParameterLabels = {
   pv_capacity_mw: '光伏容量',
   wind_capacity_mw: '风电容量',
   green_power_ratio: '绿电比例',
+  total_green_power_ratio: '绿电比例',
   green_supply_ratio: '绿电供给比例',
-  pue: 'PUE',
+  pue: '能效指标',
   estimated_pue: '预测PUE',
   predicted_wue: '预测WUE',
   cooling_technology: '制冷技术',
   cooling_initial_investment_lakh: '制冷初始投资',
   scheme_name: '供电方案',
   redundancy_logic: '冗余逻辑',
+  main_transformers_redundancy: '主变冗余',
   distribution_transformers: '配电变压器配置',
-  tier_level: 'Tier 等级',
+  tier_level: '机房等级',
   expected_availability: '预期可用性',
   annual_carbon_emission: '年碳排放',
   total_cost: '总投资',
@@ -1166,7 +1156,7 @@ const revisionValueFormatters = {
   pue: value => formatNumber(value, 2),
   estimated_pue: value => formatNumber(value, 2),
   predicted_wue: value => formatNumber(value, 2),
-  tier_level: value => (Number.isFinite(Number(value)) ? `Tier ${value}` : String(value ?? '--')),
+  tier_level: value => (Number.isFinite(Number(value)) ? `第${value}级` : String(value ?? '--')),
   expected_availability: value => formatPercentAuto(value, 3),
   annual_carbon_emission: value => formatWithUnit(value, '吨', 0),
   total_cost: value => formatWithUnit(value, '万元', 2),
@@ -1185,6 +1175,31 @@ const formatRevisionValue = (parameter, value) => {
   return String(value)
 }
 
+const normalizeRevisionLabel = (label = '') => {
+  const text = String(label || '').trim()
+  if (!text) return text
+
+  const directMap = {
+    main_transformers_redundancy: '主变冗余',
+    total_green_power_ratio: '绿电比例',
+    green_power_ratio: '绿电比例',
+    total_cost: '总投资',
+    total_capex_lakh: '总投资',
+    pue: '能效指标',
+    estimated_pue: '预测能效指标',
+    predicted_pue: '预测能效指标',
+    tier_level: '机房等级',
+    expected_availability: '预期可用性'
+  }
+
+  if (directMap[text]) return directMap[text]
+
+  return text
+    .replace(/CAPEX/gi, '投资')
+    .replace(/PUE/gi, '能效指标')
+    .replace(/Tier/gi, '机房等级')
+}
+
 const normalizeRevisionChanges = (changes = []) => {
   if (!Array.isArray(changes)) return []
   return changes
@@ -1193,13 +1208,37 @@ const normalizeRevisionChanges = (changes = []) => {
       if (!parameter) return null
       return {
         parameter,
-        label: revisionParameterLabels[parameter] || parameter,
+        label: normalizeRevisionLabel(revisionParameterLabels[parameter] || parameter),
         before: formatRevisionValue(parameter, item?.before),
         after: formatRevisionValue(parameter, item?.after),
         reason: String(item?.reason || '').trim() || '仲裁专家根据评审意见进行了修订。'
       }
     })
     .filter(Boolean)
+}
+
+const parseRevisionChangeText = (changeText = '') => {
+  const text = String(changeText || '').trim()
+  if (!text) {
+    return { before: '--', after: '--' }
+  }
+
+  const parts = text
+    .split(/\s*(?:\u2192|\u27A1|\u27F6|\u2B62|->|=>)\s*/)
+    .map(part => part.trim())
+    .filter(Boolean)
+
+  if (parts.length >= 2) {
+    return {
+      before: parts[0] || '--',
+      after: parts[1] || parts[0] || '--'
+    }
+  }
+
+  return {
+    before: text,
+    after: text
+  }
 }
 
 const normalizeRevisionDisplayItems = (items = []) => {
@@ -1209,13 +1248,13 @@ const normalizeRevisionDisplayItems = (items = []) => {
       const label = String(item?.label || '').trim()
       const change = String(item?.change || '').trim()
       if (!label || !change) return null
-      const parts = change.split('→').map(part => part.trim()).filter(Boolean)
+      const parsedChange = parseRevisionChangeText(change)
       return {
-        label,
+        label: normalizeRevisionLabel(label),
         change,
-        before: parts[0] || '--',
-        after: parts[1] || parts[0] || '--',
-        reason: String(item?.reason || '').trim() || '仲裁专家根据评审意见进行了修订。'
+        before: String(item?.before || '').trim() || parsedChange.before,
+        after: String(item?.after || '').trim() || parsedChange.after,
+        reason: String(item?.reason || '').trim() || '\u4ef2\u88c1\u4e13\u5bb6\u6839\u636e\u8bc4\u5ba1\u610f\u89c1\u8fdb\u884c\u4e86\u4fee\u8ba2\u3002'
       }
     })
     .filter(Boolean)
@@ -1371,6 +1410,16 @@ const resetRuntimeState = () => {
   }
 }
 
+const hasHydratedWorkflowContent = () => {
+  if (nodeResults.requirementParser) return true
+  if (nodeResults.draftPlan) return true
+  if (nodeResults.costCalculation) return true
+  if (finalReport.value) return true
+  if (arbitratorResult.summary) return true
+  if (expertResults.some(expert => expert.status === '已完成')) return true
+  return false
+}
+
 const setCompletedNode = (index) => {
   if (!Number.isInteger(index) || index < 0) return
   const next = new Set(completedNodes.value)
@@ -1501,26 +1550,6 @@ const draftSource = computed(() => nodeResults.draftPlan || {})
 const revisionComparison = computed(() => {
   const revisedDraftPlan = arbitratorResult.revisedDraftPlan || {}
   const displayItems = normalizeRevisionDisplayItems(arbitratorResult.revisionDisplayItems)
-    .map((item) => {
-      if (item.before && item.before !== '--' && item.after && item.after !== '--') {
-        return item
-      }
-      const matched = String(item.change || '').match(/^(.*?)\s*(?:→|->|=>|⇒|➜|➡)\s*(.*?)$/)
-      if (!matched) {
-        return {
-          ...item,
-          before: item.before || '--',
-          after: item.after || item.before || '--'
-        }
-      }
-      const before = String(matched[1] || '').trim()
-      const after = String(matched[2] || '').trim()
-      return {
-        ...item,
-        before: before || item.before || '--',
-        after: after || item.after || before || '--'
-      }
-    })
   const changes = displayItems.length ? displayItems : normalizeRevisionChanges(arbitratorResult.parameterChanges)
   const revisionNotes = Array.isArray(arbitratorResult.revisionNotes)
     ? arbitratorResult.revisionNotes.map(item => String(item || '').trim()).filter(Boolean)
@@ -1628,7 +1657,7 @@ const draftPlanTraceCards = computed(() => {
   return [
     {
       id: 'green-power',
-      order: 'Tool 01',
+      order: '工具 01',
       title: '绿电分配方案',
       tool: 'green_power_allocation',
       icon: Edit,
@@ -1706,7 +1735,7 @@ const draftPlanTraceCards = computed(() => {
     },
     {
       id: 'cooling-scheme',
-      order: 'Tool 02',
+      order: '工具 02',
       title: '制冷方案',
       tool: 'cooling-scheme-generator',
       icon: Tools,
@@ -1784,7 +1813,7 @@ const draftPlanTraceCards = computed(() => {
     },
     {
       id: 'power-supply',
-      order: 'Tool 03',
+      order: '工具 03',
       title: '供电方案',
       tool: 'power_supply_config',
       icon: Files,
@@ -1979,8 +2008,8 @@ const expertTextReplacements = [
   [/total cost/gi, '总成本'],
   [/cost per rack/gi, '单柜成本'],
   [/ROI/gi, '投资回报率'],
-  [/Tier\s*3/gi, 'Tier 3'],
-  [/Tier level/gi, 'Tier等级'],
+  [/Tier\s*3/gi, '三级'],
+  [/Tier level/gi, '机房等级'],
   [/primary substation/gi, '主变'],
   [/redundancy/gi, '冗余'],
   [/availability/gi, '可用性'],
@@ -2287,10 +2316,16 @@ const applyArbitratorData = (data, { silent = false } = {}) => {
   const keyMetrics = data.key_metrics || {}
   const economicContent = data.economic_section?.content || {}
   const economicMetrics = expertResults[0]?.metrics || {}
+  const revisedDraftPlan = data.revised_draft_plan && typeof data.revised_draft_plan === 'object'
+    ? data.revised_draft_plan
+    : arbitratorResult.revisedDraftPlan
+  const revisedGreenOptimization = revisedDraftPlan?.green_power_result?.optimization || {}
+  const revisedCooling = revisedDraftPlan?.cooling_result || {}
+  const revisedPower = revisedDraftPlan?.power_supply_plan || {}
 
   arbitratorResult.summary = data.summary || arbitratorResult.summary
   arbitratorResult.tradeOffs = Array.isArray(data.trade_offs) ? data.trade_offs : arbitratorResult.tradeOffs
-  arbitratorResult.revisedDraftPlan = data.revised_draft_plan && typeof data.revised_draft_plan === 'object' ? data.revised_draft_plan : arbitratorResult.revisedDraftPlan
+  arbitratorResult.revisedDraftPlan = revisedDraftPlan
   arbitratorResult.parameterChanges = Array.isArray(data.parameter_changes) ? data.parameter_changes : arbitratorResult.parameterChanges
   arbitratorResult.revisionDisplayItems = Array.isArray(data.revision_display_items) ? data.revision_display_items : arbitratorResult.revisionDisplayItems
   arbitratorResult.revisionDisplayCount = toNumber(data.revision_display_count, arbitratorResult.revisionDisplayCount)
@@ -2299,9 +2334,18 @@ const applyArbitratorData = (data, { silent = false } = {}) => {
     : arbitratorResult.revisionNotes
 
   finalSolution.name = data.name || finalSolution.name
-  finalSolution.pue = toNumber(keyMetrics.pue, finalSolution.pue)
-  finalSolution.greenPowerRatio = toNumber(keyMetrics.green_power_ratio, finalSolution.greenPowerRatio)
-  finalSolution.totalCost = toNumber(nodeResults.costCalculation?.totalCost, toNumber(keyMetrics.total_cost, finalSolution.totalCost))
+  finalSolution.pue = toNumber(
+    revisedCooling.estimated_pue,
+    toNumber(keyMetrics.pue, finalSolution.pue)
+  )
+  finalSolution.greenPowerRatio = toNumber(
+    revisedDraftPlan?.green_power_result?.procurement_plan?.total_green_power_ratio,
+    toNumber(
+      revisedGreenOptimization.achieved_green_ratio ?? revisedGreenOptimization.green_supply_ratio,
+      toNumber(keyMetrics.green_power_ratio, finalSolution.greenPowerRatio)
+    )
+  )
+  finalSolution.totalCost = toNumber(keyMetrics.total_cost, finalSolution.totalCost)
   finalSolution.tierLevel = keyMetrics.tier_level ?? finalSolution.tierLevel
   finalSolution.expectedAvailability = keyMetrics.expected_availability ?? finalSolution.expectedAvailability
   finalSolution.annualCarbonEmission = keyMetrics.annual_carbon_emission ?? finalSolution.annualCarbonEmission
@@ -2586,7 +2630,6 @@ const handleWorkflowCompleted = async (payload) => {
   if (payload?.solution) {
     applyArbitratorData(payload.solution, { silent: true })
   }
-  markAllNodesCompleted()
   addLog('工作流已执行完成，正在回填最终方案详情', 'success')
   stopStatusPolling()
   closeStream()
@@ -2596,8 +2639,18 @@ const handleWorkflowCompleted = async (payload) => {
       localStorage.setItem('currentSolutionId', data.id)
     }
     await hydrateFromSolutionData(data)
+    markAllNodesCompleted()
+    if (!hasHydratedWorkflowContent()) {
+      throw new Error('方案已完成，但未恢复到可展示的详情数据')
+    }
   } catch (error) {
     console.warn('回填最终方案详情失败:', error)
+    addLog('当前任务详情已失效，可能是后端重启后旧任务缓存被清空，请重新生成方案', 'warning')
+    ElMessage.warning('当前方案详情已失效，请返回配置页重新生成')
+    localStorage.removeItem('currentWorkflowId')
+    localStorage.removeItem('currentSolutionId')
+    resetRuntimeState()
+    router.push('/config')
   }
 }
 
@@ -2718,6 +2771,16 @@ const initializeWorkflow = async () => {
     }
   } catch (error) {
     console.warn('初始化获取工作流状态失败:', error)
+    const status = error?.response?.status
+    if (status === 404) {
+      addLog('当前工作流已失效，通常是后端重启后旧任务记录被清空', 'warning')
+      ElMessage.warning('当前生成任务已失效，请重新生成方案')
+      localStorage.removeItem('currentWorkflowId')
+      localStorage.removeItem('currentSolutionId')
+      resetRuntimeState()
+      router.push('/config')
+      return
+    }
     addLog('获取工作流状态失败，正在尝试直接接入实时进度流', 'warning')
   }
 
@@ -2853,13 +2916,13 @@ onUnmounted(() => {
 }
 
 .progress-header h2 {
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
 
 .progress-percent {
-  font-size: 28px;
+  font-size: 36px;
   font-weight: 700;
   color: var(--primary-dark);
 }
@@ -2901,14 +2964,14 @@ onUnmounted(() => {
 }
 
 .node-icon {
-  width: 38px;
-  height: 38px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   background: color-mix(in oklab, var(--bg-panel) 84%, var(--border-default) 16%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 18px;
   color: var(--text-placeholder);
   font-weight: 600;
   transition: all var(--transition-fast);
@@ -2938,10 +3001,10 @@ onUnmounted(() => {
 }
 
 .node-name {
-  font-size: 12px;
+  font-size: 15px;
   color: var(--text-secondary);
   text-align: center;
-  max-width: 80px;
+  max-width: 96px;
   line-height: 1.5;
 }
 
@@ -3008,7 +3071,7 @@ onUnmounted(() => {
 }
 
 .stage-header h3 {
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -3042,14 +3105,14 @@ onUnmounted(() => {
 
 .result-metrics .metric-label {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   color: rgba(181, 213, 197, 0.78);
   margin-bottom: 6px;
 }
 
 .result-metrics .metric-value {
   display: block;
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 700;
   color: rgba(242, 252, 247, 0.98);
 }
@@ -3793,8 +3856,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-height: 108px;
-  padding: 16px;
+  min-height: 124px;
+  padding: 18px;
   border-radius: 16px;
   border: 1px solid var(--border-light);
   background: color-mix(in oklab, var(--bg-card) 98%, var(--primary-color) 2%);
@@ -3811,12 +3874,12 @@ onUnmounted(() => {
 }
 
 .kpi-label {
-  font-size: 12px;
+  font-size: 15px;
   color: var(--text-secondary);
 }
 
 .kpi-value {
-  font-size: 24px;
+  font-size: 30px;
   line-height: 1.2;
   font-weight: 700;
   color: var(--text-primary);
@@ -3838,7 +3901,7 @@ onUnmounted(() => {
 }
 
 .summary-heading-title {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -3872,12 +3935,12 @@ onUnmounted(() => {
 }
 
 .summary-label {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-secondary);
 }
 
 .summary-value {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -4368,12 +4431,12 @@ onUnmounted(() => {
 }
 
 .debate-metric-label {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary);
 }
 
 .debate-metric-value {
-  font-size: 22px;
+  font-size: 28px;
   line-height: 1.15;
   font-weight: 700;
   color: var(--text-primary);
@@ -4810,12 +4873,12 @@ onUnmounted(() => {
 .revision-comparison-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 18px;
 }
 
 .revision-comparison-column {
-  padding: 14px;
-  border-radius: 16px;
+  padding: 18px 18px 20px;
+  border-radius: 18px;
   border: 1px solid var(--border-light);
   background: rgba(255, 255, 255, 0.02);
 }
@@ -4829,29 +4892,33 @@ onUnmounted(() => {
 }
 
 .revision-column-title {
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .revision-summary-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 .revision-summary-item {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  font-size: 12px;
-  line-height: 1.6;
+  align-items: center;
+  gap: 20px;
+  min-height: 44px;
+  font-size: 16px;
+  line-height: 1.7;
   color: var(--text-secondary);
 }
 
 .revision-summary-label {
   flex: 0 0 auto;
+  font-size: 17px;
+  color: rgba(223, 236, 230, 0.92);
 }
 
 .revision-summary-value {
@@ -4859,6 +4926,7 @@ onUnmounted(() => {
   text-align: right;
   color: var(--text-primary);
   font-weight: 600;
+  font-size: 24px;
 }
 
 .revision-summary-value.highlight {
@@ -4883,13 +4951,13 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 13px;
+  font-size: 17px;
   color: var(--text-primary);
   margin-bottom: 6px;
 }
 
 .revision-change-reason {
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.7;
   color: var(--text-secondary);
 }
@@ -5002,13 +5070,13 @@ onUnmounted(() => {
 
 .report-metric .metric-label {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary);
   margin-bottom: 6px;
 }
 
 .report-metric .metric-value {
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -5039,13 +5107,13 @@ onUnmounted(() => {
 
 .preview-label {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
 .preview-value {
-  font-size: 15px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--text-primary);
 }

@@ -40,6 +40,11 @@ export const solutionApi = {
   },
   exportMarkdown(id) {
     return api.get(`/api/solutions/${id}/export/markdown`)
+  },
+  exportPdf(id) {
+    return api.get(`/api/solutions/${id}/export/pdf`, {
+      responseType: 'blob'
+    })
   }
 }
 

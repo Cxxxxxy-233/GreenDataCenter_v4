@@ -1,12 +1,8 @@
-<template>
+﻿<template>
   <div class="detail-page">
     <div class="detail-header">
       <h1>方案详情</h1>
       <div class="header-actions">
-        <div class="header-actions-meta">
-          <span class="header-actions-kicker">Deliverables</span>
-          <span class="header-actions-note">Markdown / PDF</span>
-        </div>
         <div class="header-action-buttons">
           <el-button class="header-action-btn" @click="exportMarkdown">&#23548;&#20986;Markdown&#25253;&#21578;</el-button>
           <el-button class="header-action-btn header-action-btn--primary" type="primary" plain @click="exportPdf">&#23548;&#20986;PDF&#25253;&#21578;</el-button>
@@ -20,14 +16,11 @@
           <div class="overview-hero">
             <div class="overview-hero-head">
               <div class="overview-hero-copy">
-                <span class="overview-kicker">Final Recommended Scheme</span>
                 <h2>{{ finalReportData.name || solutionData.name || '数据中心绿电消纳推荐方案' }}</h2>
-                <p class="overview-hero-summary">{{ arbitrator.summary || '暂无后端仲裁摘要' }}</p>
               </div>
               <div class="overview-hero-badge">
                 <span class="overview-hero-badge-label">修订条目</span>
                 <strong>{{ revisionComparison.changeCount }}</strong>
-                <span class="overview-hero-badge-note">仲裁后参数调整</span>
               </div>
             </div>
 
@@ -43,7 +36,6 @@
           <div class="summary-section">
             <div class="summary-section-head">
               <h3>执行判断</h3>
-              <span class="summary-section-tag">方案已完成仲裁</span>
             </div>
             <div class="budget-status" :class="costResult.is_over_budget ? 'fail' : 'success'">
               <el-icon><CircleCheckFilled /></el-icon>
@@ -95,7 +87,6 @@
           <div class="info-section">
             <div class="info-section-head">
               <h3>方案信息</h3>
-              <span class="info-section-note">用于项目归档与报告导出</span>
             </div>
             <el-row :gutter="20">
               <el-col :span="6">
@@ -147,9 +138,8 @@
             <div class="system-trace-header">
               <div>
                 <h4>方案生成过程与依据</h4>
-                <p>对应后端 `cooling-scheme-generator`，展示输入条件、寻优步骤、权重设置与候选策略排序。</p>
               </div>
-              <div class="system-trace-badge">Tool 02</div>
+              <div class="system-trace-badge">工具 02</div>
             </div>
 
             <div class="system-trace-topology">
@@ -235,9 +225,8 @@
             <div class="system-trace-header">
               <div>
                 <h4>方案生成过程与依据</h4>
-                <p>对应后端 `green_power_allocation`，展示资源曲线生成、负荷输入、DE 参数和容量优化链路。</p>
               </div>
-              <div class="system-trace-badge">Tool 01</div>
+              <div class="system-trace-badge">工具 01</div>
             </div>
 
             <div class="system-trace-topology">
@@ -336,9 +325,8 @@
             <div class="system-trace-header">
               <div>
                 <h4>方案生成过程与依据</h4>
-                <p>对应后端 `power_supply_config`，展示标准模板命中、负荷折算、电压阈值判断与配置理由。</p>
               </div>
-              <div class="system-trace-badge">Tool 03</div>
+              <div class="system-trace-badge">工具 03</div>
             </div>
 
             <div class="system-trace-topology">
@@ -1039,7 +1027,10 @@ const normalizeGreenPowerResult = (rawValue, metrics = {}) => {
 const intermediate = computed(() => solutionData.value.intermediate_results || {})
 const draftOutput = computed(() => intermediate.value.draft_plan_agent?.full_output || {})
 const arbitrator = computed(() => intermediate.value.arbitrator?.full_output || solutionData.value || {})
-const keyMetrics = computed(() => solutionData.value.key_metrics || arbitrator.value.key_metrics || {})
+const keyMetrics = computed(() => ({
+  ...(solutionData.value.key_metrics || {}),
+  ...(arbitrator.value.key_metrics || {})
+}))
 const finalReportPath = computed(() => intermediate.value.final_report?.full_output?.path || solutionData.value.final_report_path || '')
 
 const revisionParameterLabels = {
@@ -1048,16 +1039,18 @@ const revisionParameterLabels = {
   pv_capacity_mw: '光伏容量',
   wind_capacity_mw: '风电容量',
   green_power_ratio: '绿电比例',
+  total_green_power_ratio: '绿电比例',
   green_supply_ratio: '绿电供给比例',
-  pue: 'PUE',
+  pue: '能效指标',
   estimated_pue: '预测PUE',
   predicted_wue: '预测WUE',
   cooling_technology: '制冷技术',
   cooling_initial_investment_lakh: '制冷初始投资',
   scheme_name: '供电方案',
   redundancy_logic: '冗余逻辑',
+  main_transformers_redundancy: '主变冗余',
   distribution_transformers: '配电变压器配置',
-  tier_level: 'Tier 等级',
+  tier_level: '机房等级',
   expected_availability: '预期可用性',
   annual_carbon_emission: '年碳排放',
   total_cost: '总投资',
@@ -1076,7 +1069,7 @@ const revisionValueFormatters = {
   pue: value => formatNumber(value, 2),
   estimated_pue: value => formatNumber(value, 2),
   predicted_wue: value => formatNumber(value, 2),
-  tier_level: value => (Number.isFinite(Number(value)) ? `Tier ${value}` : String(value ?? '--')),
+  tier_level: value => (Number.isFinite(Number(value)) ? `第${value}级` : String(value ?? '--')),
   expected_availability: value => formatPercentAuto(value, 3),
   annual_carbon_emission: value => formatWithUnit(value, '吨', 0),
   total_cost: value => formatWithUnit(value, '万元', 2),
@@ -1095,6 +1088,31 @@ const formatRevisionValue = (parameter, value) => {
   return String(value)
 }
 
+const normalizeRevisionLabel = (label = '') => {
+  const text = String(label || '').trim()
+  if (!text) return text
+
+  const directMap = {
+    main_transformers_redundancy: '主变冗余',
+    total_green_power_ratio: '绿电比例',
+    green_power_ratio: '绿电比例',
+    total_cost: '总投资',
+    total_capex_lakh: '总投资',
+    pue: '能效指标',
+    estimated_pue: '预测能效指标',
+    predicted_pue: '预测能效指标',
+    tier_level: '机房等级',
+    expected_availability: '预期可用性'
+  }
+
+  if (directMap[text]) return directMap[text]
+
+  return text
+    .replace(/CAPEX/gi, '投资')
+    .replace(/PUE/gi, '能效指标')
+    .replace(/Tier/gi, '机房等级')
+}
+
 const normalizeRevisionChanges = (changes = []) => {
   if (!Array.isArray(changes)) return []
   return changes
@@ -1103,13 +1121,37 @@ const normalizeRevisionChanges = (changes = []) => {
       if (!parameter) return null
       return {
         parameter,
-        label: revisionParameterLabels[parameter] || parameter,
+        label: normalizeRevisionLabel(revisionParameterLabels[parameter] || parameter),
         before: formatRevisionValue(parameter, item?.before),
         after: formatRevisionValue(parameter, item?.after),
         reason: String(item?.reason || '').trim() || '仲裁专家根据评审意见进行了修订。'
       }
     })
     .filter(Boolean)
+}
+
+const parseRevisionChangeText = (changeText = '') => {
+  const text = String(changeText || '').trim()
+  if (!text) {
+    return { before: '--', after: '--' }
+  }
+
+  const parts = text
+    .split(/\s*(?:\u2192|\u27A1|\u27F6|\u2B62|->|=>)\s*/)
+    .map(part => part.trim())
+    .filter(Boolean)
+
+  if (parts.length >= 2) {
+    return {
+      before: parts[0] || '--',
+      after: parts[1] || parts[0] || '--'
+    }
+  }
+
+  return {
+    before: text,
+    after: text
+  }
 }
 
 const normalizeRevisionDisplayItems = (items = []) => {
@@ -1119,13 +1161,13 @@ const normalizeRevisionDisplayItems = (items = []) => {
       const label = String(item?.label || '').trim()
       const change = String(item?.change || '').trim()
       if (!label || !change) return null
-      const parts = change.split('→').map(part => part.trim()).filter(Boolean)
+      const parsedChange = parseRevisionChangeText(change)
       return {
-        label,
+        label: normalizeRevisionLabel(label),
         change,
-        before: parts[0] || '--',
-        after: parts[1] || parts[0] || '--',
-        reason: String(item?.reason || '').trim() || '仲裁专家根据评审意见进行了修订。'
+        before: String(item?.before || '').trim() || parsedChange.before,
+        after: String(item?.after || '').trim() || parsedChange.after,
+        reason: String(item?.reason || '').trim() || '\u4ef2\u88c1\u4e13\u5bb6\u6839\u636e\u8bc4\u5ba1\u610f\u89c1\u8fdb\u884c\u4e86\u4fee\u8ba2\u3002'
       }
     })
     .filter(Boolean)
@@ -1152,9 +1194,18 @@ const revisionComparison = computed(() => {
   }
 })
 
-const economicSection = computed(() => solutionData.value.economic_section || arbitrator.value.economic_section || {})
-const powerSection = computed(() => solutionData.value.power_reliability_section || arbitrator.value.power_reliability_section || {})
-const environmentalSection = computed(() => solutionData.value.environmental_section || arbitrator.value.environmental_section || {})
+const economicSection = computed(() => ({
+  ...(solutionData.value.economic_section || {}),
+  ...(arbitrator.value.economic_section || {})
+}))
+const powerSection = computed(() => ({
+  ...(solutionData.value.power_reliability_section || {}),
+  ...(arbitrator.value.power_reliability_section || {})
+}))
+const environmentalSection = computed(() => ({
+  ...(solutionData.value.environmental_section || {}),
+  ...(arbitrator.value.environmental_section || {})
+}))
 const economicContent = computed(() => economicSection.value.content || {})
 const powerContent = computed(() => powerSection.value.content || {})
 const environmentalContent = computed(() => environmentalSection.value.content || {})
@@ -1169,8 +1220,21 @@ const requirement = computed(() => {
   }
 })
 
+const effectiveDraftPlan = computed(() => {
+  const revisedDraftPlan = arbitrator.value.revised_draft_plan && typeof arbitrator.value.revised_draft_plan === 'object'
+    ? arbitrator.value.revised_draft_plan
+    : {}
+
+  return {
+    ...draftOutput.value,
+    green_power_result: revisedDraftPlan.green_power_result || draftOutput.value.green_power_result || {},
+    cooling_result: revisedDraftPlan.cooling_result || draftOutput.value.cooling_result || {},
+    power_supply_plan: revisedDraftPlan.power_supply_plan || draftOutput.value.power_supply_plan || {}
+  }
+})
+
 const coolingResult = computed(() => {
-  const draftCooling = draftOutput.value.cooling_result || {}
+  const draftCooling = effectiveDraftPlan.value.cooling_result || {}
   return {
     ...draftCooling,
     cooling_technology: draftCooling.cooling_technology || environmentalSection.value.description || '-',
@@ -1195,7 +1259,7 @@ const coolingEconomics = computed(() => {
   }
 })
 
-const greenPowerResult = computed(() => normalizeGreenPowerResult(draftOutput.value.green_power_result || {}, keyMetrics.value))
+const greenPowerResult = computed(() => normalizeGreenPowerResult(effectiveDraftPlan.value.green_power_result || {}, keyMetrics.value))
 const greenOptimization = computed(() => greenPowerResult.value.optimization || {})
 const greenProcurementPlan = computed(() => greenPowerResult.value.procurement_plan || {})
 const greenFiles = computed(() => greenPowerResult.value.generated_files || {})
@@ -1238,7 +1302,7 @@ const greenArtifactFiles = computed(() => {
 })
 
 const powerPlan = computed(() => {
-  const draftPower = draftOutput.value.power_supply_plan || {}
+  const draftPower = effectiveDraftPlan.value.power_supply_plan || {}
   return {
     ...draftPower,
     external_source_type: draftPower.external_source_type || powerSection.value.description || '-',
@@ -1262,13 +1326,41 @@ const costResult = computed(() => {
   const economic = rawCost.economic_analysis_result || rawCost || {}
   const breakdown = economic.capex_breakdown || {}
   const opexBreakdown = economic.opex_breakdown || {}
-  const coolingCapex = toNumber(
-    breakdown.cooling_system_lakh,
-    toNumber(coolingResult.value.economic_indicators?.initial_investment, 0)
+  const hasRevisedDraftPlan = Boolean(
+    arbitrator.value.revised_draft_plan
+    && typeof arbitrator.value.revised_draft_plan === 'object'
+    && Object.keys(arbitrator.value.revised_draft_plan).length
   )
-  const powerSupplyCapex = toNumber(breakdown.power_supply_system_lakh, 0)
-  const greenPowerCapex = toNumber(breakdown.green_power_system_lakh, 0)
-  const recalculatedTotal = powerSupplyCapex + greenPowerCapex + coolingCapex
+  const costFactors = {
+    wind_per_mw: toNumber(economic.cost_factors?.wind_per_mw, 420),
+    pv_per_mw: toNumber(economic.cost_factors?.pv_per_mw, 350),
+    storage_per_mwh: toNumber(economic.cost_factors?.storage_per_mwh, 60)
+  }
+  const recalculatedCoolingCapex = toNumber(coolingResult.value.economic_indicators?.initial_investment, 0)
+  const coolingCapex = hasRevisedDraftPlan
+    ? recalculatedCoolingCapex
+    : toNumber(breakdown.cooling_system_lakh, recalculatedCoolingCapex)
+  const revisedGreenOptimization = greenOptimization.value || {}
+  const revisedPowerCostPerMw = toNumber(powerPlan.value.raw_json?.cost_per_mw, 0)
+  const revisedPowerLoadMw = toNumber(powerPlan.value.raw_json?.total_load_mw, 0)
+  const recalculatedPowerSupplyCapex = revisedPowerLoadMw * revisedPowerCostPerMw
+  const normalizedPowerSupplyCapex = hasRevisedDraftPlan
+    ? recalculatedPowerSupplyCapex
+    : (toNumber(breakdown.power_supply_system_lakh, 0) > 0
+      ? toNumber(breakdown.power_supply_system_lakh, 0)
+      : recalculatedPowerSupplyCapex)
+  const normalizedGreenPowerCapex = (() => {
+    const recalculated = (
+      toNumber(revisedGreenOptimization.wind_capacity_mw, 0) * costFactors.wind_per_mw
+      + toNumber(revisedGreenOptimization.pv_capacity_mw, 0) * costFactors.pv_per_mw
+      + toNumber(revisedGreenOptimization.storage_capacity_mwh, 0) * costFactors.storage_per_mwh
+    )
+    const explicit = toNumber(breakdown.green_power_system_lakh, 0)
+    if (hasRevisedDraftPlan) return recalculated
+    if (explicit > 0) return explicit
+    return recalculated
+  })()
+  const recalculatedTotal = normalizedPowerSupplyCapex + normalizedGreenPowerCapex + coolingCapex
   const budgetConstraint = toNumber(economic.budget_constraint_lakh, 0)
   const normalizedTotal = recalculatedTotal > 0
     ? recalculatedTotal
@@ -1286,15 +1378,20 @@ const costResult = computed(() => {
     opex_breakdown: opexBreakdown,
     capex_breakdown: {
       ...breakdown,
-      power_supply_system_lakh: powerSupplyCapex,
-      green_power_system_lakh: greenPowerCapex,
+      power_supply_system_lakh: normalizedPowerSupplyCapex,
+      green_power_system_lakh: normalizedGreenPowerCapex,
       cooling_system_lakh: coolingCapex
     }
   }
 })
 const finalReportData = computed(() => ({
+  ...solutionData.value,
   ...arbitrator.value,
-  ...solutionData.value
+  key_metrics: keyMetrics.value,
+  economic_section: economicSection.value,
+  power_reliability_section: powerSection.value,
+  environmental_section: environmentalSection.value,
+  revised_draft_plan: arbitrator.value.revised_draft_plan || solutionData.value.revised_draft_plan || {}
 }))
 const reportRequirementFacts = computed(() => {
   const req = requirement.value || {}
@@ -1378,9 +1475,9 @@ const keyMetricsRows = computed(() => {
   const metrics = keyMetrics.value || {}
   return [
     { label: '总成本(万元)', value: formatNumber(costResult.value.total_capex_lakh || metrics.total_cost, 2) },
-    { label: 'PUE', value: formatNumber(metrics.pue, 3) },
+    { label: '能效指标', value: formatNumber(metrics.pue, 3) },
     { label: '绿电比例', value: formatPercent(metrics.green_power_ratio) },
-    { label: 'Tier 等级', value: metrics.tier_level ?? '-' },
+    { label: '机房等级', value: metrics.tier_level ? `第${metrics.tier_level}级` : '-' },
     { label: '预期可用性', value: formatPercentAuto(metrics.expected_availability) },
     { label: '年碳排放(吨)', value: metrics.annual_carbon_emission ?? '-' }
   ]
@@ -1875,7 +1972,7 @@ const costStructureSegments = computed(() => {
         { label: '初始投资', value: `${formatNumber(coolingEconomics.value.initial_investment, 0)} 万元` },
         { label: '年运维成本', value: `${formatNumber(coolingEconomics.value.annual_op_cost, 0)} 万元` },
         { label: '年电费', value: `${formatNumber(coolingEconomics.value.annual_electricity_cost, 0)} 万元` },
-        { label: 'LCOE', value: `${formatNumber(coolingEconomics.value.lcoe, 4)} 元/kWh` },
+        { label: '???????', value: `${formatNumber(coolingEconomics.value.lcoe, 4)} 元/kWh` },
         { label: '预测PUE', value: formatNumber(coolingResult.value.estimated_pue, 3) }
       ]
     }
@@ -2101,66 +2198,23 @@ const exportMarkdown = async () => {
 }
 
 const exportPdf = async () => {
-  if (activeTab.value !== 'report') {
-    activeTab.value = 'report'
-    await nextTick()
+  try {
+    const response = await solutionApi.exportPdf(solutionId.value)
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    const disposition = response.headers?.['content-disposition'] || ''
+    const matchedFilename = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i)
+    const fallbackName = `${finalReportData.value?.name || '方案报告'}_${solutionId.value}.pdf`
+    const filename = decodeURIComponent((matchedFilename?.[1] || fallbackName).replace(/"/g, '').trim())
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('PDF export failed:', error)
+    ElMessage.error(error?.response?.data?.detail || '\u5bfc\u51fa PDF \u62a5\u544a\u5931\u8d25')
   }
-
-  if (!reportMarkdown.value) {
-    await loadMarkdownReport()
-    await nextTick()
-  }
-
-  const reportNode = reportExportRef.value
-  if (!reportNode) {
-    ElMessage.warning('\u672a\u627e\u5230\u53ef\u5bfc\u51fa\u7684\u62a5\u544a\u5185\u5bb9')
-    return
-  }
-
-  const printWindow = window.open('', '_blank', 'width=1200,height=900')
-  if (!printWindow) {
-    ElMessage.warning('\u6d4f\u89c8\u5668\u62e6\u622a\u4e86\u5f39\u7a97\uff0c\u8bf7\u5141\u8bb8\u5f39\u7a97\u540e\u91cd\u8bd5')
-    return
-  }
-
-  const title = finalReportData.value?.name || ('\u65b9\u6848\u62a5\u544a_' + solutionId.value)
-  printWindow.document.write(
-    '<!DOCTYPE html>' +
-    '<html lang="zh-CN">' +
-    '<head>' +
-    '<meta charset="UTF-8" />' +
-    '<title>' + title + '</title>' +
-    '<style>' +
-    '* { box-sizing: border-box; }' +
-    "body { margin: 0; padding: 32px; font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; color: #1f2d26; line-height: 1.65; background: #fff; }" +
-    'h1, h2, h3 { color: #10241a; margin: 0 0 14px; }' +
-    'h1 { font-size: 28px; }' +
-    'h2 { font-size: 20px; margin-top: 28px; padding-bottom: 8px; border-bottom: 1px solid #dfe9e3; }' +
-    'h3 { font-size: 16px; }' +
-    'p, li, span, div { font-size: 13px; }' +
-    'ul, ol { padding-left: 20px; }' +
-    'table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; }' +
-    'th, td { border: 1px solid #d9e3dc; padding: 10px 12px; text-align: left; vertical-align: top; }' +
-    'th { background: #f4f8f5; }' +
-    '.report-meta { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; color: #5d6d65; }' +
-    '.executive-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }' +
-    '.executive-item { border: 1px solid #dfe9e3; border-radius: 10px; padding: 12px 14px; background: #f8fbf9; }' +
-    '.executive-label { color: #6c7a73; margin-bottom: 6px; }' +
-    '.executive-value { color: #10241a; font-size: 18px; font-weight: 700; }' +
-    '.report-chapter { break-inside: avoid; page-break-inside: avoid; margin-bottom: 20px; }' +
-    '.markdown-rendered code { padding: 2px 6px; background: #f2f4f3; border-radius: 4px; }' +
-    '.markdown-table-wrap { overflow: visible; }' +
-    '@media print { body { padding: 18px; } .report-chapter { page-break-inside: avoid; } }' +
-    '</style>' +
-    '</head>' +
-    '<body>' + reportNode.innerHTML + '</body>' +
-    '</html>'
-  )
-  printWindow.document.close()
-  printWindow.focus()
-  setTimeout(() => {
-    printWindow.print()
-  }, 300)
 }
 
 const initPowerBalanceChart = () => {
@@ -2486,14 +2540,14 @@ watch(
 }
 
 .metric-label {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-secondary);
   margin-bottom: 8px;
   font-weight: 500;
 }
 
 .metric-value {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.2;
@@ -2520,7 +2574,7 @@ watch(
 }
 
 .summary-section h3 {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 16px;
@@ -2542,6 +2596,7 @@ watch(
   margin-bottom: 12px;
   transition: all var(--transition-fast);
   border: 1px solid transparent;
+  font-size: 16px;
 }
 
 .budget-status.success {
@@ -2599,20 +2654,20 @@ watch(
 }
 
 .info-section h3 {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 16px;
 }
 
 .info-item {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-secondary);
   margin-bottom: 6px;
 }
 
 .info-value {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -2631,7 +2686,7 @@ watch(
 }
 
 .param-card h4 {
-  font-size: 15px;
+  font-size: 19px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 14px;
@@ -2644,7 +2699,7 @@ watch(
 }
 
 .param-item {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-secondary);
   line-height: 1.7;
 }
@@ -4363,6 +4418,11 @@ watch(
   color: rgba(225, 232, 229, 0.9);
 }
 
+.header-actions :deep(.header-action-btn--primary),
+.header-actions :deep(.header-action-btn--primary span) {
+  color: #ffffff !important;
+}
+
 .detail-tabs {
   overflow: visible;
 }
@@ -4399,7 +4459,7 @@ watch(
 
 .overview-section {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px;
   align-items: start;
 }
@@ -4446,7 +4506,7 @@ watch(
 
 .overview-hero-copy h2 {
   margin: 12px 0 10px;
-  font-size: 30px;
+  font-size: 34px;
   line-height: 1.08;
   letter-spacing: -0.03em;
   color: rgba(244, 247, 246, 0.99);
@@ -4486,7 +4546,7 @@ watch(
 }
 
 .overview-hero-badge strong {
-  font-size: 30px;
+  font-size: 34px;
   line-height: 1;
   color: rgba(137, 245, 179, 0.98);
 }
@@ -4505,7 +4565,7 @@ watch(
 
 .revision-overview h5 {
   margin: 0 0 14px;
-  font-size: 14px;
+  font-size: 18px;
   color: rgba(240, 244, 241, 0.96);
 }
 
@@ -4531,7 +4591,7 @@ watch(
 
 .revision-overview-title {
   margin-bottom: 12px;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
   color: rgba(240, 244, 241, 0.96);
 }
@@ -4546,21 +4606,27 @@ watch(
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 12px;
+  font-size: 17px;
   line-height: 1.6;
   color: rgba(192, 203, 199, 0.8);
 }
 
+.revision-overview-item span {
+  font-size: 17px;
+  color: rgba(223, 236, 230, 0.92);
+}
+
 .revision-overview-item strong {
+  font-size: 18px;
   color: rgba(240, 244, 241, 0.96);
 }
 
 .overview-section .summary-section {
-  min-height: 100%;
+  min-height: auto;
 }
 
 .overview-section .info-section {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 
 .summary-section-head,
@@ -5331,3 +5397,4 @@ watch(
   }
 }
 </style>
+

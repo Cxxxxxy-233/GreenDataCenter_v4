@@ -1,27 +1,47 @@
 # -*- coding: utf-8 -*-
 """
-FastAPI HTTP Server - 封装 AISystemCoordinator，提供 REST API 和 SSE 实时流式输出
+FastAPI HTTP Server - 闂備浇顕х换鎰崲鐎ｎ€㈠綊宕堕?AISystemCoordinator闂傚倷鐒︾€笛呯矙閹达箑瀚夋い鎺戝暔娴滅懓霉閿濆懏璐￠柣?REST API 闂?SSE 闂備浇顕ф绋匡耿闁秴纾婚柣鎰▕濞撳鏌涚仦缁㈠殧閻熸瑥瀚刊鎾煕濠靛嫬鍔ゆい銏犳嚇閺屸剝寰勬繝鍕杸闂佺懓鎲￠幃鍌氱暦?
 """
 
 import asyncio
 import csv
 import json
 import mimetypes
+import re
 import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+from xml.sax.saxutils import escape
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import Field
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.pdfmetrics import registerFont
+from reportlab.platypus import (
+    ListFlowable,
+    ListItem,
+    LongTable,
+    Paragraph,
+    Preformatted,
+    SimpleDocTemplate,
+    Spacer,
+    TableStyle,
+)
 
 from greendatacenter.coordinator_v2 import AISystemCoordinator
+from greendatacenter.graph.nodes import RequirementParserNode
 from greendatacenter.graph.state import UserRequirement
 
-app = FastAPI(title="数据中心绿电一体化方案智能规划系统", version="1.0.0")
+app = FastAPI(title="Green Data Center API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,38 +63,41 @@ requirements_store: dict[str, dict] = {}
 solutions_store: dict[str, dict] = {}
 workflows_store: dict[str, dict] = {}
 stream_queues: dict[str, asyncio.Queue] = {}
+registerFont(UnicodeCIDFont("STSong-Light"))
 
 
 class WorkflowStartRequest(PydanticBaseModel):
-    location: str = Field(..., description="数据中心所在地点")
-    planned_load_kw: float = Field(..., gt=0, description="总负荷(kW)")
-    green_power_ratio: float = Field(..., ge=0, le=1, description="绿电消纳率目标(0-1)")
-    planned_area: float = Field(..., gt=0, description="计划建筑面积(m²)")
-    budget_constraint: float = Field(..., gt=0, description="预算约束(万元)")
-    cooling_technology: str = Field(default="浸没式液冷", description="制冷技术")
-    machine_room_grade: str = Field(default="A", description="机房等级")
-    pue_target: float = Field(default=1.3, ge=1.0, le=3.0, description="PUE目标值")
-    sim_hours: int = Field(default=160, gt=0, le=8760, description="仿真时长(小时)")
-    year: Optional[int] = Field(default=2025, description="气象数据年份")
-    date: Optional[str] = Field(default=None, description="仿真日期")
-    pv_tilt: Optional[float] = Field(default=None, description="光伏倾角(度)")
-    pv_azimuth: float = Field(default=180.0, description="光伏方位角(度)")
-    wind_cut_in_ms: float = Field(default=3.0, gt=0, description="风机切入风速(m/s)")
-    wind_rated_ms: float = Field(default=12.0, gt=0, description="风机额定风速(m/s)")
-    wind_cut_out_ms: float = Field(default=25.0, gt=0, description="风机切出风速(m/s)")
-    computing_power_density: float = Field(default=8.0, gt=0, description="单机柜算力密度(kW/机柜)")
-    carbon_emission_factor: float = Field(default=0.5, ge=0, description="电网碳排放因子")
+    location: str = Field(..., description="Location")
+    planned_load_kw: float = Field(..., gt=0, description="Total load (kW)")
+    green_power_ratio: float = Field(..., ge=0, le=1, description="Green power ratio (0-1)")
+    planned_area: float = Field(..., gt=0, description="Planned area (m^2)")
+    budget_constraint: float = Field(..., gt=0, description="Budget constraint (10k CNY)")
+    cooling_technology: str = Field(default="Immersion liquid cooling", description="Cooling technology")
+    machine_room_grade: str = Field(default="A", description="Machine room grade")
+    pue_target: float = Field(default=1.3, ge=1.0, le=3.0, description="PUE target")
+    sim_hours: int = Field(default=160, gt=0, le=8760, description="Simulation hours")
+    year: Optional[int] = Field(default=2025, description="Weather data year")
+    date: Optional[str] = Field(default=None, description="Simulation date")
+    pv_tilt: Optional[float] = Field(default=None, description="PV tilt (deg)")
+    pv_azimuth: float = Field(default=180.0, description="PV azimuth (deg)")
+    wind_cut_in_ms: float = Field(default=3.0, gt=0, description="Wind cut-in speed (m/s)")
+    wind_rated_ms: float = Field(default=12.0, gt=0, description="Wind rated speed (m/s)")
+    wind_cut_out_ms: float = Field(default=25.0, gt=0, description="Wind cut-out speed (m/s)")
+    computing_power_density: float = Field(default=8.0, gt=0, description="Computing density (kW per rack)")
+    carbon_emission_factor: float = Field(default=0.5, ge=0, description="Carbon emission factor")
     electricity_prices: dict[str, float] = Field(
         default_factory=lambda: {
-            "尖峰电价": 0.5, "高峰电价": 0.4, "平段电价": 0.3,
-            "低谷电价": 0.25, "深谷电价": 0.2,
+            "peak": 0.5,
+            "high": 0.4,
+            "flat": 0.3,
+            "valley": 0.25,
+            "deep_valley": 0.2,
         },
-        description="各时段电价(元/kWh)",
+        description="Time-of-use prices (CNY/kWh)",
     )
-    maxiter: int = Field(default=60, gt=0, description="差分进化最大迭代次数")
-    popsize: int = Field(default=10, gt=0, description="差分进化种群大小")
-    seed: int = Field(default=42, description="随机种子")
-
+    maxiter: int = Field(default=60, gt=0, description="Max optimization iterations")
+    popsize: int = Field(default=10, gt=0, description="Optimization population size")
+    seed: int = Field(default=42, description="Random seed")
 
 @app.on_event("startup")
 async def startup_event():
@@ -82,14 +105,49 @@ async def startup_event():
     coordinator = AISystemCoordinator()
 
 
-def _serialize_value(value: Any) -> Any:
+def _serialize_value(value: Any, seen: set[int] | None = None, depth: int = 0) -> Any:
+    if seen is None:
+        seen = set()
+
+    if depth > 20:
+        return "<max-depth-reached>"
+
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+
+    obj_id = id(value)
+    if obj_id in seen:
+        return "<circular-reference>"
+
     if hasattr(value, "model_dump"):
-        return value.model_dump()
+        seen.add(obj_id)
+        try:
+            dumped = value.model_dump()
+            return _serialize_value(dumped, seen, depth + 1)
+        finally:
+            seen.discard(obj_id)
+
     if isinstance(value, (list, tuple)):
-        return [_serialize_value(v) for v in value]
+        seen.add(obj_id)
+        try:
+            return [_serialize_value(v, seen, depth + 1) for v in value]
+        finally:
+            seen.discard(obj_id)
+
     if isinstance(value, dict):
-        return {k: _serialize_value(v) for k, v in value.items()}
-    return value
+        seen.add(obj_id)
+        try:
+            return {
+                str(k): _serialize_value(v, seen, depth + 1)
+                for k, v in value.items()
+            }
+        finally:
+            seen.discard(obj_id)
+
+    if isinstance(value, Path):
+        return str(value)
+
+    return str(value)
 
 
 def _make_serializable(obj: Any) -> Any:
@@ -168,8 +226,330 @@ def _load_report_markdown_from_solution(sol: dict) -> str:
     return ""
 
 
-async def _run_workflow(workflow_id: str, input_data: dict):
+def _sanitize_export_filename(value: str, fallback: str) -> str:
+    text = re.sub(r"[\\/:*?\"<>|]+", "_", str(value or "").strip())
+    text = re.sub(r"\s+", "_", text).strip("._")
+    return text or fallback
+
+
+def _markdown_inline_to_reportlab(text: str) -> str:
+    escaped = escape(str(text or ""))
+    escaped = re.sub(r"`([^`]+)`", r"<font name='Courier'>\1</font>", escaped)
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escaped)
+    escaped = re.sub(r"\*(.+?)\*", r"<i>\1</i>", escaped)
+    return escaped
+
+
+def _is_markdown_table_separator(line: str) -> bool:
+    stripped = line.strip().strip("|").strip()
+    if not stripped:
+        return False
+    return bool(re.fullmatch(r"[:\-\s|]+", stripped))
+
+
+def _parse_markdown_table_row(line: str) -> list[str]:
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|"):
+        stripped = stripped[:-1]
+    return [cell.strip() for cell in stripped.split("|")]
+
+
+def _build_pdf_styles():
+    base = getSampleStyleSheet()
+    styles = {
+        "title": ParagraphStyle(
+            "ReportTitle",
+            parent=base["Title"],
+            fontName="STSong-Light",
+            fontSize=20,
+            leading=26,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor("#10241a"),
+            spaceAfter=10,
+        ),
+        "meta": ParagraphStyle(
+            "ReportMeta",
+            parent=base["Normal"],
+            fontName="STSong-Light",
+            fontSize=9.5,
+            leading=14,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor("#55655e"),
+            spaceAfter=4,
+        ),
+        "h1": ParagraphStyle(
+            "Heading1Pdf",
+            parent=base["Heading1"],
+            fontName="STSong-Light",
+            fontSize=17,
+            leading=23,
+            textColor=colors.HexColor("#123126"),
+            spaceBefore=10,
+            spaceAfter=7,
+        ),
+        "h2": ParagraphStyle(
+            "Heading2Pdf",
+            parent=base["Heading2"],
+            fontName="STSong-Light",
+            fontSize=14,
+            leading=20,
+            textColor=colors.HexColor("#174032"),
+            spaceBefore=8,
+            spaceAfter=6,
+        ),
+        "h3": ParagraphStyle(
+            "Heading3Pdf",
+            parent=base["Heading3"],
+            fontName="STSong-Light",
+            fontSize=12,
+            leading=18,
+            textColor=colors.HexColor("#1c4738"),
+            spaceBefore=6,
+            spaceAfter=5,
+        ),
+        "body": ParagraphStyle(
+            "BodyPdf",
+            parent=base["Normal"],
+            fontName="STSong-Light",
+            fontSize=10.5,
+            leading=17,
+            textColor=colors.HexColor("#24322d"),
+            spaceAfter=6,
+        ),
+        "table": ParagraphStyle(
+            "TablePdf",
+            parent=base["Normal"],
+            fontName="STSong-Light",
+            fontSize=9.5,
+            leading=13,
+            textColor=colors.HexColor("#24322d"),
+        ),
+        "code": ParagraphStyle(
+            "CodePdf",
+            parent=base["Code"],
+            fontName="Courier",
+            fontSize=8.8,
+            leading=12,
+            textColor=colors.HexColor("#24322d"),
+            backColor=colors.HexColor("#f4f7f5"),
+            borderPadding=6,
+        ),
+    }
+    return styles
+
+
+def _build_pdf_story(markdown_text: str, solution_id: str, solution_name: str):
+    styles = _build_pdf_styles()
+    story = [
+        Paragraph(_markdown_inline_to_reportlab(solution_name), styles["title"]),
+        Paragraph(_markdown_inline_to_reportlab(f"Solution ID: {solution_id}"), styles["meta"]),
+        Paragraph(_markdown_inline_to_reportlab(f"Exported At: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"), styles["meta"]),
+        Spacer(1, 6 * mm),
+    ]
+
+    lines = markdown_text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    paragraph_lines: list[str] = []
+    list_items: list[str] = []
+    list_type: Optional[str] = None
+    table_lines: list[str] = []
+    code_lines: list[str] = []
+    in_code_block = False
+
+    def flush_paragraph():
+        nonlocal paragraph_lines
+        if not paragraph_lines:
+            return
+        text = " ".join(part.strip() for part in paragraph_lines if part.strip())
+        if text:
+            story.append(Paragraph(_markdown_inline_to_reportlab(text), styles["body"]))
+        paragraph_lines = []
+
+    def flush_list():
+        nonlocal list_items, list_type
+        if not list_items:
+            return
+        bullet_type = "1" if list_type == "ordered" else "bullet"
+        story.append(
+            ListFlowable(
+                [
+                    ListItem(Paragraph(_markdown_inline_to_reportlab(item), styles["body"]))
+                    for item in list_items
+                ],
+                bulletType=bullet_type,
+                start="1",
+                leftIndent=16,
+            )
+        )
+        story.append(Spacer(1, 2 * mm))
+        list_items = []
+        list_type = None
+
+    def flush_table():
+        nonlocal table_lines
+        if not table_lines:
+            return
+
+        rows = [_parse_markdown_table_row(line) for line in table_lines if line.strip()]
+        if len(rows) < 2:
+            for row in rows:
+                if row:
+                    story.append(Paragraph(_markdown_inline_to_reportlab(" | ".join(row)), styles["body"]))
+            table_lines = []
+            return
+
+        if len(rows) >= 2 and _is_markdown_table_separator(table_lines[1]):
+            header = rows[0]
+            body_rows = rows[2:]
+        else:
+            header = rows[0]
+            body_rows = rows[1:]
+
+        normalized_rows = [header] + body_rows
+        column_count = max(len(row) for row in normalized_rows)
+        normalized_rows = [
+            row + [""] * (column_count - len(row))
+            for row in normalized_rows
+        ]
+
+        table_data = [
+            [Paragraph(_markdown_inline_to_reportlab(cell), styles["table"]) for cell in row]
+            for row in normalized_rows
+        ]
+
+        available_width = A4[0] - 28 * mm
+        col_width = available_width / max(1, column_count)
+        table = LongTable(table_data, repeatRows=1, colWidths=[col_width] * column_count)
+        table.setStyle(
+            TableStyle([
+                ("FONTNAME", (0, 0), (-1, -1), "STSong-Light"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+                ("LEADING", (0, 0), (-1, -1), 12),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef5f1")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#123126")),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d7e3dd")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ])
+        )
+        story.append(table)
+        story.append(Spacer(1, 3 * mm))
+        table_lines = []
+
+    def flush_code():
+        nonlocal code_lines
+        if not code_lines:
+            return
+        story.append(Preformatted("\n".join(code_lines), styles["code"]))
+        story.append(Spacer(1, 2 * mm))
+        code_lines = []
+
+    for raw_line in lines:
+        line = raw_line.rstrip()
+        stripped = line.strip()
+
+        if stripped.startswith("```"):
+            flush_paragraph()
+            flush_list()
+            flush_table()
+            if in_code_block:
+                flush_code()
+            in_code_block = not in_code_block
+            continue
+
+        if in_code_block:
+            code_lines.append(line)
+            continue
+
+        if stripped.startswith("|") and stripped.count("|") >= 2:
+            flush_paragraph()
+            flush_list()
+            table_lines.append(stripped)
+            continue
+
+        if table_lines:
+            flush_table()
+
+        if not stripped:
+            flush_paragraph()
+            flush_list()
+            continue
+
+        heading_match = re.match(r"^(#{1,3})\s+(.*)$", stripped)
+        if heading_match:
+            flush_paragraph()
+            flush_list()
+            level = len(heading_match.group(1))
+            content = heading_match.group(2).strip()
+            style_key = f"h{level}"
+            story.append(Paragraph(_markdown_inline_to_reportlab(content), styles[style_key]))
+            continue
+
+        unordered_match = re.match(r"^[-*+]\s+(.*)$", stripped)
+        ordered_match = re.match(r"^\d+\.\s+(.*)$", stripped)
+        if unordered_match or ordered_match:
+            flush_paragraph()
+            current_type = "ordered" if ordered_match else "unordered"
+            content = (ordered_match or unordered_match).group(1).strip()
+            if list_type and list_type != current_type:
+                flush_list()
+            list_type = current_type
+            list_items.append(content)
+            continue
+
+        if stripped in {"---", "***"}:
+            flush_paragraph()
+            flush_list()
+            story.append(Spacer(1, 2 * mm))
+            continue
+
+        paragraph_lines.append(stripped)
+
+    flush_paragraph()
+    flush_list()
+    flush_table()
+    flush_code()
+    return story
+
+
+def _generate_pdf_report(solution_id: str, solution_name: str, markdown_text: str) -> Path:
+    output_dir = (PROJECT_ROOT / "src" / "greendatacenter" / "output" / "pdf_reports").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = _sanitize_export_filename(solution_name, f"solution_{solution_id}")
+    pdf_path = output_dir / f"{safe_name}_{solution_id}.pdf"
+    doc = SimpleDocTemplate(
+        str(pdf_path),
+        pagesize=A4,
+        leftMargin=14 * mm,
+        rightMargin=14 * mm,
+        topMargin=15 * mm,
+        bottomMargin=14 * mm,
+        title=solution_name,
+        author="GreenDataCenter",
+    )
+    story = _build_pdf_story(markdown_text, solution_id, solution_name)
+    doc.build(story)
+    return pdf_path
+
+
+async def _push_workflow_message(workflow_id: str, message: dict[str, Any]) -> None:
     queue = stream_queues.get(workflow_id)
+    serializable = _make_serializable(message)
+    if queue:
+        await queue.put(serializable)
+    if (
+        "streaming_output" in workflows_store.get(workflow_id, {})
+        and message.get("node") not in {"completed", "error", "heartbeat"}
+    ):
+        workflows_store[workflow_id]["streaming_output"].append(serializable)
+
+
+async def _run_workflow(workflow_id: str, input_data: dict):
     try:
         workflows_store[workflow_id]["status"] = "running"
         start_time = datetime.now()
@@ -197,111 +577,83 @@ async def _run_workflow(workflow_id: str, input_data: dict):
             "streaming_output": [],
         }
 
-        last_node_output_with_so = None
-        all_node_names_from_so = set()
+        parser = RequirementParserNode(coordinator.memory)
+        normalized_requirement = parser._normalize_requirement(input_data)
+        parsed_requirement = UserRequirement(**normalized_requirement)
+        parsed_requirement_dict = parsed_requirement.model_dump()
+
+        initial_state["user_requirement"] = parsed_requirement
+        initial_state["requirement"] = parsed_requirement_dict
+
+        await _push_workflow_message(
+            workflow_id,
+            {
+                "node": "requirement_parser",
+                "data": parsed_requirement_dict,
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+
+        accumulated_state = dict(initial_state)
+        replayed_nodes = {"requirement_parser"}
 
         async for event in coordinator.compiled_graph.astream(initial_state):
+            if not isinstance(event, dict):
+                continue
+
             for node_name, node_output in event.items():
-                output_keys = list(node_output.keys()) if isinstance(node_output, dict) else type(node_output).__name__
-                print(f"[ASTREAM] node={node_name}, output_keys={output_keys}", flush=True)
+                if not isinstance(node_output, dict):
+                    node_output = {"value": node_output}
 
-                wf_store = workflows_store.get(workflow_id, {})
-                so_list = wf_store.get("streaming_output", [])
+                accumulated_state.update(node_output)
 
-                extracted_data = None
-                if so_list:
-                    for entry in reversed(so_list):
+                if node_name == "requirement_parser":
+                    continue
+
+                payload = None
+                inner_streaming_output = node_output.get("streaming_output")
+                if isinstance(inner_streaming_output, list):
+                    for entry in reversed(inner_streaming_output):
                         if isinstance(entry, dict) and entry.get("node") == node_name:
-                            extracted_data = entry.get("full_output")
+                            payload = entry.get("full_output")
                             break
 
-                if extracted_data is None:
-                    if "streaming_output" in node_output and isinstance(node_output["streaming_output"], list):
-                        inner_so = node_output["streaming_output"]
-                        if inner_so:
-                            last_node_output_with_so = node_output
-                            for entry in inner_so:
-                                if isinstance(entry, dict) and entry.get("node"):
-                                    all_node_names_from_so.add(entry["node"])
-                                    if entry.get("node") == node_name and extracted_data is None:
-                                        extracted_data = entry.get("full_output")
+                if payload is None:
+                    payload = node_output
 
-                if extracted_data is None:
-                    extracted_data = node_output
-
-                serializable_data = _make_serializable(extracted_data)
-                message = {
-                    "node": node_name,
-                    "data": serializable_data,
-                    "timestamp": datetime.now().isoformat(),
-                }
-                print(f"[SSE PUSH] node={node_name}, data_keys={list(serializable_data.keys()) if isinstance(serializable_data, dict) else type(serializable_data).__name__}", flush=True)
-
-                if queue:
-                    await queue.put(message)
-                if "streaming_output" in workflows_store.get(workflow_id, {}):
-                    workflows_store[workflow_id]["streaming_output"].append(message)
-
-        print("[SSE] astream loop finished", flush=True)
-        print(f"[SSE] Nodes found in streaming_output: {sorted(all_node_names_from_so)}", flush=True)
-
-        pushed_nodes = set()
-        so_final = workflows_store.get(workflow_id, {}).get("streaming_output", [])
-        for item in so_final:
-            if isinstance(item, dict) and item.get("node"):
-                pushed_nodes.add(item["node"])
-
-        print(f"[SSE] Nodes pushed via SSE: {sorted(pushed_nodes)}", flush=True)
-
-        missing_nodes = all_node_names_from_so - pushed_nodes
-        if missing_nodes and last_node_output_with_so:
-            print(f"[SSE] Missing nodes to补发: {sorted(missing_nodes)}", flush=True)
-            inner_so = last_node_output_with_so.get("streaming_output", [])
-            for entry in inner_so:
-                if isinstance(entry, dict) and entry.get("node") in missing_nodes:
-                    fallback_msg = {
-                        "node": entry["node"],
-                        "data": _make_serializable(entry.get("full_output", {})),
+                await _push_workflow_message(
+                    workflow_id,
+                    {
+                        "node": node_name,
+                        "data": _make_serializable(payload),
                         "timestamp": datetime.now().isoformat(),
-                    }
-                    print(f"[SSE FALLBACK] 补发节点: {entry['node']}, keys={list(fallback_msg['data'].keys()) if isinstance(fallback_msg['data'], dict) else 'N/A'}", flush=True)
-                    if queue:
-                        await queue.put(fallback_msg)
-                    workflows_store[workflow_id]["streaming_output"].append(fallback_msg)
-                    pushed_nodes.add(entry["node"])
+                    },
+                )
+                replayed_nodes.add(node_name)
 
-        solution = {}
-        for item in workflows_store.get(workflow_id, {}).get("streaming_output", []):
-            node = item.get("node", "")
-            data = item.get("data", {})
-            if node == "arbitrator" and isinstance(data, dict):
-                solution = data
-            if node == "final_report" and isinstance(data, dict):
-                solution.update(data)
+        solution = _make_serializable(accumulated_state.get("solution", {}) or {})
+        final_report = _make_serializable(accumulated_state.get("final_report_result", {}) or {})
+        if isinstance(final_report, dict) and final_report:
+            if not solution:
+                solution = {}
+            solution.update(final_report)
 
-        if "output" not in pushed_nodes:
-            print("[SSE] Fallback: output node not received from astream, pushing manually", flush=True)
-            fallback_output_msg = {
-                "node": "output",
-                "data": _make_serializable({"current_step": "completed", "final_solution": solution}),
-                "timestamp": datetime.now().isoformat(),
-            }
-            if queue:
-                await queue.put(fallback_output_msg)
-            if "streaming_output" in workflows_store.get(workflow_id, {}):
-                workflows_store[workflow_id]["streaming_output"].append(fallback_output_msg)
-            pushed_nodes.add("output")
+        if "output" not in replayed_nodes:
+            await _push_workflow_message(
+                workflow_id,
+                {
+                    "node": "output",
+                    "data": {
+                        "current_step": "completed",
+                        "final_solution": solution,
+                    },
+                    "timestamp": datetime.now().isoformat(),
+                },
+            )
 
-        streaming_output = workflows_store.get(workflow_id, {}).get("streaming_output", [])
-
-        solution = {}
-        for item in streaming_output:
-            node = item.get("node", "")
-            data = item.get("data", {})
-            if node == "arbitrator" and isinstance(data, dict):
-                solution = data
-            if node == "final_report" and isinstance(data, dict):
-                solution.update(data)
+        streaming_output = _make_serializable(
+            list(workflows_store.get(workflow_id, {}).get("streaming_output", []))
+        )
 
         end_time = datetime.now()
         generation_time = (end_time - start_time).total_seconds()
@@ -312,7 +664,7 @@ async def _run_workflow(workflow_id: str, input_data: dict):
         result = {
             "success": True,
             "solution": _make_serializable(solution),
-            "streaming_output": _make_serializable(streaming_output),
+            "streaming_output": streaming_output,
             "generation_time": generation_time,
         }
 
@@ -320,18 +672,28 @@ async def _run_workflow(workflow_id: str, input_data: dict):
         workflows_store[workflow_id]["status"] = "completed"
         workflows_store[workflow_id]["result"] = result
 
-        if queue:
-            await queue.put({"node": "completed", "data": _make_serializable(result)})
+        await _push_workflow_message(
+            workflow_id,
+            {
+                "node": "completed",
+                "data": _make_serializable(result),
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
 
     except Exception as e:
         error_msg = f"{type(e).__name__}: {str(e)}"
         traceback.print_exc()
         workflows_store[workflow_id]["status"] = "failed"
         workflows_store[workflow_id]["error"] = error_msg
-        if queue:
-            await queue.put({"node": "error", "data": {"error": error_msg}})
-
-
+        await _push_workflow_message(
+            workflow_id,
+            {
+                "node": "error",
+                "data": {"error": error_msg},
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
 @app.post("/api/workflow/start")
 async def start_workflow(request: WorkflowStartRequest):
     input_data = request.model_dump()
@@ -476,6 +838,26 @@ async def export_markdown(solution_id: str):
     sol = solutions_store[solution_id]
     final_report = _load_report_markdown_from_solution(sol)
     return {"content": final_report, "filename": f"report_{solution_id}.md"}
+
+
+@app.get("/api/solutions/{solution_id}/export/pdf")
+async def export_pdf(solution_id: str):
+    if solution_id not in solutions_store:
+        raise HTTPException(status_code=404, detail="Solution not found")
+
+    sol = solutions_store[solution_id]
+    final_report = _load_report_markdown_from_solution(sol).strip()
+    if not final_report:
+        raise HTTPException(status_code=404, detail="Report content not found")
+
+    solution = sol.get("solution", {}) or {}
+    solution_name = str(solution.get("name") or f"solution_{solution_id}")
+    pdf_path = _generate_pdf_report(solution_id, solution_name, final_report)
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        filename=pdf_path.name,
+    )
 
 
 @app.get("/api/artifacts/file")
