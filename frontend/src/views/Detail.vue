@@ -125,7 +125,7 @@
                 <div class="param-item">初始投资：{{ formatNumber(coolingEconomics.initial_investment, 2) }} 万元</div>
                 <div class="param-item">年运维成本：{{ formatNumber(coolingEconomics.annual_op_cost, 2) }} 万元</div>
                 <div class="param-item">年电费：{{ formatNumber(coolingEconomics.annual_electricity_cost, 2) }} 万元</div>
-                <div class="param-item">LCOE：{{ formatNumber(coolingEconomics.lcoe, 4) }} 元/kWh</div>
+                <div class="param-item">平准化用能成本：{{ formatNumber(coolingEconomics.lcoe, 4) }} 元/kWh</div>
               </div>
             <div class="param-grid" v-if="environmentalSection.recommendations && environmentalSection.recommendations.length">
               <div class="param-item">环保建议：</div>
@@ -501,7 +501,7 @@
             <h4>系统可用性指标</h4>
             <div class="reliability-stats">
               <div class="stat-card">可用性：{{ formatPercentAuto(reliabilityOpinion.metrics?.expected_availability ?? keyMetrics.expected_availability) }}</div>
-              <div class="stat-card">Tier等级：{{ keyMetrics.tier_level || powerRaw.machine_room_grade || '-' }}</div>
+              <div class="stat-card">机房等级：{{ keyMetrics.tier_level || powerRaw.machine_room_grade || '-' }}</div>
               <div class="stat-card">仲裁修订项：{{ revisionComparison.changeCount }}</div>
             </div>
           </el-card>
@@ -539,8 +539,8 @@
                 </div>
                 <div class="expert-summary">{{ expert.summary || '-' }}</div>
                 <div class="expert-metrics">
-                  <span v-for="(value, key) in expert.metrics" :key="key">
-                    {{ key }}: {{ value }}
+                  <span v-for="metric in formatExpertMetrics(expert.metrics)" :key="metric.key">
+                    {{ metric.label }}：{{ metric.value }}
                   </span>
                 </div>
                 <div class="expert-recommendations" v-if="expert.recommendations && expert.recommendations.length">
@@ -598,7 +598,7 @@
           <div class="report-preview-shell">
           <div ref="reportExportRef" class="report-content">
             <div class="report-title-section">
-              <span class="report-cover-kicker">Project Deliverable</span>
+              <span class="report-cover-kicker">项目交付报告</span>
               <div class="report-cover-grid">
                 <div class="report-cover-main">
                   <h1 class="report-title">{{ finalReportData.name || '数据中心绿电消纳方案报告' }}</h1>
@@ -618,9 +618,9 @@
                   </div>
                 </div>
                     <div class="report-cover-score">
-                      <span class="report-cover-score-label">Revision Notes</span>
+                      <span class="report-cover-score-label">修订说明</span>
                       <strong>{{ revisionComparison.revisionNotes.length }}</strong>
-                      <small>Multi-agent arbitration</small>
+                      <small>多专家仲裁</small>
                 </div>
               </div>
             </div>
@@ -1263,6 +1263,23 @@ const greenPowerResult = computed(() => normalizeGreenPowerResult(effectiveDraft
 const greenOptimization = computed(() => greenPowerResult.value.optimization || {})
 const greenProcurementPlan = computed(() => greenPowerResult.value.procurement_plan || {})
 const greenFiles = computed(() => greenPowerResult.value.generated_files || {})
+const greenTotalRatio = computed(() => {
+  const procurement = greenProcurementPlan.value || {}
+  const directRatio = toNumber(procurement.actual_direct_connection_ratio, keyMetrics.value.direct_connection_ratio)
+  const procuredRatio = toNumber(procurement.procured_green_ratio, keyMetrics.value.procured_green_ratio)
+  const explicitTotal = pickFirstFiniteNumber(
+    procurement.total_green_power_ratio,
+    greenOptimization.value.green_supply_ratio,
+    greenOptimization.value.achieved_green_ratio,
+    keyMetrics.value.green_power_ratio,
+    requirement.value.green_power_ratio
+  )
+  if (Number.isFinite(explicitTotal)) return explicitTotal
+  if (Number.isFinite(directRatio) || Number.isFinite(procuredRatio)) {
+    return Math.max(0, toNumber(directRatio, 0) + toNumber(procuredRatio, 0))
+  }
+  return null
+})
 const greenArtifactFiles = computed(() => {
   const files = greenFiles.value || {}
   return [
@@ -1274,19 +1291,19 @@ const greenArtifactFiles = computed(() => {
     },
     {
       key: 'pv_csv',
-      label: '光伏资源曲线 CSV',
+      label: '光伏资源曲线数据表',
       description: '光伏单位出力系数曲线文件，可直接查看后端生成结果。',
       path: files.pv_csv || ''
     },
     {
       key: 'wind_csv',
-      label: '风电资源曲线 CSV',
+      label: '风电资源曲线数据表',
       description: '风电单位出力系数曲线文件，可直接查看后端生成结果。',
       path: files.wind_csv || ''
     },
     {
       key: 'load_csv',
-      label: '负荷曲线 CSV',
+      label: '负荷曲线数据表',
       description: '容量优化使用的负荷曲线文件。',
       path: files.load_csv || ''
     }
@@ -1303,13 +1320,16 @@ const greenArtifactFiles = computed(() => {
 
 const powerPlan = computed(() => {
   const draftPower = effectiveDraftPlan.value.power_supply_plan || {}
+  const raw = draftPower.raw_json || {}
+  const content = powerContent.value || {}
   return {
     ...draftPower,
-    external_source_type: draftPower.external_source_type || powerSection.value.description || '-',
-    redundancy_logic: draftPower.redundancy_logic || powerContent.value.ups_configuration || '-',
-    bus_type: draftPower.bus_type || '-',
-    secondary_voltage: draftPower.secondary_voltage || '-',
-    external_voltage: draftPower.external_voltage || '-'
+    scheme_name: draftPower.scheme_name || content.scheme_name || raw.scheme_name || '-',
+    external_source_type: draftPower.external_source_type || raw.external_source_type || raw.external_source || content.external_source_type || content.external_source || powerSection.value.description || '-',
+    redundancy_logic: draftPower.redundancy_logic || raw.redundancy_logic || raw.transformer_redundancy || content.redundancy_logic || content.ups_configuration || '-',
+    bus_type: draftPower.bus_type || raw.bus_type || raw.bus_config || content.bus_type || '-',
+    secondary_voltage: draftPower.secondary_voltage || raw.secondary_voltage || raw.secondary_dist || content.secondary_voltage || '380V/220V',
+    external_voltage: draftPower.external_voltage || raw.external_voltage || content.external_voltage || '-'
   }
 })
 const powerRaw = computed(() => {
@@ -1317,7 +1337,8 @@ const powerRaw = computed(() => {
   return {
     ...raw,
     machine_room_grade: raw.machine_room_grade || keyMetrics.value.tier_level || powerContent.value.tier_level || '-',
-    cost_per_mw: raw.cost_per_mw ?? null
+    total_load_mw: raw.total_load_mw ?? powerPlan.value.total_load_mw ?? null,
+    cost_per_mw: raw.cost_per_mw ?? powerPlan.value.cost_per_mw ?? null
   }
 })
 
@@ -1337,15 +1358,17 @@ const costResult = computed(() => {
     storage_per_mwh: toNumber(economic.cost_factors?.storage_per_mwh, 60)
   }
   const recalculatedCoolingCapex = toNumber(coolingResult.value.economic_indicators?.initial_investment, 0)
+  const explicitCoolingCapex = toNumber(breakdown.cooling_system_lakh, 0)
   const coolingCapex = hasRevisedDraftPlan
-    ? recalculatedCoolingCapex
+    ? (recalculatedCoolingCapex > 0 ? recalculatedCoolingCapex : explicitCoolingCapex)
     : toNumber(breakdown.cooling_system_lakh, recalculatedCoolingCapex)
   const revisedGreenOptimization = greenOptimization.value || {}
-  const revisedPowerCostPerMw = toNumber(powerPlan.value.raw_json?.cost_per_mw, 0)
-  const revisedPowerLoadMw = toNumber(powerPlan.value.raw_json?.total_load_mw, 0)
+  const revisedPowerCostPerMw = toNumber(powerRaw.value.cost_per_mw, 0)
+  const revisedPowerLoadMw = toNumber(powerRaw.value.total_load_mw, totalLoadMw.value)
   const recalculatedPowerSupplyCapex = revisedPowerLoadMw * revisedPowerCostPerMw
+  const explicitPowerSupplyCapex = toNumber(breakdown.power_supply_system_lakh, 0)
   const normalizedPowerSupplyCapex = hasRevisedDraftPlan
-    ? recalculatedPowerSupplyCapex
+    ? (recalculatedPowerSupplyCapex > 0 ? recalculatedPowerSupplyCapex : explicitPowerSupplyCapex)
     : (toNumber(breakdown.power_supply_system_lakh, 0) > 0
       ? toNumber(breakdown.power_supply_system_lakh, 0)
       : recalculatedPowerSupplyCapex)
@@ -1356,7 +1379,7 @@ const costResult = computed(() => {
       + toNumber(revisedGreenOptimization.storage_capacity_mwh, 0) * costFactors.storage_per_mwh
     )
     const explicit = toNumber(breakdown.green_power_system_lakh, 0)
-    if (hasRevisedDraftPlan) return recalculated
+    if (hasRevisedDraftPlan) return recalculated > 0 ? recalculated : explicit
     if (explicit > 0) return explicit
     return recalculated
   })()
@@ -1600,7 +1623,7 @@ const professionalReportSectionsMarkdown = computed(() => {
       { label: '\u8f93\u5165\u6765\u6e90', value: '\u7528\u6237\u53c2\u6570\u3001\u5236\u51b7\u5bfb\u4f18\u3001\u7eff\u7535\u5bb9\u91cf\u4f18\u5316\u3001\u4f9b\u7535\u53ef\u9760\u6027\u5206\u6790\u3001\u591a\u4e13\u5bb6\u4ef2\u88c1' },
       { label: '\u673a\u623f\u7b49\u7ea7', value: req.machine_room_grade || '\u5f85\u8865\u5145' },
       { label: '\u8bbe\u8ba1\u53c2\u8003', value: 'GB 50174-2017 / YD/T 5235-2019 \u7b49\u6570\u636e\u4e2d\u5fc3\u8bbe\u8ba1\u53e3\u5f84\uff0c\u540e\u7eed\u9700\u5728\u65bd\u5de5\u56fe\u9636\u6bb5\u590d\u6838' },
-      { label: '\u6295\u8d44\u8fb9\u754c', value: 'CAPEX/OPEX \u4e3a\u65b9\u6848\u9636\u6bb5\u4f30\u7b97\uff0c\u9700\u4e0e\u5382\u5bb6\u62a5\u4ef7\u548c\u62db\u6807\u6e05\u5355\u95ed\u73af' }
+      { label: '\u6295\u8d44\u8fb9\u754c', value: '\u521d\u59cb\u6295\u8d44\u4e0e\u8fd0\u7ef4\u6210\u672c\u4e3a\u65b9\u6848\u9636\u6bb5\u4f30\u7b97\uff0c\u4ecd\u9700\u4e0e\u5382\u5bb6\u62a5\u4ef7\u548c\u62db\u6807\u6e05\u5355\u95ed\u73af\u6821\u6838' }
     ], ['\u8fb9\u754c\u9879', '\u8bf4\u660e']),
     '',
     '## \u5efa\u8bbe\u89c4\u6a21\u4e0e\u5bb9\u91cf\u6d4b\u7b97',
@@ -1633,10 +1656,10 @@ const professionalReportSectionsMarkdown = computed(() => {
     '',
     buildMarkdownTable([
       { label: '\u9884\u7b97\u7ea6\u675f', value: req.budget_constraint ? `${formatNumber(req.budget_constraint, 0)} \u4e07\u5143` : '\u5f85\u8865\u5145' },
-      { label: '\u4f30\u7b97\u603b CAPEX', value: `${formatNumber(costResult.value.total_capex_lakh || keyMetrics.value.total_cost, 0)} \u4e07\u5143` },
-      { label: '\u4f9b\u7535\u7cfb\u7edf CAPEX', value: `${formatNumber(capexBreakdown.power_supply_system_lakh, 0)} \u4e07\u5143` },
-      { label: '\u7eff\u7535\u7cfb\u7edf CAPEX', value: `${formatNumber(capexBreakdown.green_power_system_lakh, 0)} \u4e07\u5143` },
-      { label: '\u5236\u51b7\u7cfb\u7edf CAPEX', value: `${formatNumber(capexBreakdown.cooling_system_lakh, 0)} \u4e07\u5143` },
+      { label: '\u4f30\u7b97\u603b\u6295\u8d44', value: `${formatNumber(costResult.value.total_capex_lakh || keyMetrics.value.total_cost, 0)} \u4e07\u5143` },
+      { label: '\u4f9b\u7535\u7cfb\u7edf\u6295\u8d44', value: `${formatNumber(capexBreakdown.power_supply_system_lakh, 0)} \u4e07\u5143` },
+      { label: '\u7eff\u7535\u7cfb\u7edf\u6295\u8d44', value: `${formatNumber(capexBreakdown.green_power_system_lakh, 0)} \u4e07\u5143` },
+      { label: '\u5236\u51b7\u7cfb\u7edf\u6295\u8d44', value: `${formatNumber(capexBreakdown.cooling_system_lakh, 0)} \u4e07\u5143` },
       { label: '\u5e74\u8fd0\u7ef4\u6210\u672c', value: opexBreakdown.annual_opex_lakh ? `${formatNumber(opexBreakdown.annual_opex_lakh, 2)} \u4e07\u5143/\u5e74` : '\u5f85\u8865\u5145' }
     ], ['\u6210\u672c\u9879', '\u4f30\u7b97\u503c']),
     '',
@@ -1691,13 +1714,57 @@ const stripReportTitle = (content = '') => String(content || '').replace(/^#\s+.
 const reportDocumentMarkdown = computed(() => stripReportTitle(exportableReportMarkdown.value || generatedReportMarkdown.value))
 
 const coolingOptimization = computed(() => coolingResult.value.optimization_summary || {})
-const coolingWeights = computed(() => coolingOptimization.value.objective_weights || {})
+const normalizePriorityMode = (value = '') => {
+  const text = String(value || '').trim().toLowerCase()
+  if (['economic', 'economy', 'cost', 'tco', '经济优先', '经济性优先'].includes(text)) return 'economic'
+  if (['energy', 'efficiency', 'pue', '能效优先'].includes(text)) return 'efficiency'
+  if (['water', 'wue', '节水优先'].includes(text)) return 'water'
+  if (['heat', 'whr', '余热优先'].includes(text)) return 'heat'
+  if (['balanced', 'balance', '综合平衡'].includes(text)) return 'balanced'
+  return 'balanced'
+}
+const formatPriorityModeLabel = (value = '') => {
+  const mode = normalizePriorityMode(value)
+  const labels = {
+    economic: '经济优先',
+    efficiency: '能效优先',
+    water: '节水优先',
+    heat: '余热回收优先',
+    balanced: '综合平衡'
+  }
+  return labels[mode] || '综合平衡'
+}
+const derivedCoolingWeights = computed(() => {
+  const priorityMode = normalizePriorityMode(coolingOptimization.value.priority_mode || requirement.value.priority)
+  const presets = {
+    economic: { PUE: 0.2, WUE: 0.15, TCO: 0.4, CUE: 0.15, WHR: 0.1 },
+    efficiency: { PUE: 0.4, WUE: 0.15, TCO: 0.2, CUE: 0.15, WHR: 0.1 },
+    water: { PUE: 0.2, WUE: 0.4, TCO: 0.15, CUE: 0.15, WHR: 0.1 },
+    heat: { PUE: 0.2, WUE: 0.15, TCO: 0.15, CUE: 0.15, WHR: 0.35 },
+    balanced: { PUE: 0.25, WUE: 0.2, TCO: 0.25, CUE: 0.15, WHR: 0.15 }
+  }
+  return presets[priorityMode] || presets.balanced
+})
+const coolingWeights = computed(() => {
+  const rawWeights = coolingOptimization.value.objective_weights || coolingResult.value.objective_weights || {}
+  const hasAnyWeight = ['PUE', 'WUE', 'TCO', 'CUE', 'WHR'].some(key => Number.isFinite(Number(rawWeights[key])))
+  return hasAnyWeight ? rawWeights : derivedCoolingWeights.value
+})
 const coolingRanking = computed(() => Array.isArray(coolingResult.value.all_strategy_scores) ? coolingResult.value.all_strategy_scores : [])
 const greenInputs = computed(() => greenPowerResult.value.inputs || {})
 const greenProfiles = computed(() => ({
   pv: greenPowerResult.value.pv_profile || {},
   wind: greenPowerResult.value.wind_profile || {}
 }))
+const greenSimulationMode = computed(() => {
+  const explicitMode = String(greenProfiles.value.pv.mode || greenProfiles.value.wind.mode || greenInputs.value.mode || '').trim()
+  if (explicitMode) return explicitMode
+  const simHours = toNumber(greenInputs.value.sim_hours, toNumber(requirement.value.sim_hours, 168))
+  if (simHours >= 8760) return '全年逐时仿真'
+  if (simHours >= 168) return '周尺度仿真'
+  if (simHours >= 24) return '日内逐时仿真'
+  return '短时场景仿真'
+})
 const powerFactor = computed(() => toNumber(powerRaw.value.power_factor, 0.9))
 const totalLoadMw = computed(() => toNumber(powerRaw.value.total_load_mw, toNumber(requirement.value.planned_load_kw, 0) / 1000))
 const totalLoadMva = computed(() => toNumber(powerRaw.value.total_load_mva, totalLoadMw.value / powerFactor.value))
@@ -1708,7 +1775,7 @@ const coolingTrace = computed(() => ({
     `IT 负荷：${formatNumber(toNumber(requirement.value.planned_load_kw, 0), 0)} kW`,
     `功率密度：${formatNumber(requirement.value.computing_power_density, 2)} kW/机柜`,
     `PUE 目标：${formatNumber(requirement.value.pue_target, 2)}`,
-    `优先级：${coolingOptimization.value.priority_mode || requirement.value.priority || 'economic'}`,
+    `优先级：${formatPriorityModeLabel(coolingOptimization.value.priority_mode || requirement.value.priority)}`,
     '优化目标：PUE / WUE / TCO / CUE / WHR'
   ],
   facts: [
@@ -1753,29 +1820,29 @@ const greenTrace = computed(() => ({
   inputs: [
     `项目位置：${requirement.value.location || '-'}`,
     `负荷规模：${formatNumber(totalLoadMw.value, 2)} MW`,
-    `绿电目标：${formatPercent(greenInputs.value.green_power_ratio ?? requirement.value.green_power_ratio, 0)}`,
+    `绿电目标：${formatPercent(greenInputs.value.green_power_ratio ?? greenTotalRatio.value ?? requirement.value.green_power_ratio, 0)}`,
     `直连目标：${requirement.value.direct_connection_ratio != null ? formatPercent(requirement.value.direct_connection_ratio, 0) : '自动推荐'}`,
     `仿真时长：${greenInputs.value.sim_hours || requirement.value.sim_hours || 168} h`,
     `气象年份：${greenInputs.value.year || requirement.value.year || 2025}`,
     '容量边界：风/光 1-500MW，储能 0-500MWh'
   ],
   facts: [
-    { label: '仿真模式', value: greenProfiles.value.pv.mode || greenProfiles.value.wind.mode || '--' },
+    { label: '仿真模式', value: greenSimulationMode.value },
     { label: '资源曲线', value: '先生成 PV / Wind 单位出力曲线' },
     { label: '采购方式', value: sanitizeProcurementMethodLabel(greenProcurementPlan.value.method_label || '--') },
     { label: '采购补足占比', value: formatPercent(greenProcurementPlan.value.procured_green_ratio, 0) },
     { label: 'DE 参数', value: `maxiter ${greenInputs.value.maxiter || 60} · popsize ${greenInputs.value.popsize || 10} · seed ${greenInputs.value.seed || 42}` },
-    { label: '后端产物', value: greenFiles.value.balance_plot ? '平衡图 + 曲线 CSV' : '容量优化结果' }
+    { label: '后端产物', value: greenFiles.value.balance_plot ? '平衡图 + 曲线数据表' : '容量优化结果' }
   ],
   steps: [
     { title: '根据地点生成风光资源曲线', description: '后端会先分别调用光伏与风电子工具，按地点、年份和设备参数生成单位出力曲线。' },
-    { title: '载入负荷曲线与容量边界', description: '将总负荷、仿真时长、负荷 CSV、风光储容量范围和目标绿电比例一起整理为优化输入。' },
+    { title: '载入负荷曲线与容量边界', description: '将总负荷、仿真时长、负荷曲线数据表、风光储容量范围和目标绿电比例一起整理为优化输入。' },
     { title: '执行差分进化容量优化', description: '在风电、光伏、储能三维搜索空间内迭代寻优，目标是在满足约束下最小化总投资。' },
     { title: '输出装机结果与平衡图', description: '得到最优组合后，返回装机容量、目标绿电占比、成本拆分以及功率平衡图文件。' }
   ],
   evidences: [
     '绿电方案不是直接估算容量，而是先生成当地风光出力曲线，再进入容量优化。',
-    `当前负荷为 ${formatNumber(totalLoadMw.value, 2)} MW，绿电目标为 ${formatPercent(greenInputs.value.green_power_ratio ?? requirement.value.green_power_ratio, 0)}。`,
+    `当前负荷为 ${formatNumber(totalLoadMw.value, 2)} MW，绿电目标为 ${formatPercent(greenInputs.value.green_power_ratio ?? greenTotalRatio.value ?? requirement.value.green_power_ratio, 0)}。`,
     `系统先形成直连方案，再以 ${sanitizeProcurementMethodLabel(greenProcurementPlan.value.method_label || '市场化采购')} 补足剩余绿色电量。`,
     '差分进化参数、搜索边界和仿真时长都会影响容量优化的收敛路径和最终结果。'
   ]
@@ -1822,13 +1889,138 @@ const economicOpinion = computed(() => intermediate.value.economic_analysis?.ful
 const reliabilityOpinion = computed(() => intermediate.value.power_reliability_analysis?.full_output || {})
 const environmentalOpinion = computed(() => intermediate.value.environmental_analysis?.full_output || {})
 
+const localizeExpertType = (value = '') => {
+  const text = String(value || '').trim().toLowerCase()
+  if (text.includes('economic')) return '经济性专家'
+  if (text.includes('power') || text.includes('reliability')) return '供电可靠性专家'
+  if (text.includes('environment')) return '环保专家'
+  if (text.includes('analysis')) return '分析专家'
+  return String(value || '专家')
+}
+
+const localizeExpertName = (name = '', type = '') => {
+  const rawName = String(name || '').trim()
+  const rawType = String(type || '').trim().toLowerCase()
+  if (!rawName) return localizeExpertType(type)
+  if (/[一-龥]/.test(rawName)) return rawName
+
+  const suffixMatch = rawName.match(/[-_ ]([A-Za-z]+)$/)
+  const suffix = suffixMatch ? suffixMatch[1] : ''
+
+  if (rawType.includes('economic')) return suffix ? `经济性专家-${suffix}` : '经济性专家'
+  if (rawType.includes('power') || rawType.includes('reliability')) return suffix ? `供电可靠性专家-${suffix}` : '供电可靠性专家'
+  if (rawType.includes('environment')) return suffix ? `环保专家-${suffix}` : '环保专家'
+  return rawName
+}
+
+const localizeExpertSummary = (summary = '', type = '') => {
+  const text = String(summary || '').trim()
+  if (!text) return ''
+
+  const lowerType = String(type || '').toLowerCase()
+
+  if (lowerType.includes('economic')) {
+    const totalCost = text.match(/total CAPEX is ([\d.]+) lakh yuan/i)?.[1]
+      || text.match(/total[_ ]cost[:：]?\s*([\d.]+)/i)?.[1]
+    const costPerRack = text.match(/cost per rack is ([\d.]+) lakh yuan/i)?.[1]
+      || text.match(/cost[_ ]per[_ ]rack[:：]?\s*([\d.]+)/i)?.[1]
+    const budgetState = /within budget/i.test(text)
+      ? '当前满足预算约束。'
+      : /over budget|exceed(?:s|ed)? budget/i.test(text)
+        ? '当前方案超出预算约束。'
+        : /budget[_ ]delta[:：]?\s*-\d+(\.\d+)?/i.test(text)
+          ? '当前方案超出预算约束。'
+          : ''
+    return [
+      totalCost ? `预计总投资为 ${totalCost} 万元` : '',
+      costPerRack ? `单机架成本约为 ${costPerRack} 万元` : '',
+      budgetState
+    ].filter(Boolean).join('，') || text
+  }
+
+  if (lowerType.includes('power') || lowerType.includes('reliability')) {
+    const tierLevel = text.match(/Tier\s*([0-9]+)/i)?.[1]
+    const externalVoltage = text.match(/external voltage level:\s*([^;.,]+)/i)?.[1]?.trim()
+    const availability = text.match(/expected availability(?: about)?\s*([\d.]+%)/i)?.[1]
+    const upsConfig = text.match(/UPS \/ redundancy strategy:\s*([^;]+)/i)?.[1]?.trim()
+    return [
+      tierLevel ? `推荐可靠性目标为 Tier ${tierLevel}` : '推荐可靠性目标已完成校核',
+      upsConfig ? `UPS与冗余策略为 ${upsConfig}` : '',
+      externalVoltage ? `外部接入电压等级为 ${externalVoltage}` : '',
+      availability ? `预计可用性约为 ${availability}` : ''
+    ].filter(Boolean).join('，') || text
+  }
+
+  if (lowerType.includes('environment')) {
+    const pue = text.match(/Estimated PUE is ([\d.]+)/i)?.[1] || text.match(/pue[_ ]target[:：]?\s*([\d.]+)/i)?.[1]
+    const greenRatio = text.match(/total green(?: power)? ratio is about ([\d.]+)%/i)?.[1]
+      || text.match(/green[_ ]power[_ ]ratio[:：]?\s*([\d.]+)/i)?.[1]
+    const carbon = text.match(/annual carbon emissions? (?:is|are)? about ([\d.]+)/i)?.[1]
+      || text.match(/annual[_ ]carbon[_ ]emission[:：]?\s*([\d.]+)/i)?.[1]
+    return [
+      pue ? `预计 PUE 为 ${pue}` : '',
+      greenRatio ? `总绿电占比约为 ${Number(greenRatio) > 1 ? greenRatio : (Number(greenRatio) * 100).toFixed(2)}%` : '',
+      carbon ? `年度碳排放约为 ${carbon} 吨` : ''
+    ].filter(Boolean).join('，') || text
+  }
+
+  return text
+}
+
+const expertMetricLabels = {
+  total_cost: '总投资',
+  total_capex_lakh: '总投资',
+  cost_per_rack: '单机架成本',
+  roi: '投资回报率',
+  payback_period: '投资回收期',
+  budget_delta: '预算差额',
+  tier_level: 'Tier 等级',
+  expected_availability: '预计可用性',
+  annual_downtime: '年停机时长',
+  ups_configuration: 'UPS配置',
+  ups_capacity: 'UPS容量',
+  distribution_reliability: '配电可靠性',
+  pue_target: 'PUE目标',
+  green_power_ratio: '绿电占比',
+  annual_carbon_emission: '年度碳排放',
+  carbon_per_rack: '单机架碳排放',
+  direct_connection_ratio: '绿电直连占比',
+  procured_green_ratio: '采购补足占比'
+}
+
+const formatExpertMetricValue = (key, value) => {
+  if (value === null || value === undefined || value === '') return '-'
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) return String(value)
+  if (['roi', 'expected_availability', 'distribution_reliability', 'green_power_ratio', 'direct_connection_ratio', 'procured_green_ratio'].includes(key)) {
+    return formatPercentAuto(numericValue, key === 'expected_availability' ? 3 : 1)
+  }
+  if (key === 'annual_downtime') return `${formatNumber(numericValue, 1)} 小时`
+  if (key === 'ups_capacity') return `${formatNumber(numericValue, 0)} kVA`
+  if (key === 'annual_carbon_emission') return `${formatNumber(numericValue, 2)} 吨`
+  if (key === 'carbon_per_rack') return `${formatNumber(numericValue, 4)} 吨/柜`
+  if (key === 'cost_per_rack') return `${formatNumber(numericValue, 2)} 万元`
+  if (key === 'budget_delta' || key === 'total_cost' || key === 'total_capex_lakh') return `${formatNumber(numericValue, 2)} 万元`
+  if (key === 'payback_period') return `${formatNumber(numericValue, 1)} 年`
+  return String(value)
+}
+
+const formatExpertMetrics = (metrics = {}) => {
+  if (!metrics || typeof metrics !== 'object') return []
+  return Object.entries(metrics).map(([key, value]) => ({
+    key,
+    label: expertMetricLabels[key] || normalizeRevisionLabel(key),
+    value: formatExpertMetricValue(key, value)
+  }))
+}
+
 const expertOpinions = computed(() => {
   const source = [economicOpinion.value, reliabilityOpinion.value, environmentalOpinion.value].filter(item => item && Object.keys(item).length)
   if (source.length) {
     return source.map((item) => ({
-      name: item.expert_name || '专家',
-      type: item.expert_type || '分析',
-      summary: item.summary || '',
+      name: localizeExpertName(item.expert_name || '专家', item.expert_type || '分析'),
+      type: localizeExpertType(item.expert_type || '分析'),
+      summary: localizeExpertSummary(item.summary || '', item.expert_type || '分析'),
       metrics: item.metrics || {},
       recommendations: item.recommendations || []
     }))
@@ -1841,13 +2033,29 @@ const expertOpinions = computed(() => {
   ].filter(item => item.summary || Object.keys(item.metrics || {}).length)
 
   return fallback.map((item) => ({
-    name: item.expert_name || '专家',
-    type: item.expert_type || '分析',
-    summary: item.summary || '',
+    name: localizeExpertName(item.expert_name || '专家', item.expert_type || '分析'),
+    type: localizeExpertType(item.expert_type || '分析'),
+    summary: localizeExpertSummary(item.summary || '', item.expert_type || '分析'),
     metrics: item.metrics || {},
     recommendations: item.recommendations || []
   }))
 })
+
+const localizeDebateSpeaker = (value = '') => {
+  const text = String(value || '').trim()
+  const lower = text.toLowerCase()
+  if (!text) return '专家'
+  if (/[一-龥]/.test(text)) return text
+
+  const suffixMatch = text.match(/[-_ ]([A-Za-z]+)$/)
+  const suffix = suffixMatch ? suffixMatch[1] : ''
+
+  if (lower.includes('economic')) return suffix ? `经济性专家-${suffix}` : '经济性专家'
+  if (lower.includes('power') || lower.includes('reliability')) return suffix ? `供电可靠性专家-${suffix}` : '供电可靠性专家'
+  if (lower.includes('environment')) return suffix ? `环保专家-${suffix}` : '环保专家'
+  if (lower.includes('arbitrator')) return '仲裁专家'
+  return text
+}
 
 const debateHistory = computed(() => {
   const grouped = {}
@@ -1856,7 +2064,7 @@ const debateHistory = computed(() => {
     const round = item.round || 1
     if (!grouped[round]) grouped[round] = { round, messages: [] }
     grouped[round].messages.push({
-      speaker: item.speaker || item.expert || '专家',
+      speaker: localizeDebateSpeaker(item.speaker || item.expert || '专家'),
       content: item.content || ''
     })
   }
@@ -1889,7 +2097,7 @@ const greenConfig = computed(() => {
   const pv = toNumber(greenOptimization.value.pv_capacity_mw, null)
   const storage = toNumber(greenOptimization.value.storage_capacity_mwh, null)
   const total = wind + pv + storage
-  const totalGreenRatio = toNumber(procurement.total_green_power_ratio, keyMetrics.value.green_power_ratio)
+  const totalGreenRatio = greenTotalRatio.value
   const directRatio = toNumber(procurement.actual_direct_connection_ratio, keyMetrics.value.direct_connection_ratio)
   const procuredRatio = toNumber(procurement.procured_green_ratio, keyMetrics.value.procured_green_ratio)
   return [
@@ -1918,11 +2126,22 @@ const costStructureSegments = computed(() => {
   const opexBreakdown = costResult.value.opex_breakdown || {}
   const total = toNumber(costResult.value.total_capex_lakh, 0)
   const safeRatio = (amount) => (total > 0 ? ((toNumber(amount, 0) / total) * 100).toFixed(1) : '0.0')
+  const greenSystemAmount = toNumber(breakdown.green_power_system_lakh, 0)
+  const greenCostShareRatio = greenSystemAmount > 0
+    ? safeRatio(greenSystemAmount)
+    : (() => {
+        const annualGreenOpex = toNumber(
+          opexBreakdown.annual_green_procurement_cost_lakh,
+          greenProcurementPlan.value.annual_procurement_cost_lakh
+        )
+        const denominator = greenSystemAmount + annualGreenOpex
+        return denominator > 0 ? ((annualGreenOpex / denominator) * 100).toFixed(1) : '0.0'
+      })()
 
   return [
     {
       key: 'power_supply',
-      name: '供电系统CAPEX',
+      name: '供电系统投资',
       amount: toNumber(breakdown.power_supply_system_lakh, 0),
       ratio: safeRatio(breakdown.power_supply_system_lakh),
       color: '#16b8c4',
@@ -1939,29 +2158,29 @@ const costStructureSegments = computed(() => {
     },
     {
       key: 'green_power',
-      name: '绿电系统CAPEX',
-      amount: toNumber(breakdown.green_power_system_lakh, 0),
-      ratio: safeRatio(breakdown.green_power_system_lakh),
+      name: '绿电系统投资',
+      amount: greenSystemAmount,
+      ratio: greenCostShareRatio,
       color: '#18b26b',
       shortDescription: '风光储协同的绿电建设投入',
       summary: '绿电系统投资由风电、光伏与储能构成，对应当前方案的装机容量与消纳目标。',
       details: [
-        { label: '风电CAPEX', value: `${formatNumber(breakdown.details?.wind_capex_lakh, 0)} 万元` },
-        { label: '光伏CAPEX', value: `${formatNumber(breakdown.details?.pv_capex_lakh, 0)} 万元` },
-        { label: '储能CAPEX', value: `${formatNumber(breakdown.details?.storage_capex_lakh, 0)} 万元` },
+        { label: '风电投资', value: `${formatNumber(breakdown.details?.wind_capex_lakh, 0)} 万元` },
+        { label: '光伏投资', value: `${formatNumber(breakdown.details?.pv_capex_lakh, 0)} 万元` },
+        { label: '储能投资', value: `${formatNumber(breakdown.details?.storage_capex_lakh, 0)} 万元` },
         { label: '风电装机容量', value: `${formatNumber(greenOptimization.value.wind_capacity_mw, 2)} MW` },
         { label: '光伏装机容量', value: `${formatNumber(greenOptimization.value.pv_capacity_mw, 2)} MWp` },
         { label: '储能额定能量', value: `${formatNumber(greenOptimization.value.storage_capacity_mwh, 2)} MWh` },
-        { label: '总绿电占比', value: formatPercent(greenProcurementPlan.value.total_green_power_ratio, 0) },
+        { label: '总绿电占比', value: formatPercent(greenTotalRatio.value, 0) },
         { label: '直连占比', value: formatPercent(greenProcurementPlan.value.actual_direct_connection_ratio, 0) },
         { label: '采购补足占比', value: formatPercent(greenProcurementPlan.value.procured_green_ratio, 0) },
         { label: '采购方式', value: sanitizeProcurementMethodLabel(greenProcurementPlan.value.method_label || '-') },
-        { label: '年采购成本(OPEX)', value: `${formatNumber(opexBreakdown.annual_green_procurement_cost_lakh, 2)} 万元/年` }
+        { label: '年采购成本', value: `${formatNumber(opexBreakdown.annual_green_procurement_cost_lakh, 2)} 万元/年` }
       ]
     },
     {
       key: 'cooling',
-      name: '制冷系统CAPEX',
+      name: '制冷系统投资',
       amount: toNumber(breakdown.cooling_system_lakh, 0),
       ratio: safeRatio(breakdown.cooling_system_lakh),
       color: '#d99a27',
@@ -1972,7 +2191,7 @@ const costStructureSegments = computed(() => {
         { label: '初始投资', value: `${formatNumber(coolingEconomics.value.initial_investment, 0)} 万元` },
         { label: '年运维成本', value: `${formatNumber(coolingEconomics.value.annual_op_cost, 0)} 万元` },
         { label: '年电费', value: `${formatNumber(coolingEconomics.value.annual_electricity_cost, 0)} 万元` },
-        { label: '???????', value: `${formatNumber(coolingEconomics.value.lcoe, 4)} 元/kWh` },
+        { label: '平准化用能成本', value: `${formatNumber(coolingEconomics.value.lcoe, 4)} 元/kWh` },
         { label: '预测PUE', value: formatNumber(coolingResult.value.estimated_pue, 3) }
       ]
     }
@@ -1995,7 +2214,7 @@ const overviewMetrics = computed(() => [
   { label: '推荐制冷技术', value: coolingResult.value.cooling_technology || '-', highlight: false },
   { label: '预测PUE', value: formatNumber(coolingResult.value.estimated_pue, 3), highlight: true },
   { label: '预测WUE', value: `${formatNumber(coolingResult.value.predicted_wue, 3)}`, unit: 'L/kWh', highlight: false },
-  { label: '绿电消纳率', value: formatPercent(keyMetrics.value.green_power_ratio), highlight: true },
+  { label: '绿电消纳率', value: formatPercent(greenTotalRatio.value ?? keyMetrics.value.green_power_ratio), highlight: true },
   { label: '总初始投资', value: formatNumber(costResult.value.total_capex_lakh || keyMetrics.value.total_cost, 2), unit: '万元', highlight: false },
   { label: '修订条目', value: revisionComparison.value.changeCount, highlight: false }
 ])

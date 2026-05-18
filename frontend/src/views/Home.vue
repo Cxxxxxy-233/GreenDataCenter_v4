@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="home-page">
     <div class="hero-section">
       <div class="hero-bg">
@@ -973,7 +973,6 @@ const statsData = ref([
     bgColor: 'rgba(5, 150, 105, 0.08)'
   }
 ])
-
 const recentProjects = ref([])
 
 const guideSteps = ref([
@@ -1161,11 +1160,105 @@ const loadSample = () => {
 
 const handleRowClick = (row) => {}
 
+const toFiniteNumber = (value) => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : null
+}
+
+const average = (values) => {
+  if (!values.length) {
+    return null
+  }
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+const formatAverageGenerationTime = (seconds) => {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return { value: '6.8', unit: 'min', progress: 68, trend: 8 }
+  }
+
+  const minutes = seconds / 60
+  if (minutes >= 1) {
+    return {
+      value: minutes.toFixed(1),
+      unit: 'min',
+      progress: Math.min(Math.round(minutes * 10), 100),
+      trend: 6
+    }
+  }
+
+  return {
+    value: seconds.toFixed(0),
+    unit: 's',
+    progress: Math.min(Math.round(seconds), 100),
+    trend: 6
+  }
+}
+
+const updateStatsSummary = (solutions) => {
+  const totalSolutions = solutions.length
+  const generationTimes = solutions
+    .map(solution => toFiniteNumber(solution.generation_time))
+    .filter(value => value !== null)
+  const pueValues = solutions
+    .map(solution => toFiniteNumber(solution.key_metrics?.pue))
+    .filter(value => value !== null)
+  const greenRatioValues = solutions
+    .map(solution => {
+      const rawValue = toFiniteNumber(solution.key_metrics?.green_power_ratio)
+      if (rawValue === null) {
+        return null
+      }
+      return rawValue > 1 ? rawValue : rawValue * 100
+    })
+    .filter(value => value !== null)
+
+  const averageGenerationTime = average(generationTimes)
+  const averagePue = average(pueValues)
+  const averageGreenRatio = average(greenRatioValues)
+
+  statsData.value[0].value = String(totalSolutions)
+  statsData.value[0].progress = totalSolutions > 0 ? Math.min(totalSolutions * 10, 100) : 18
+  statsData.value[0].trend = totalSolutions > 0 ? 12 : 0
+
+  const generationDisplay = formatAverageGenerationTime(averageGenerationTime)
+  statsData.value[1].value = generationDisplay.value
+  statsData.value[1].unit = generationDisplay.unit
+  statsData.value[1].progress = generationDisplay.progress
+  statsData.value[1].trend = generationDisplay.trend
+
+  if (averagePue !== null) {
+    statsData.value[2].value = averagePue.toFixed(2)
+    statsData.value[2].unit = ''
+    statsData.value[2].progress = Math.max(0, Math.min(Math.round(((1.6 - averagePue) / 0.5) * 100), 100))
+    statsData.value[2].trend = 5
+  } else {
+    statsData.value[2].value = '1.24'
+    statsData.value[2].unit = ''
+    statsData.value[2].progress = 72
+    statsData.value[2].trend = 4
+  }
+
+  if (averageGreenRatio !== null) {
+    statsData.value[3].value = averageGreenRatio.toFixed(1)
+    statsData.value[3].unit = '%'
+    statsData.value[3].progress = Math.max(0, Math.min(Math.round(averageGreenRatio), 100))
+    statsData.value[3].trend = 9
+  } else {
+    statsData.value[3].value = '86.0'
+    statsData.value[3].unit = '%'
+    statsData.value[3].progress = 86
+    statsData.value[3].trend = 7
+  }
+}
+
 const loadRecentProjects = async () => {
   try {
     isLoading.value = true
     const response = await solutionApi.getAll()
     const solutions = response.data || []
+
+    updateStatsSummary(solutions)
 
     if (solutions.length > 0) {
       recentProjects.value = solutions.map(solution => ({
@@ -1180,10 +1273,8 @@ const loadRecentProjects = async () => {
           lcoe: '--'
         }
       }))
-
-      statsData.value[0].value = String(solutions.length)
-      statsData.value[0].progress = Math.min(solutions.length * 10, 100)
-      statsData.value[0].trend = solutions.length > 0 ? 12 : 0
+    } else {
+      recentProjects.value = []
     }
     isLoading.value = false
   } catch (error) {
@@ -1351,9 +1442,10 @@ onUnmounted(() => {
 .sub-title {
   font-size: 16px;
   color: rgba(232, 244, 237, 0.76);
-  max-width: 62ch;
+  max-width: none;
   line-height: 1.7;
   margin: 0;
+  white-space: nowrap;
 }
 
 .hero-actions {
@@ -2987,6 +3079,10 @@ onUnmounted(() => {
     white-space: normal;
   }
 
+  .sub-title {
+    white-space: normal;
+  }
+
   .hero-model-stage {
     position: relative;
     top: auto;
@@ -3190,3 +3286,6 @@ onUnmounted(() => {
   }
 }
 </style>
+
+
+

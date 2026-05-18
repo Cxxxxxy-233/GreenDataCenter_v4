@@ -544,19 +544,7 @@
         </div>
         <div v-if="arbitratorResult" class="arbitrator-panel">
           <el-card class="arbitrator-card arbitrator-card--highlight">
-            <div class="arbitrator-header">
-              <span class="arbitrator-title">仲裁决策结果</span>
-            </div>
-            <div class="arbitrator-content">
-              <div class="consensus-indicator">
-                <span class="label">修订条目</span>
-                <span class="value high">
-                  {{ revisionComparison.changeCount }}
-                </span>
-              </div>
-              <div class="decision-summary">
-                <p>{{ arbitratorResult.summary }}</p>
-              </div>
+<div class="arbitrator-content">
               <div v-if="revisionComparison.changes.length" class="revision-comparison">
                 <h4>初稿与仲裁修订对比</h4>
                 <div class="revision-comparison-grid">
@@ -564,7 +552,7 @@
                     <div class="revision-column-title">初稿方案</div>
                     <div class="revision-summary-list">
                       <div v-for="(change, index) in revisionComparison.changes" :key="`draft-${index}`" class="revision-summary-item">
-                        <span class="revision-summary-label">{{ change.label }}</span>
+                        <span class="revision-summary-label">{{ localizeRevisionLabel(change.label) }}</span>
                         <span class="revision-summary-value">{{ change.before }}</span>
                       </div>
                     </div>
@@ -573,7 +561,7 @@
                     <div class="revision-column-title">仲裁修订后</div>
                     <div class="revision-summary-list">
                       <div v-for="(change, index) in revisionComparison.changes" :key="`revised-${index}`" class="revision-summary-item">
-                        <span class="revision-summary-label">{{ change.label }}</span>
+                        <span class="revision-summary-label">{{ localizeRevisionLabel(change.label) }}</span>
                         <span class="revision-summary-value highlight">{{ change.after }}</span>
                       </div>
                     </div>
@@ -582,7 +570,7 @@
                 <div class="revision-change-list">
                   <div v-for="(change, index) in revisionComparison.changes" :key="index" class="revision-change-item">
                     <div class="revision-change-head">
-                      <strong>{{ change.label }}</strong>
+                      <strong>{{ localizeRevisionLabel(change.label) }}</strong>
                       <span>{{ change.before }} → {{ change.after }}</span>
                     </div>
                     <div class="revision-change-reason">修改原因：{{ change.reason }}</div>
@@ -632,7 +620,6 @@
                 <span class="report-requirement-value">{{ fact.value }}</span>
               </div>
             </div>
-            <div class="report-content" v-html="finalReport.summary"></div>
             <div class="report-metrics">
               <div class="report-metric">
                 <span class="metric-label">报告状态</span>
@@ -1198,6 +1185,13 @@ const normalizeRevisionLabel = (label = '') => {
     .replace(/CAPEX/gi, '投资')
     .replace(/PUE/gi, '能效指标')
     .replace(/Tier/gi, '机房等级')
+}
+
+const localizeRevisionLabel = (label = '') => {
+  const text = normalizeRevisionLabel(label)
+  return String(text || '')
+    .replace(/external_source_type/gi, '外部电源类型')
+    .replace(/purchased_green_power_ratio/gi, '外购绿电比例')
 }
 
 const normalizeRevisionChanges = (changes = []) => {
@@ -2038,6 +2032,14 @@ const localizeExpertText = (value = '') => {
   expertTextReplacements.forEach(([pattern, replacement]) => {
     text = text.replace(pattern, replacement)
   })
+  text = text
+    .replace(/Estimated total CAPEX is/gi, '预计总投资为')
+    .replace(/Estimated PUE is/gi, '预计 PUE 为')
+    .replace(/currently within budget/gi, '当前在预算范围内')
+    .replace(/cost per rack is/gi, '单柜成本为')
+    .replace(/lakh yuan/gi, '万元')
+    .replace(/k yuan/gi, '千元')
+    .replace(/yuan/gi, '元')
   text = text
     .replace(/;\s*/g, '；')
     .replace(/:\s*/g, '：')
@@ -4864,7 +4866,7 @@ onUnmounted(() => {
 
 .revision-comparison h4,
 .revision-notes h4 {
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 14px;
@@ -4951,13 +4953,13 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 17px;
+  font-size: 19px;
   color: var(--text-primary);
   margin-bottom: 6px;
 }
 
 .revision-change-reason {
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.7;
   color: var(--text-secondary);
 }
@@ -4973,7 +4975,7 @@ onUnmounted(() => {
 }
 
 .revision-notes li {
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.7;
   margin-bottom: 6px;
 }
@@ -5018,7 +5020,7 @@ onUnmounted(() => {
 }
 
 .trade-offs h4 {
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 12px;
@@ -5030,7 +5032,7 @@ onUnmounted(() => {
 }
 
 .trade-offs li {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-secondary);
   line-height: 1.7;
   margin-bottom: 8px;
@@ -5744,3 +5746,11 @@ onUnmounted(() => {
   }
 }
 </style>
+
+
+
+
+
+
+
+
