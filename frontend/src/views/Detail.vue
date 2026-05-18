@@ -2408,28 +2408,32 @@ const exportMarkdown = async () => {
   await loadMarkdownReport()
   const content = exportableReportMarkdown.value || generatedReportMarkdown.value
   const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+  triggerBlobDownload(blob, '\u65b9\u6848\u62a5\u544a_' + solutionId.value + '.md')
+}
+
+const triggerBlobDownload = (blob, filename) => {
   const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = '\u65b9\u6848\u62a5\u544a_' + solutionId.value + '.md'
-  a.click()
-  URL.revokeObjectURL(url)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  setTimeout(() => {
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, 100)
 }
 
 const exportPdf = async () => {
   try {
     const response = await solutionApi.exportPdf(solutionId.value)
     const blob = new Blob([response.data], { type: 'application/pdf' })
-    const url = URL.createObjectURL(blob)
     const disposition = response.headers?.['content-disposition'] || ''
     const matchedFilename = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i)
     const fallbackName = `${finalReportData.value?.name || '方案报告'}_${solutionId.value}.pdf`
     const filename = decodeURIComponent((matchedFilename?.[1] || fallbackName).replace(/"/g, '').trim())
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.click()
-    URL.revokeObjectURL(url)
+    triggerBlobDownload(blob, filename)
   } catch (error) {
     console.error('PDF export failed:', error)
     ElMessage.error(error?.response?.data?.detail || '\u5bfc\u51fa PDF \u62a5\u544a\u5931\u8d25')
