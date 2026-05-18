@@ -45,6 +45,23 @@ export const solutionApi = {
     return api.get(`/api/solutions/${id}/export/pdf`, {
       responseType: 'blob'
     })
+  },
+  exportPdfFromMarkdown(id, markdown, options = {}) {
+    return api.post(`/api/solutions/${id}/export/pdf-from-markdown`, markdown, {
+      params: options,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8'
+      },
+      responseType: 'blob'
+    })
+  },
+  exportPdfFromMarkdownData(id, markdown, options = {}) {
+    return api.post(`/api/solutions/${id}/export/pdf-from-markdown-data`, markdown, {
+      params: options,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8'
+      }
+    })
   }
 }
 

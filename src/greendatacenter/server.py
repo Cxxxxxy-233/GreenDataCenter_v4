@@ -4,6 +4,7 @@ FastAPI HTTP Server - 闂備浇顕х换鎰崲鐎ｎ€㈠綊宕堕?AISyste
 """
 
 import asyncio
+import base64
 import csv
 import json
 import mimetypes
@@ -12,11 +13,12 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import quote
 from xml.sax.saxutils import escape
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import Field
 from reportlab.lib import colors
@@ -98,6 +100,12 @@ class WorkflowStartRequest(PydanticBaseModel):
     maxiter: int = Field(default=60, gt=0, description="Max optimization iterations")
     popsize: int = Field(default=10, gt=0, description="Optimization population size")
     seed: int = Field(default=42, description="Random seed")
+
+
+class PdfFromMarkdownRequest(PydanticBaseModel):
+    content: str = Field(..., min_length=1, description="Markdown report content")
+    filename: Optional[str] = Field(default=None, description="Downloaded PDF filename")
+    solution_name: Optional[str] = Field(default=None, description="PDF document title")
 
 @app.on_event("startup")
 async def startup_event():
@@ -240,6 +248,48 @@ def _markdown_inline_to_reportlab(text: str) -> str:
     return escaped
 
 
+def _normalize_pdf_text(text: str) -> str:
+    if not text:
+        return ""
+
+    normalized = str(text)
+    replacement_pairs = [
+        ("mÂ²", "m2"),
+        ("kW/mÂ²", "kW/m2"),
+        ("â‰¤", "<="),
+        ("â‰¥", ">="),
+        ("Â±", "+/-"),
+        ("tCOâ‚‚", "tCO2"),
+        ("COâ‚‚", "CO2"),
+        ("ãŽ¡", "平方米"),
+        ("㎡", "平方米"),
+        ("m²", "m2"),
+        ("m³", "m3"),
+        ("²", "2"),
+        ("³", "3"),
+        ("₀", "0"),
+        ("₁", "1"),
+        ("₂", "2"),
+        ("₃", "3"),
+        ("₄", "4"),
+        ("₅", "5"),
+        ("₆", "6"),
+        ("₇", "7"),
+        ("₈", "8"),
+        ("₉", "9"),
+        ("≤", "<="),
+        ("≥", ">="),
+        ("±", "+/-"),
+        ("—", "-"),
+        ("–", "-"),
+        ("×", "x"),
+        ("�", ""),
+    ]
+    for source, target in replacement_pairs:
+        normalized = normalized.replace(source, target)
+    return normalized
+
+
 def _is_markdown_table_separator(line: str) -> bool:
     stripped = line.strip().strip("|").strip()
     if not stripped:
@@ -266,7 +316,7 @@ def _build_pdf_styles():
             fontSize=20,
             leading=26,
             alignment=TA_CENTER,
-            textColor=colors.HexColor("#10241a"),
+            textColor=colors.HexColor("#111827"),
             spaceAfter=10,
         ),
         "meta": ParagraphStyle(
@@ -276,7 +326,7 @@ def _build_pdf_styles():
             fontSize=9.5,
             leading=14,
             alignment=TA_CENTER,
-            textColor=colors.HexColor("#55655e"),
+            textColor=colors.HexColor("#6b7280"),
             spaceAfter=4,
         ),
         "h1": ParagraphStyle(
@@ -285,7 +335,7 @@ def _build_pdf_styles():
             fontName="STSong-Light",
             fontSize=17,
             leading=23,
-            textColor=colors.HexColor("#123126"),
+            textColor=colors.HexColor("#111827"),
             spaceBefore=10,
             spaceAfter=7,
         ),
@@ -295,7 +345,7 @@ def _build_pdf_styles():
             fontName="STSong-Light",
             fontSize=14,
             leading=20,
-            textColor=colors.HexColor("#174032"),
+            textColor=colors.HexColor("#1f2937"),
             spaceBefore=8,
             spaceAfter=6,
         ),
@@ -305,9 +355,39 @@ def _build_pdf_styles():
             fontName="STSong-Light",
             fontSize=12,
             leading=18,
-            textColor=colors.HexColor("#1c4738"),
+            textColor=colors.HexColor("#374151"),
             spaceBefore=6,
             spaceAfter=5,
+        ),
+        "h4": ParagraphStyle(
+            "Heading4Pdf",
+            parent=base["Heading3"],
+            fontName="STSong-Light",
+            fontSize=11,
+            leading=16,
+            textColor=colors.HexColor("#374151"),
+            spaceBefore=5,
+            spaceAfter=4,
+        ),
+        "h5": ParagraphStyle(
+            "Heading5Pdf",
+            parent=base["Heading3"],
+            fontName="STSong-Light",
+            fontSize=10.5,
+            leading=15,
+            textColor=colors.HexColor("#4b5563"),
+            spaceBefore=4,
+            spaceAfter=4,
+        ),
+        "h6": ParagraphStyle(
+            "Heading6Pdf",
+            parent=base["Heading3"],
+            fontName="STSong-Light",
+            fontSize=10,
+            leading=14,
+            textColor=colors.HexColor("#4b5563"),
+            spaceBefore=4,
+            spaceAfter=3,
         ),
         "body": ParagraphStyle(
             "BodyPdf",
@@ -315,7 +395,7 @@ def _build_pdf_styles():
             fontName="STSong-Light",
             fontSize=10.5,
             leading=17,
-            textColor=colors.HexColor("#24322d"),
+            textColor=colors.HexColor("#111827"),
             spaceAfter=6,
         ),
         "table": ParagraphStyle(
@@ -324,7 +404,7 @@ def _build_pdf_styles():
             fontName="STSong-Light",
             fontSize=9.5,
             leading=13,
-            textColor=colors.HexColor("#24322d"),
+            textColor=colors.HexColor("#111827"),
         ),
         "code": ParagraphStyle(
             "CodePdf",
@@ -332,8 +412,8 @@ def _build_pdf_styles():
             fontName="Courier",
             fontSize=8.8,
             leading=12,
-            textColor=colors.HexColor("#24322d"),
-            backColor=colors.HexColor("#f4f7f5"),
+            textColor=colors.HexColor("#111827"),
+            backColor=colors.HexColor("#f3f4f6"),
             borderPadding=6,
         ),
     }
@@ -342,20 +422,23 @@ def _build_pdf_styles():
 
 def _build_pdf_story(markdown_text: str, solution_id: str, solution_name: str):
     styles = _build_pdf_styles()
-    story = [
-        Paragraph(_markdown_inline_to_reportlab(solution_name), styles["title"]),
-        Paragraph(_markdown_inline_to_reportlab(f"Solution ID: {solution_id}"), styles["meta"]),
-        Paragraph(_markdown_inline_to_reportlab(f"Exported At: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"), styles["meta"]),
-        Spacer(1, 6 * mm),
-    ]
+    story = []
 
-    lines = markdown_text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    normalized_markdown = _normalize_pdf_text(markdown_text)
+    lines = normalized_markdown.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     paragraph_lines: list[str] = []
     list_items: list[str] = []
     list_type: Optional[str] = None
     table_lines: list[str] = []
     code_lines: list[str] = []
     in_code_block = False
+
+    def _next_non_empty_line(start_index: int) -> str:
+        for candidate in lines[start_index + 1:]:
+            stripped_candidate = candidate.strip()
+            if stripped_candidate:
+                return stripped_candidate
+        return ""
 
     def flush_paragraph():
         nonlocal paragraph_lines
@@ -370,18 +453,25 @@ def _build_pdf_story(markdown_text: str, solution_id: str, solution_name: str):
         nonlocal list_items, list_type
         if not list_items:
             return
-        bullet_type = "1" if list_type == "ordered" else "bullet"
-        story.append(
-            ListFlowable(
-                [
-                    ListItem(Paragraph(_markdown_inline_to_reportlab(item), styles["body"]))
-                    for item in list_items
-                ],
-                bulletType=bullet_type,
-                start="1",
-                leftIndent=16,
+        if list_type == "ordered":
+            for item_index, item in enumerate(list_items, start=1):
+                story.append(
+                    Paragraph(
+                        _markdown_inline_to_reportlab(f"{item_index}. {item}"),
+                        styles["body"],
+                    )
+                )
+        else:
+            story.append(
+                ListFlowable(
+                    [
+                        ListItem(Paragraph(_markdown_inline_to_reportlab(item), styles["body"]))
+                        for item in list_items
+                    ],
+                    bulletType="bullet",
+                    leftIndent=16,
+                )
             )
-        )
         story.append(Spacer(1, 2 * mm))
         list_items = []
         list_type = None
@@ -426,9 +516,9 @@ def _build_pdf_story(markdown_text: str, solution_id: str, solution_name: str):
                 ("FONTNAME", (0, 0), (-1, -1), "STSong-Light"),
                 ("FONTSIZE", (0, 0), (-1, -1), 9.5),
                 ("LEADING", (0, 0), (-1, -1), 12),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef5f1")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#123126")),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d7e3dd")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3f4f6")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#111827")),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#d1d5db")),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 6),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 6),
@@ -448,7 +538,7 @@ def _build_pdf_story(markdown_text: str, solution_id: str, solution_name: str):
         story.append(Spacer(1, 2 * mm))
         code_lines = []
 
-    for raw_line in lines:
+    for index, raw_line in enumerate(lines):
         line = raw_line.rstrip()
         stripped = line.strip()
 
@@ -475,11 +565,20 @@ def _build_pdf_story(markdown_text: str, solution_id: str, solution_name: str):
             flush_table()
 
         if not stripped:
+            if list_type:
+                next_line = _next_non_empty_line(index)
+                next_unordered_match = re.match(r"^[-*+]\s+(.*)$", next_line)
+                next_ordered_match = re.match(r"^\d+\.\s+(.*)$", next_line)
+                if (
+                    (list_type == "unordered" and next_unordered_match)
+                    or (list_type == "ordered" and next_ordered_match)
+                ):
+                    continue
             flush_paragraph()
             flush_list()
             continue
 
-        heading_match = re.match(r"^(#{1,3})\s+(.*)$", stripped)
+        heading_match = re.match(r"^(#{1,6})\s+(.*)$", stripped)
         if heading_match:
             flush_paragraph()
             flush_list()
@@ -522,6 +621,38 @@ def _generate_pdf_report(solution_id: str, solution_name: str, markdown_text: st
 
     safe_name = _sanitize_export_filename(solution_name, f"solution_{solution_id}")
     pdf_path = output_dir / f"{safe_name}_{solution_id}.pdf"
+    doc = SimpleDocTemplate(
+        str(pdf_path),
+        pagesize=A4,
+        leftMargin=14 * mm,
+        rightMargin=14 * mm,
+        topMargin=15 * mm,
+        bottomMargin=14 * mm,
+        title=solution_name,
+        author="GreenDataCenter",
+    )
+    story = _build_pdf_story(markdown_text, solution_id, solution_name)
+    doc.build(story)
+    return pdf_path
+
+
+def _generate_pdf_report_with_filename(
+    solution_id: str,
+    solution_name: str,
+    markdown_text: str,
+    filename: str | None = None,
+) -> Path:
+    output_dir = (PROJECT_ROOT / "src" / "greendatacenter" / "output" / "pdf_reports").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = _sanitize_export_filename(filename or "", "")
+    if safe_filename and not safe_filename.lower().endswith(".pdf"):
+        safe_filename = f"{safe_filename}.pdf"
+    if not safe_filename:
+        safe_name = _sanitize_export_filename(solution_name, f"solution_{solution_id}")
+        safe_filename = f"{safe_name}_{solution_id}.pdf"
+
+    pdf_path = output_dir / safe_filename
     doc = SimpleDocTemplate(
         str(pdf_path),
         pagesize=A4,
@@ -857,7 +988,98 @@ async def export_pdf(solution_id: str):
         path=str(pdf_path),
         media_type="application/pdf",
         filename=pdf_path.name,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(pdf_path.name)}"
+        },
     )
+
+
+async def _read_pdf_from_markdown_request(
+    request: Request,
+    filename: Optional[str],
+    solution_name: Optional[str],
+) -> tuple[str, Optional[str], Optional[str]]:
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            payload = PdfFromMarkdownRequest(**await request.json())
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"PDF export parameters are invalid: {exc}") from exc
+        return payload.content.strip(), payload.filename, payload.solution_name
+
+    markdown_text = (await request.body()).decode("utf-8", errors="replace").strip()
+    return markdown_text, filename, solution_name
+
+
+@app.post("/api/solutions/{solution_id}/export/pdf-from-markdown")
+async def export_pdf_from_markdown(
+    solution_id: str,
+    request: Request,
+    filename: Optional[str] = None,
+    solution_name: Optional[str] = None,
+):
+    markdown_text, export_filename, export_solution_name = await _read_pdf_from_markdown_request(
+        request, filename, solution_name
+    )
+    if not markdown_text:
+        raise HTTPException(status_code=400, detail="Markdown report content is empty")
+
+    document_title = export_solution_name or f"solution_{solution_id}"
+    try:
+        pdf_path = _generate_pdf_report_with_filename(
+            solution_id=solution_id,
+            solution_name=document_title,
+            markdown_text=markdown_text,
+            filename=export_filename,
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Markdown to PDF failed: {exc}"},
+        )
+
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(pdf_path.name)}"
+        },
+    )
+
+
+@app.post("/api/solutions/{solution_id}/export/pdf-from-markdown-data")
+async def export_pdf_from_markdown_data(
+    solution_id: str,
+    request: Request,
+    filename: Optional[str] = None,
+    solution_name: Optional[str] = None,
+):
+    markdown_text, export_filename, export_solution_name = await _read_pdf_from_markdown_request(
+        request, filename, solution_name
+    )
+    if not markdown_text:
+        raise HTTPException(status_code=400, detail="Markdown report content is empty")
+
+    document_title = export_solution_name or f"solution_{solution_id}"
+    try:
+        pdf_path = _generate_pdf_report_with_filename(
+            solution_id=solution_id,
+            solution_name=document_title,
+            markdown_text=markdown_text,
+            filename=export_filename,
+        )
+        pdf_bytes = pdf_path.read_bytes()
+    except Exception as exc:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Markdown to PDF failed: {exc}"},
+        )
+
+    return {
+        "filename": pdf_path.name,
+        "mime_type": "application/pdf",
+        "content_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+    }
 
 
 @app.get("/api/artifacts/file")

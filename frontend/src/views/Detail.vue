@@ -2425,18 +2425,79 @@ const triggerBlobDownload = (blob, filename) => {
   }, 100)
 }
 
+const formatDownloadTimestamp = () => {
+  const now = new Date()
+  const pad = value => String(value).padStart(2, '0')
+  return [
+    now.getFullYear(),
+    pad(now.getMonth() + 1),
+    pad(now.getDate()),
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+    pad(now.getSeconds())
+  ].join('')
+}
+
+const readBlobErrorDetail = async (error) => {
+  const data = error?.response?.data
+  if (data instanceof Blob) {
+    const text = await data.text()
+    if (!text) return ''
+    try {
+      const parsed = JSON.parse(text)
+      return parsed?.detail || parsed?.message || text
+    } catch {
+      return text
+    }
+  }
+  return error?.response?.data?.detail || error?.message || ''
+}
+
+const base64ToBlob = (base64, mimeType = 'application/octet-stream') => {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return new Blob([bytes], { type: mimeType })
+}
+
 const exportPdf = async () => {
   try {
-    const response = await solutionApi.exportPdf(solutionId.value)
-    const blob = new Blob([response.data], { type: 'application/pdf' })
-    const disposition = response.headers?.['content-disposition'] || ''
-    const matchedFilename = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i)
-    const fallbackName = `${finalReportData.value?.name || '方案报告'}_${solutionId.value}.pdf`
-    const filename = decodeURIComponent((matchedFilename?.[1] || fallbackName).replace(/"/g, '').trim())
+    await loadMarkdownReport()
+    const markdown = exportableReportMarkdown.value || generatedReportMarkdown.value
+    if (!String(markdown || '').trim()) {
+      ElMessage.error('当前 Markdown 报告内容为空，无法导出 PDF')
+      return
+    }
+    const timestamp = formatDownloadTimestamp()
+    const response = await solutionApi.exportPdfFromMarkdownData(solutionId.value, markdown, {
+      filename: `solution_report_${solutionId.value}_${timestamp}.pdf`,
+      solution_name: finalReportData.value?.name || solutionData.value?.name || 'solution_report'
+    })
+    const pdfData = response.data || {}
+    if (!pdfData.content_base64) {
+      throw new Error(pdfData.detail || 'PDF export returned empty content')
+    }
+    const fallbackName = `solution_report_${solutionId.value}_${timestamp}.pdf`
+    const filename = pdfData.filename || fallbackName
+    const blob = base64ToBlob(pdfData.content_base64, pdfData.mime_type || 'application/pdf')
     triggerBlobDownload(blob, filename)
   } catch (error) {
-    console.error('PDF export failed:', error)
-    ElMessage.error(error?.response?.data?.detail || '\u5bfc\u51fa PDF \u62a5\u544a\u5931\u8d25')
+    const detail = await readBlobErrorDetail(error)
+    console.error('PDF export failed:', {
+      status: error?.response?.status,
+      url: error?.config?.url,
+      baseURL: error?.config?.baseURL,
+      method: error?.config?.method,
+      detail,
+      error
+    })
+    if (error?.message === 'Network Error' && !detail) {
+      ElMessage.error('PDF 导出请求未获得后端响应，请确认后端已重启后再刷新页面重试')
+      return
+    }
+    ElMessage.error(detail || '导出 PDF 报告失败')
   }
 }
 
